@@ -138,7 +138,7 @@ body{margin:0}
     </div>
   </div>
 
-  <!-- left: stats and the stage strip -->
+  <!-- left: stats and the route line (deaths per section, any game length: E7) -->
   <div style="position: absolute; left: 64px; top: {{statsY}}px; width: {{statsW}}px; display: grid; grid-template-columns: repeat({{statCols}}, minmax(0, 1fr)); gap: 18px">
     <sc-for list="{{stats}}" as="s" hint-placeholder-count="6">
       <div style="display: flex; flex-direction: column; gap: 4px">
@@ -147,18 +147,7 @@ body{margin:0}
       </div>
     </sc-for>
   </div>
-  <div style="position: absolute; left: 54px; top: {{stagesY}}px; display: flex; gap: 8px">
-    <sc-for list="{{stages}}" as="g" hint-placeholder-count="7">
-      <div style="position: relative; width: {{stageW}}px; height: 48px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); margin-left: 10px; background: rgba(12,14,22,.7)">
-        <div style="position: absolute; inset: 0; background: {{g.fill}}"></div>
-        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {{g.heat}}"></div>
-        <div style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px">
-          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 21px; font-weight: 700; color: {{g.ink}}">{{g.name}}</span>
-          <span style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05"><span style="font-size: 14px; font-weight: 700; color: {{g.ink}}">{{g.deaths}}</span><span style="font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #c9cde0">{{t.deaths}}</span></span>
-        </div>
-      </div>
-    </sc-for>
-  </div>
+  <div style="position: absolute; left: 58px; top: {{stagesY}}px"><dc-import name="Route" len="standard" variant="deaths" mode="ta" w="{{routeW}}" head="{{ false }}" hint-size="880px,72px"></dc-import></div>
 
   <!-- left, below: tabs -->
   <div style="position: absolute; left: 54px; top: {{tabsY}}px; width: {{panelW}}px; display: flex; flex-direction: column; gap: 12px">
@@ -318,7 +307,7 @@ class Component extends DCLogic {
     // vertical rhythm, direction A vs B
     const top = dirB ? 140 : 96;
     const wedgeH = deck ? 260 : 290;
-    const statsY = top + wedgeH + 22, stagesY = statsY + 70, tabsY = stagesY + 76;
+    const statsY = top + wedgeH + 22, stagesY = statsY + 72, tabsY = stagesY + 80;
     const panelW = deck ? 680 : 860;
     const NAMES = ['tsukimi', 'bluespike', 'kestrel', 'mochi_dash'];
     const times = ['31:42.18', '31:54.44', '32:07.46', '32:21.04'];
@@ -383,7 +372,7 @@ class Component extends DCLogic {
       wedgeY: top, wedgeH, wedgeW: deck ? 760 : 980, wedgeArtW: deck ? 840 : 1060, titleSize: deck ? 58 : 72,
       favBg: state === 'collections' ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.1)', favRing: state === 'collections' ? open : 'none',
       tags: ['Needle', 'Avoidance', 'Adventure', 'Gimmick'],
-      statsY, statsW: deck ? 640 : 880, statCols: deck ? 4 : 6, stats, stagesY, stages, stageW: deck ? 80 : 112,
+      statsY, routeW: deck ? 640 : 880, statsW: deck ? 640 : 880, statCols: deck ? 4 : 6, stats, stagesY, stages, stageW: deck ? 80 : 112,
       tabsY, panelW, tabs, showScope: ta && tab === 'ranking', showRanking: ta && tab === 'ranking', showSaves: classic && tab === 'saves', showDetails: tab === 'details',
       ranking: deck ? ranking.slice(0, 2) : ranking, rowW: deck ? 660 : 820, pinW: deck ? 680 : 840, slots,
       footBtns, showCard: !deck, menu,

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Icons: games and kinds</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The icon system. Game icons: one per game, from the package's [icon] sprite (picked by the porter), drawn pixel-crisp on a tile in the game's hue; a package without one gets its first letter. They appear wherever a game is named in a list or a message: notifications and toasts, downloads, replays, profile showcase and recent rows, the pause and session headers, Browse cards, the exit dialog. Kind icons: line icons at 1.8 px stroke on a 22 px grid, for messages that are not about one game and for the menus. Icons never replace words: every one sits beside its label. -->
+<div style="position: relative; width: 1920px; height: 700px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <span style="position: absolute; left: 60px; top: 40px; font-size: 22px; font-weight: 700">Game icons, from each package</span>
+  <div style="position: absolute; left: 60px; top: 90px; display: flex; gap: 34px; flex-wrap: wrap; width: 1100px">
+    <sc-for list="{{games}}" as="g" hint-placeholder-count="12">
+      <div style="width: 150px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+        <dc-import name="GameIcon" game="{{g.k}}" size="64" hint-size="64px,64px"></dc-import>
+        <span style="font-size: 13px; line-height: 1.3; color: #c9cde0">{{g.t}}</span>
+      </div>
+    </sc-for>
+  </div>
+  <span style="position: absolute; left: 60px; top: 470px; font-size: 18px; font-weight: 700">Sizes</span>
+  <div style="position: absolute; left: 60px; top: 510px; display: flex; align-items: flex-end; gap: 26px">
+    <sc-for list="{{sizes}}" as="s" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><dc-import name="GameIcon" game="kaenbyou" size="{{s.n}}" hint-size="56px,56px"></dc-import><span style="font-size: 13px; color: #a2a8bc">{{s.n}} · {{s.use}}</span></div>
+    </sc-for>
+  </div>
+  <span style="position: absolute; left: 1260px; top: 40px; font-size: 22px; font-weight: 700">Kind icons</span>
+  <div style="position: absolute; left: 1260px; top: 90px; width: 600px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px">
+    <sc-for list="{{kinds}}" as="k" hint-placeholder-count="14">
+      <div style="display: flex; align-items: center; gap: 14px; height: 44px">
+        <span style="width: 44px; height: 44px; border-radius: 10px; background: {{k.tile}}; display: grid; place-items: center"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="{{k.d}}" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+        <span style="font-size: 15px; font-weight: 600">{{k.t}}</span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const games = [['kaenbyou', 'I wanna be the Kaenbyou'], ['lemon', 'I wanna eat the lemon'], ['runner', 'I wanna be the Little runner'], ['fairy', 'I wanna help the Fairy tale'], ['machinary', 'I wanna be the Machinary'], ['spook', 'I wanna go the Spook House'], ['needle', 'I Wanna Rely The Needle 4.2'], ['feather', 'I wanna get the Rainbow feather'], ['animus', 'I wanna be the Animus'], ['newyear', 'I wanna eat the New Year!'], ['showdown', 'I wanna be the Showdown'], ['mono', 'A package without an icon']].map(([k, t]) => ({ k, t }));
+    const sizes = [[20, 'toasts'], [28, 'rows'], [40, 'lists'], [56, 'cards']].map(([n, use]) => ({ n, use }));
+    const K = [
+      ['Download', 'M11 3v11M6.5 9.5L11 14l4.5-4.5M4 18h14', 'rgba(255,61,85,.35)'], ['Upload', 'M11 18V7M6.5 11.5L11 7l4.5 4.5M4 3h14', 'rgba(142,203,255,.3)'],
+      ['Update', 'M18 11a7 7 0 1 1-2-4.9M18 3v4h-4', 'rgba(142,203,255,.3)'], ['Placement', 'M6 3h10v5a5 5 0 0 1-10 0zM11 13v4M7 19h8', 'rgba(255,201,60,.3)'],
+      ['Warning', 'M11 3l9 16H2zM11 9v4M11 16v.5', 'rgba(255,196,107,.3)'], ['Error', 'M11 3a8 8 0 1 0 0 16a8 8 0 1 0 0-16M8 8l6 6M14 8l-6 6', 'rgba(255,107,107,.3)'],
+      ['Controller', 'M6 7h10a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6h-4A4 4 0 0 1 2 12v-1a4 4 0 0 1 4-4zM7 10v3M5.5 11.5h3M15 10.5v.5M17 12.5v.5', 'rgba(255,255,255,.14)'], ['File', 'M5 2h8l4 4v14H5zM13 2v4h4M8 13h6M8 16h4', 'rgba(255,255,255,.14)'],
+      ['Account', 'M11 4a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7M4 19c1-4 3.5-6 7-6s6 2 7 6', 'rgba(255,255,255,.14)'], ['Device sign-in', 'M3 5h10v9H3zM6 17h4M15 8h4v11h-4zM16.5 16.5h1', 'rgba(255,255,255,.14)'],
+      ['Practice', 'M11 3a8 8 0 1 0 0 16a8 8 0 1 0 0-16M11 7a4 4 0 1 0 0 8a4 4 0 1 0 0-8M11 10.5v1', 'rgba(255,196,107,.3)'], ['Ghost', 'M6 18V9a5 5 0 0 1 10 0v9l-2.5-2-2.5 2-2.5-2zM9 9.5v1M13 9.5v1', 'rgba(255,255,255,.14)'],
+      ['Stream', 'M4 7h11v10H4zM15 11l4-3v8l-4-3', 'rgba(255,255,255,.14)'], ['Death', 'M5 5l12 12M17 5L5 17', 'rgba(255,107,107,.3)'],
+    ].map(([t, d, tile]) => ({ t, d, tile }));
+    return { games, sizes, kinds: K };
+  }
+}
+</script>
+</body>
+</html>

@@ -13,27 +13,27 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- A second block on the m4 results page, under the time and grade (scroll or Down; the hero stays as approved). Fangame runs are lost in one or two stages, so results says which, and offers the two things players do next: practise that stage, or watch how someone faster plays it. Each stage gets a bar against your PB (left of the line is time saved, right is time lost, with the sign on every number) and its deaths. The worst stage is picked out and its buttons open Practice from that stage (#39) or the replay player at that stage (C14) for your PB or the board's #1. Bars grow from the centre line 600 ms OutQuint, 40 ms apart; the picked stage's row lights last. -->
+<!-- A second block on the m4 results page, under the time and grade (scroll or Down; the hero stays as approved). Fangame runs are lost in one or two stages, so results says which, and offers the two things players do next: practise that stage, or watch how someone faster plays it. The route line (E7) shows every section's delta at any game length; under it, only the three sections that decided the run, so a 48-section game gets the same three rows. The worst stage is picked out and its buttons open Practice from that stage (#39) or the replay player at that stage (C14) for your PB or the board's #1. Bars grow from the centre line 600 ms OutQuint, 40 ms apart; the picked stage's row lights last. -->
 <div style="position: relative; width: 1920px; height: 900px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="900px" hue="250" blur="45" dim="0.66" tag="none" hint-size="1920px,900px"></dc-import></div>
   <div style="position: absolute; left: 80px; top: 50px; display: flex; align-items: baseline; gap: 24px">
     <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 64px; font-weight: 700; font-style: italic">Where the time went</span>
     <span style="font-size: 18px; color: #c9cde0">38:12.46 against your PB 37:48.62 · +0:23.84</span>
   </div>
-  <div style="position: absolute; left: 80px; top: 160px; width: 1060px; display: flex; flex-direction: column; gap: 8px">
-    <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr) 110px 90px; gap: 18px; padding: 0 16px 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc"><span>Stage</span><span style="text-align: center">saved ← against your PB → lost</span><span style="text-align: right">Split</span><span style="text-align: right">Deaths</span></div>
-    <sc-for list="{{stages}}" as="g" hint-placeholder-count="7">
-      <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr) 110px 90px; gap: 18px; align-items: center; height: 62px; padding: 0 16px; border-radius: 10px; background: {{g.bg}}; box-shadow: {{g.ring}}">
-        <span style="font-size: 18px; font-weight: 700">{{g.name}}</span>
-        <span style="position: relative; height: 62px">
-          <span style="position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; background: rgba(255,255,255,.3)"></span>
-          <span style="position: absolute; top: 22px; height: 18px; border-radius: 4px; left: {{g.l}}%; width: {{g.w}}%; background: {{g.c}}"></span>
-          <span style="position: absolute; top: 19px; left: {{g.tx}}%; transform: translateX({{g.tshift}}); padding: 0 10px; font-size: 16px; font-weight: 700; color: {{g.c}}; white-space: nowrap">{{g.d}}</span>
-        </span>
-        <span style="font-size: 17px; font-weight: 600; text-align: right">{{g.split}}</span>
-        <span style="font-size: 17px; font-weight: 600; text-align: right; color: {{g.dInk}}">{{g.deaths}}</span>
-      </div>
-    </sc-for>
+  <div style="position: absolute; left: 80px; top: 160px; width: 1060px; display: flex; flex-direction: column; gap: 34px">
+    <dc-import name="Route" len="standard" variant="splits" mode="ta" at="7" w="1060" hint-size="1060px,96px"></dc-import>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">The sections that decided it</span>
+      <sc-for list="{{stages}}" as="g" hint-placeholder-count="3">
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 120px 110px; gap: 18px; align-items: center; height: 64px; padding: 0 18px; border-radius: 10px; background: {{g.bg}}; box-shadow: {{g.ring}}">
+          <span style="font-size: 19px; font-weight: 700">{{g.name}}</span>
+          <span style="font-size: 15px; color: #c9cde0">{{g.why}}</span>
+          <span style="font-size: 20px; font-weight: 700; text-align: right; color: {{g.c}}">{{g.d}}</span>
+          <span style="font-size: 15px; text-align: right; color: #c9cde0">{{g.deaths}} deaths</span>
+        </div>
+      </sc-for>
+      <span style="padding: 6px 0 0 18px; font-size: 14px; color: #a2a8bc">Three rows whatever the game's length: the two that lost most and the one that gained most. All splits are one key away (Tab), in a scrolling list.</span>
+    </div>
   </div>
 
   <div style="position: absolute; left: 1220px; top: 160px; width: 620px; display: flex; flex-direction: column; gap: 16px">
@@ -53,20 +53,11 @@ body{margin:0}
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":900}}'>
 class Component extends DCLogic {
   renderVals() {
-    const S = [['Stage 1', -21.6, '4:02.18', 4, true], ['Stage 2', 33.0, '6:40.51', 9], ['Stage 3', -12.4, '5:11.02', 6], ['Stage 4', 47.1, '2:59.84', 16], ['Stage 5', -8.2, '7:20.40', 12], ['Stage 6', -6.9, '6:31.77', 9], ['Boss', -7.16, '5:26.74', 5]];
-    const max = 50;
-    const fmt = (v) => (v < 0 ? '−' : '+') + '0:' + Math.abs(v).toFixed(2).padStart(5, '0');
-    const stages = S.map(([name, d, split, deaths, gold]) => {
-      const w = Math.abs(d) / max * 50;
-      const worst = name === 'Stage 4';
-      return {
-        name, split, deaths, d: fmt(d) + (gold ? ' · gold' : ''),
-        l: d < 0 ? 50 - w : 50, w, tx: d < 0 ? 50 - w : 50 + w, tshift: d < 0 ? '-100%' : '0',
-        c: gold ? '#ffc93c' : d < 0 ? '#45d483' : '#ff6b6b',
-        bg: worst ? 'rgba(255,107,107,.12)' : 'rgba(255,255,255,.04)', ring: worst ? 'inset 0 0 0 2px rgba(255,107,107,.7)' : 'none',
-        dInk: deaths >= 12 ? '#ffffff' : '#c9cde0',
-      };
-    });
+    const stages = [
+      ['Stage 4', '+0:47.10', '#ff6b6b', 16, 'lost the most: 11 deaths in room 4-2', true],
+      ['Stage 2', '+0:33.00', '#ff6b6b', 9, 'slower than your PB from the second save point', false],
+      ['Stage 1', '−0:21.60', '#ffc93c', 4, 'gained the most · a new gold split', false],
+    ].map(([name, d, c, deaths, why, worst]) => ({ name, d, c, deaths, why, bg: worst ? 'rgba(255,107,107,.12)' : 'rgba(255,255,255,.04)', ring: worst ? 'inset 0 0 0 2px rgba(255,107,107,.7)' : 'none' }));
     return { stages };
   }
 }

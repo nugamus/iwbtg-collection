@@ -28,8 +28,9 @@ body{margin:0}
       <div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 120px 170px 90px 30px; gap: 14px; padding: 0 26px 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc"><span>When</span><span>Game · map</span><span>Mode</span><span style="text-align: right">Result</span><span style="text-align: right">Deaths</span><span></span></div>
       <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
         <div style="margin-left: {{r.x}}px; height: 58px; border-radius: 10px; background: {{r.bg}}; transform: skewX(-11.31deg); box-shadow: {{r.ring}}">
-          <div style="transform: skewX(11.31deg); height: 100%; display: grid; grid-template-columns: 120px minmax(0, 1fr) 120px 170px 90px 30px; gap: 14px; align-items: center; padding: 0 26px">
+          <div style="transform: skewX(11.31deg); height: 100%; display: grid; grid-template-columns: 110px 36px minmax(0, 1fr) 120px 170px 90px 30px; gap: 14px; align-items: center; padding: 0 26px">
             <span style="font-size: 14px; color: #c9cde0">{{r.when}}</span>
+            <dc-import name="GameIcon" game="{{r.icon}}" size="36" hint-size="36px,36px"></dc-import>
             <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.game}}</span><span style="font-size: 13px; color: #a2a8bc; white-space: nowrap">{{r.map}}</span></span>
             <span><span style="height: 22px; padding: 0 9px; border-radius: 8px; background: {{r.modeBg}}; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: {{r.modeInk}}">{{r.mode}}</span></span></span>
             <span style="text-align: right; font-size: 16px; font-weight: 700; color: {{r.resInk}}">{{r.result}}</span>
@@ -102,9 +103,10 @@ class Component extends DCLogic {
       ['24 Nov', 'I Wanna Rely The Needle 4.2', 'Any% · practice', TA, 'Practice · Stage 3', '#ffc46b', '118', ''],
       ['24 Nov', 'I wanna go the Spook House', 'Normal · Any%', TA, '26:44.10', '#f3f4f8', '502', '⤓'],
       ['21 Nov', 'I wanna help the Fairy tale', 'Classic', CL, 'Session 41:07', '#d4ccff', '212', ''],
-      ['18 Nov', 'nugamus vs. tsukimi', 'downloaded replay', TA, '31:42.18 #1', '#f3f4f8', '1,261', '⤓'],
+      ['18 Nov', 'I wanna be the Kaenbyou', 'tsukimi · downloaded replay', TA, '31:42.18 #1', '#f3f4f8', '1,261', '⤓'],
     ];
-    const rows = R.map(([when, game, map, m, result, resInk, deaths, keep], i) => ({ when, game, map, mode: m[0], modeBg: m[1], modeInk: m[2], result, resInk, deaths, keep, keepInk: keep === '★' ? '#ffc93c' : '#c9cde0', x: i === 0 ? 0 : 20, bg: i === 0 ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.74)', ring: i === 0 ? '0 0 0 2px rgba(255,255,255,.55)' : 'none' }));
+    const ICO = { 'I wanna be the Kaenbyou': 'kaenbyou', 'I wanna eat the lemon': 'lemon', 'I Wanna Rely The Needle 4.2': 'needle', 'I wanna go the Spook House': 'spook', 'I wanna help the Fairy tale': 'fairy' };
+    const rows = R.map(([when, game, map, m, result, resInk, deaths, keep], i) => ({ icon: ICO[game] || 'kaenbyou', when, game, map, mode: m[0], modeBg: m[1], modeInk: m[2], result, resInk, deaths, keep, keepInk: keep === '★' ? '#ffc93c' : '#c9cde0', x: i === 0 ? 0 : 20, bg: i === 0 ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.74)', ring: i === 0 ? '0 0 0 2px rgba(255,255,255,.55)' : 'none' }));
     let seed = 3; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
     const deathMarks = []; for (let i = 0; i < 40; i++) deathMarks.push((rnd() * 61).toFixed(1));
     return {

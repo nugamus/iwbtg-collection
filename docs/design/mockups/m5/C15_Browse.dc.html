@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Browse the catalog</title>
+<title>Browse: the catalog</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -13,76 +13,121 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- Browse (#50), osu!'s beatmap listing in our look: every game in the catalog as a card with its key art, status and size, and one button that becomes the progress bar while it downloads. Installed games say so and go straight to play; a game on the signed removal list (#808, #68) is greyed, says why, and is deleted from the library on the next start. Cards appear 30 ms apart with a 300 ms fade and 12 px rise (OutQuint). -->
+<!-- Browse (#50), redone to be calm. Search comes first and is focused when the screen opens; typing anywhere goes to it. Below it, three filters and a sort, nothing else. Six large cards at a time (art, icon, title, creator, one line of facts, one button), so the eye has room. The focused card's details fill the right side: description, tags, size, maps, port version, and the one big button. Downloads do not crowd the cards: a card's button turns into its progress bar, and the full list lives in the notification list (the pill top right opens it). A game removed at its creator's request is a single quiet line above the grid, not a grey card. Motion: cards fade up 12 px, 30 ms apart (300 ms OutQuint); the detail panel crossfades 200 ms as focus moves. Sort never uses play counts (they stay internal). -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
-  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="210" scene="sea" blur="60" dim="0.66" tag="none" hint-size="1920px,1080px"></dc-import></div>
-  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="none" crumb="Browse" badge="1" hint-size="1920px,56px"></dc-import></div>
-  <div style="position: absolute; left: 80px; right: 80px; top: 84px; display: flex; align-items: center; gap: 12px">
-    <label for="br-search" style="width: 520px; height: 50px; border-radius: 10px; background: rgba(12,14,22,.8); display: flex; align-items: center; transform: skewX(-11.31deg)">
-      <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px; padding: 0 18px; width: 100%"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg><input id="br-search" type="search" placeholder="Search the catalog: title, creator, tag" style="all: unset; flex: 1; font-size: 16px; color: #f3f4f8"></span>
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="280" scene="castle" blur="70" dim="0.72" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="none" crumb="Browse" badge="2" hint-size="1920px,56px"></dc-import></div>
+
+  <!-- search and filters -->
+  <div style="position: absolute; left: 80px; top: 96px; width: 1140px; display: flex; flex-direction: column; gap: 16px">
+    <label style="height: 62px; border-radius: 10px; background: rgba(12,14,22,.82); display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: inset 0 0 0 2px rgba(255,255,255,.55)">
+      <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 14px; padding: 0 24px; width: 100%">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="9.5" cy="9.5" r="6.5" stroke="#f3f4f8" stroke-width="2" fill="none"></circle><path d="M14.5 14.5L20 20" stroke="#f3f4f8" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="display: inline-block; width: 2px; height: 24px; background: #ffffff"></span><span style="font-size: 21px; font-weight: 500; color: #a2a8bc">Search 214 games by title, creator or tag</span>
+        <span style="flex: 1"></span>
+        <span style="font-size: 14px; color: #a2a8bc">just start typing</span>
+      </span>
     </label>
-    <sc-for list="{{filters}}" as="c" hint-placeholder-count="6">
-      <button type="button" style="all: unset; height: 36px; padding: 0 14px; border-radius: 10px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px; white-space: nowrap"><span style="color: #a2a8bc">{{c.k}}</span><span style="font-weight: 600">{{c.v}}</span></span></button>
-    </sc-for>
-    <span style="flex: 1"></span>
-    <span style="font-size: 15px; color: #c9cde0">20 games · 6 installed · 1.4 GB free here</span>
+    <div style="display: flex; align-items: center; gap: 10px; padding-left: 10px">
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="4">
+        <span style="height: 38px; padding: 0 16px; border-radius: 10px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: {{c.w}}; color: {{c.ink}}; white-space: nowrap">{{c.t}}</span></span>
+      </sc-for>
+      <span style="flex: 1"></span>
+      <span style="font-size: 15px; color: #a2a8bc">Sort</span>
+      <span style="height: 38px; padding: 0 16px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">Newest ports ▾</span></span>
+    </div>
   </div>
-  <div style="position: absolute; left: 80px; right: 80px; top: 164px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 26px">
-    <sc-for list="{{cards}}" as="c" hint-placeholder-count="9">
-      <div style="position: relative; height: 236px; border-radius: 10px; overflow: hidden; background: #10121a; box-shadow: 0 12px 30px rgba(0,0,0,.35); opacity: {{c.op}}; filter: {{c.filter}}">
-        <div style="position: relative; height: 128px"><dc-import name="Backdrop" w="560px" h="128px" hue="{{c.hue}}" scene="{{c.scene}}" blur="0" dim="0.1" tag="none" hint-size="560px,128px"></dc-import>
-          <div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(16,18,26,1) 0%, rgba(16,18,26,0) 70%)"></div>
-          <div style="position: absolute; left: 16px; top: 14px; height: 22px; padding: 0 9px; border-radius: 8px; background: {{c.stBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: {{c.stRing}}"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{c.stInk}}">{{c.status}}</span></div>
+
+  <!-- the quiet line about a removal -->
+  <div style="position: absolute; left: 90px; top: 268px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #c9cde0">
+    <span style="width: 8px; height: 8px; border-radius: 4px; background: #c9cde0"></span>
+    <span>One game in your library was removed at its creator's request and goes on the next start.</span>
+    <span style="font-weight: 700; color: #ffffff; text-decoration: underline; text-underline-offset: 3px">Which one</span>
+  </div>
+
+  <!-- the grid -->
+  <div style="position: absolute; left: 80px; top: 310px; width: 1140px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px 24px">
+    <sc-for list="{{cards}}" as="c" hint-placeholder-count="6">
+      <div style="position: relative; height: 330px; border-radius: 10px; overflow: hidden; background: rgba(12,14,22,.8); box-shadow: {{c.ring}}; opacity: {{c.op}}">
+        <div style="position: absolute; left: 0; top: 0; width: 364px; height: 190px; overflow: hidden"><dc-import name="Backdrop" w="364px" h="190px" hue="{{c.hue}}" scene="{{c.scene}}" blur="0" dim="0.12" tag="none" hint-size="364px,190px"></dc-import></div>
+        <div style="position: absolute; left: 0; right: 0; top: 120px; height: 70px; background: linear-gradient(180deg, rgba(12,14,22,0), rgba(12,14,22,.8))"></div>
+        <span style="position: absolute; left: 14px; top: 14px; height: 24px; padding: 0 9px; border-radius: 7px; background: {{c.sBg}}; box-shadow: {{c.sRing}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: {{c.sInk}}">{{c.status}}</span></span>
+        <div style="position: absolute; left: 16px; top: 162px"><dc-import name="GameIcon" game="{{c.icon}}" size="56" hint-size="56px,56px"></dc-import></div>
+        <div style="position: absolute; left: 86px; right: 16px; top: 196px; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.title}}</span>
+          <span style="font-size: 14px; color: #a2a8bc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.creator}}</span>
         </div>
-        <div style="padding: 0 20px; margin-top: -20px; position: relative; display: flex; flex-direction: column; gap: 2px">
-          <span style="font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.title}}</span>
-          <span style="font-size: 14px; color: #a2a8bc; white-space: nowrap">{{c.meta}}</span>
-        </div>
-        <div style="position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; align-items: center; gap: 12px">
-          <span style="font-size: 13px; color: {{c.noteInk}}; flex: 1; min-width: 0">{{c.note}}</span>
-          <sc-if value="{{c.progress}}" hint-placeholder-val="{{ false }}">
-            <span style="position: relative; width: 200px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.1); overflow: hidden; transform: skewX(-11.31deg)"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{c.pct}}%; background: rgba(255,61,85,.65)"></span><span style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700">{{c.btn}}</span></span>
-          </sc-if>
-          <sc-if value="{{c.plain}}" hint-placeholder-val="{{ true }}">
-            <span style="height: 40px; padding: 0 18px; border-radius: 10px; background: {{c.btnBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700; color: {{c.btnInk}}; white-space: nowrap">{{c.btn}}</span></span>
-          </sc-if>
+        <div style="position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px">
+          <span style="font-size: 14px; color: #c9cde0; white-space: nowrap">{{c.facts}}</span>
+          <span style="position: relative; overflow: hidden; height: 40px; min-width: 120px; padding: 0 16px; box-sizing: border-box; border-radius: 10px; background: {{c.bBg}}; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{c.pct}}%; background: #ff3d55"></span>
+            <span style="position: relative; transform: skewX(11.31deg); font-size: 15px; font-weight: 700; color: {{c.bInk}}; white-space: nowrap">{{c.btn}}</span>
+          </span>
         </div>
       </div>
     </sc-for>
   </div>
-  <div style="position: absolute; left: 80px; right: 80px; bottom: 24px; display: flex; align-items: center; gap: 14px">
-    <button type="button" style="all: unset; height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 600">Back</span></button>
-    <span style="flex: 1"></span>
-    <span style="font-size: 14px; color: #a2a8bc">Downloads resume after a restart and are checked against their hash before they install.</span>
+
+  <!-- the focused game -->
+  <div style="position: absolute; left: 1280px; top: 96px; width: 560px; height: 900px; border-radius: 10px; overflow: hidden; background: rgba(12,14,22,.86); box-shadow: 0 30px 80px rgba(0,0,0,.5)">
+    <div style="position: absolute; left: 0; top: 0; width: 560px; height: 300px; overflow: hidden"><dc-import name="Backdrop" w="560px" h="300px" hue="280" scene="castle" blur="0" dim="0.1" tag="none" hint-size="560px,300px"></dc-import></div>
+    <div style="position: absolute; left: 0; right: 0; top: 200px; height: 100px; background: linear-gradient(180deg, rgba(12,14,22,0), rgba(12,14,22,.86))"></div>
+    <div style="position: absolute; left: 28px; top: 248px"><dc-import name="GameIcon" game="animus" size="88" hint-size="88px,88px"></dc-import></div>
+    <div style="position: absolute; left: 28px; right: 28px; top: 350px; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 44px; font-weight: 700; font-style: italic; line-height: 1">I wanna be the Animus</span>
+        <span style="font-size: 16px; color: #c9cde0">by [creator] · port by [porter]</span>
+      </div>
+      <span style="font-size: 16px; line-height: 1.55; color: #e3e5ee">[The catalog's description of the game, two or three lines, from the package. Nothing here is written by us.]</span>
+      <div style="display: flex; gap: 8px">
+        <sc-for list="{{tags}}" as="t" hint-placeholder-count="2"><span style="height: 28px; padding: 0 12px; border-radius: 8px; background: rgba(255,255,255,.1); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700">{{t}}</span></span></sc-for>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 6px 0">
+        <sc-for list="{{facts}}" as="f" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{f.k}}</span><span style="font-size: 18px; font-weight: 600">{{f.v}}</span></div>
+        </sc-for>
+      </div>
+      <button type="button" style="all: unset; height: 64px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: 0 10px 30px rgba(255,61,85,.35)"><span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; font-size: 22px; font-weight: 700">Get<span style="font-size: 15px; font-weight: 600; opacity: .9">14.0 MB</span></span></button>
+      <span style="font-size: 14px; line-height: 1.5; color: #a2a8bc">Plays in Time Attack and Classic. Ranked: both maps have leaderboards.</span>
+      <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 6px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Maps</span>
+        <sc-for list="{{maps}}" as="m" hint-placeholder-count="2">
+          <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 14px; border-radius: 10px; background: rgba(255,255,255,.05)">
+            <span style="height: 24px; padding: 0 8px; border-radius: 7px; background: {{m.c}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700; color: #10121a">★ {{m.s}}</span></span>
+            <span style="font-size: 16px; font-weight: 600; flex: 1">{{m.n}}</span>
+            <span style="font-size: 14px; color: #a2a8bc">{{m.d}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
   </div>
+
+  <div style="position: absolute; left: 80px; bottom: 26px"><dc-import name="Hints" items="Type:Search|Enter:Get|Tab:Filters|F:Favourite|Esc:Back" keys="{{ true }}" hint-size="700px,40px"></dc-import></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
-    const ST = { Ranked: ['#8ecbff', '#0b1a2a', 'none'], Loved: ['#ff8fc7', '#2a0b1c', 'none'], Beta: ['rgba(10,12,18,.6)', '#f3f4f8', 'inset 0 0 0 1.5px rgba(255,255,255,.7)'], Unranked: ['#ffc46b', '#2a1d05', 'none'], Removed: ['rgba(255,255,255,.12)', '#c9cde0', 'none'] };
+    const ST = { Ranked: ['#8ecbff', '#0b1a2a', 'none'], Loved: ['#ff8fc7', '#2a0b1c', 'none'], Beta: ['rgba(10,12,18,.6)', '#f3f4f8', 'inset 0 0 0 1.5px rgba(255,255,255,.7)'], Unranked: ['#ffc46b', '#2a1d05', 'none'] };
     const C = [
-      ['I wanna be the Machinary', 'メガビリー · 19.3 MB · 3 maps', 190, 'cave', 'Beta', 'downloading', 'Resumed · 2.1 MB/s', 64],
-      ['I wanna be the Kaenbyou', 'Kira☆~Kira☆~ · 9.8 MB · 5 maps', 250, 'castle', 'Ranked', 'installed', 'Installed · played 2 days ago'],
-      ['I wanna be the Animus', '[creator] · 14.0 MB · 2 maps', 280, 'castle', 'Ranked', 'get', 'Needle, Adventure'],
-      ['I wanna eat the New Year!', '[creator] · 6.2 MB · 1 map', 20, 'city', 'Loved', 'get', 'Avoidance'],
-      ['I wanna go the Spook House', 'Sephalos, Patrickgh3 · 22.1 MB · 2 maps', 20, 'sea', 'Ranked', 'update', 'Port 1.2 · 1.3 MB · your PBs stay'],
-      ['I wanna be the Showdown', '[creator] · 11.5 MB · 4 maps', 330, 'city', 'Ranked', 'queued', 'Queued · after Machinary'],
-      ['I wanna get the Rainbow feather', '[creator] · 8.0 MB · 1 map', 95, 'forest', 'Beta', 'get', 'Adventure, Gimmick'],
-      ['[a removed game]', 'removed at the creator\'s request · 12 Nov', 0, 'cave', 'Removed', 'removed', 'Deleted from your library on the next start'],
-      ['I Wanna Rely The Needle 4.2', 'NineightA · 4.4 MB · 1 map', 330, 'city', 'Unranked', 'installed', 'Installed · no leaderboard yet'],
+      ['I wanna be the Animus', '[creator]', 280, 'castle', 'animus', 'Ranked', 'get', '14.0 MB · 2 maps', true],
+      ['I wanna be the Machinary', 'メガビリー', 190, 'cave', 'machinary', 'Beta', 'dl', '19.3 MB · 3 maps'],
+      ['I wanna go the Spook House', 'Sephalos, Patrickgh3', 20, 'sea', 'spook', 'Ranked', 'update', 'port 1.2 · 1.3 MB'],
+      ['I wanna be the Kaenbyou', 'Kira☆~Kira☆~', 250, 'castle', 'kaenbyou', 'Ranked', 'installed', '9.8 MB · 5 maps'],
+      ['I wanna get the Rainbow feather', '[creator]', 95, 'forest', 'feather', 'Beta', 'get', '8.0 MB · 1 map'],
+      ['I wanna eat the New Year!', '[creator]', 20, 'city', 'newyear', 'Loved', 'get', '6.2 MB · 1 map'],
     ];
-    const cards = C.map(([title, meta, hue, scene, status, state, note, pct]) => {
+    const cards = C.map(([title, creator, hue, scene, icon, status, st, facts, focus]) => {
       const s = ST[status];
-      const b = {
-        downloading: ['64% · 12.4 MB', 'rgba(255,255,255,.1)', '#ffffff'], installed: ['Play', 'rgba(255,255,255,.14)', '#ffffff'], get: ['Download', '#ff3d55', '#ffffff'],
-        update: ['Update', '#ffc46b', '#2a1d05'], queued: ['Cancel', 'rgba(255,255,255,.08)', '#c9cde0'], removed: ['Removed', 'rgba(255,255,255,.06)', '#a2a8bc'],
-      }[state];
-      return { title, meta, hue, scene, status, stBg: s[0], stInk: s[1], stRing: s[2], note, noteInk: state === 'removed' ? '#ffc46b' : '#a2a8bc', pct: pct || 0, progress: state === 'downloading', plain: state !== 'downloading', btn: b[0], btnBg: b[1], btnInk: b[2], op: state === 'removed' ? 0.75 : 1, filter: state === 'removed' ? 'grayscale(1)' : 'none' };
+      const B = { get: ['Get', 'rgba(255,255,255,.14)', '#ffffff', 0], dl: ['64% · 2.1 MB/s', 'rgba(255,61,85,.25)', '#ffffff', 64], update: ['Update', '#ffffff', '#10121a', 0], installed: ['Installed', 'transparent', '#a2a8bc', 0] }[st];
+      return { title, creator, hue, scene, icon, status, facts, sBg: s[0], sInk: s[1], sRing: s[2], btn: B[0], bBg: focus ? '#ff3d55' : B[1], bInk: B[2], pct: B[3], ring: focus ? '0 0 0 3px #ffffff, 0 18px 40px rgba(0,0,0,.5)' : '0 8px 20px rgba(0,0,0,.3)', op: 1 };
     });
     return {
       cards,
-      filters: [{ k: 'Status', v: 'Any ▾', bg: 'rgba(12,14,22,.8)' }, { k: 'Tags', v: 'Any ▾', bg: 'rgba(12,14,22,.8)' }, { k: '', v: 'Not installed', bg: 'rgba(255,255,255,.2)' }, { k: 'Sort', v: 'Newest ports ▾', bg: 'rgba(12,14,22,.8)' }],
+      chips: [['All', true], ['Ranked', false], ['Loved', false], ['Beta', false], ['Not installed', false], ['Tags ▾', false]].map(([t, on]) => ({ t, bg: on ? 'rgba(255,255,255,.22)' : 'rgba(12,14,22,.72)', ink: on ? '#ffffff' : '#c9cde0', w: on ? 700 : 600 })),
+      tags: ['Needle', 'Adventure'],
+      maps: [{ n: 'Normal · Any%', s: '4.20', c: '#8ee08a', d: 'avg clear 31:10' }, { n: 'Very Hard · Any%', s: '6.95', c: '#ff8a5c', d: 'avg clear 1:12:40' }],
+      facts: [{ k: 'Size', v: '14.0 MB' }, { k: 'Maps', v: '2' }, { k: 'Port', v: '1.0' }, { k: 'Status', v: 'Ranked' }],
     };
   }
 }

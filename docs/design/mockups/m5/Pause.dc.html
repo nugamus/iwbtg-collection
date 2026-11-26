@@ -47,7 +47,7 @@ body{margin:0}
   <sc-if value="{{showRun}}" hint-placeholder-val="{{ true }}">
     <div style="position: absolute; left: {{cardX}}px; top: {{menuY}}px; width: {{cardW}}px; display: flex; flex-direction: column; gap: 16px">
       <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
-        <span style="font-size: 24px; font-weight: 700">I wanna be the Kaenbyou</span>
+        <span style="align-self: center"><dc-import name="GameIcon" game="kaenbyou" size="36" hint-size="36px,36px"></dc-import></span><span style="font-size: 24px; font-weight: 700">I wanna be the Kaenbyou</span>
         <span style="font-size: 16px; color: #c9cde0">{{mapLine}}</span>
         <sc-for list="{{pills}}" as="p" hint-placeholder-count="1"><span style="height: 24px; padding: 0 9px; border-radius: 8px; background: {{p.bg}}; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .08em; color: {{p.ink}}">{{p.t}}</span></span></sc-for>
       </div>
@@ -56,18 +56,8 @@ body{margin:0}
           <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{b.k}}</span><span style="font-size: {{b.size}}px; font-weight: 600; line-height: 1; color: {{b.ink}}">{{b.v}}</span><span style="font-size: 14px; font-weight: 600; color: {{b.dc}}">{{b.d}}</span></div>
         </sc-for>
       </div>
-      <!-- stage track -->
-      <div style="display: flex; flex-direction: column; gap: 8px">
-        <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{trackKey}}</span>
-        <div style="display: flex; gap: 6px">
-          <sc-for list="{{track}}" as="g" hint-placeholder-count="7">
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0">
-              <div style="height: 40px; border-radius: 8px; background: {{g.bg}}; transform: skewX(-11.31deg); box-shadow: {{g.ring}}"><div style="transform: skewX(11.31deg); height: 100%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; color: {{g.ink}}">{{g.name}}</div></div>
-              <span style="font-size: 13px; font-weight: 600; text-align: center; color: {{g.dc}}; white-space: nowrap">{{g.d}}</span>
-            </div>
-          </sc-for>
-        </div>
-      </div>
+      <!-- the route: splits in Time Attack, progress in Classic, at any game length (E7) -->
+      <dc-import name="Route" len="standard" variant="{{routeVariant}}" mode="{{routeMode}}" at="{{routeAt}}" w="{{cardW}}" hint-size="880px,96px"></dc-import>
       <!-- this stage, room by room -->
       <div style="display: grid; grid-template-columns: minmax(0, 1fr) {{ctlW}}px; gap: 28px">
         <div style="display: flex; flex-direction: column; gap: 6px">
@@ -151,12 +141,6 @@ class Component extends DCLogic {
       { k: 'vs PB here', v: '+0:46.10', d: 'behind after Stage 4', dc: '#a2a8bc', size: 40, ink: '#ff6b6b' },
       { k: 'Deaths', v: '1,284', d: 'attempt 41 today', dc: '#a2a8bc', size: 40, ink: '#ffffff' },
     ];
-    const T = classic ? [['1', 'done'], ['2', 'done'], ['3', 'done'], ['4', 'here'], ['5', ''], ['6', ''], ['Boss', '']] : [['1', '−0:21.6'], ['2', '+0:33.0'], ['3', '−0:12.4'], ['4', '+0:47.1'], ['5', 'now'], ['6', ''], ['Boss', '']];
-    const track = T.map(([name, d], i) => {
-      const done = classic ? i < 3 : i < 4, cur = classic ? i === 3 : i === 4;
-      return { name, d: d === 'done' ? '✓' : d, dc: d.startsWith('−') ? '#45d483' : d.startsWith('+') ? '#ff6b6b' : '#c9cde0',
-        bg: cur ? accent : done ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.06)', ink: cur || done ? '#ffffff' : '#6a7088', ring: cur ? '0 0 0 2px rgba(255,255,255,.6)' : 'none' };
-    });
     const R = classic ? [['Misty forest 3', 21], ['Misty forest 2', 9], ['Misty forest 1', 5], ['Stage 4 start', 2]] : [['5-3 falling spikes', 24], ['5-2', 19], ['5-4 miniboss', 11], ['5-1', 7]];
     const max = R[0][1];
     const rooms = R.map(([name, n], i) => ({ name, n, pct: Math.round(100 * n / max), c: i === 0 ? accent : 'rgba(255,255,255,.35)', ink: i === 0 ? '#ffffff' : '#c9cde0' }));
@@ -181,7 +165,7 @@ class Component extends DCLogic {
       items, showRun: !opts, showOptions: opts, opts: optsList,
       mapLine: classic ? 'Classic' : 'Very Hard · Any%',
       pills: classic ? [{ t: 'CLASSIC', bg: '#8f7bff', ink: '#ffffff' }] : [{ t: 'SD', bg: 'rgba(255,255,255,.16)', ink: '#ffffff' }, { t: 'AR', bg: 'rgba(255,255,255,.16)', ink: '#ffffff' }],
-      big, trackKey: classic ? 'Stages reached' : 'Splits so far, against your PB', track, roomsKey: classic ? 'Deaths this session, by room' : 'Stage 5 so far: deaths by room', rooms, controls,
+      big, routeVariant: classic ? 'progress' : 'splits', routeMode: classic ? 'classic' : 'ta', routeAt: classic ? 3 : 4, roomsKey: classic ? 'Deaths this session, by room' : 'Stage 5 so far: deaths by room', rooms, controls,
       hints: pad ? 'A:Choose|B:Continue|Y:Retry from save|X:Practice' : 'Enter:Choose|Esc:Continue|R:Retry from save|`:Hold to restart',
       keys: !pad, hintB: r43 ? 40 : 36,
     };

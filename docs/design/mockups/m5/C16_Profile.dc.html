@@ -11,60 +11,127 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
 <style>
 body{margin:0}
+@keyframes pf-sheen{0%{transform:translateX(-140%) skewX(-20deg)}55%,100%{transform:translateX(340%) skewX(-20deg)}}
+@keyframes pf-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pf-ring{from{stroke-dashoffset:440}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
 </helmet>
-<!-- Profile in the client (#60), osu!'s user profile overlay: it rises over the current screen from the player card or a leaderboard row (600 ms OutQuint) and closes on Esc. Your own and other players' look the same; yours adds Edit. The rank box keeps a slot for pp (#84, not designed). Milestones are the badge question (#489) answered as plain facts: see the note. -->
+<!-- Profile (#60), redone with more shine. It rises over the current screen from the player card or a leaderboard row (600 ms OutQuint) and closes on Esc. The hero is the player's cover, art from a game they finished (picked in Edit), behind a large sheared avatar. A ring around the avatar fills with the collection (games cleared in either mode, of games installed, drawn 900 ms OutQuint on open). The rank carries a light sheen that crosses once every 6 s. Below: three showcase cards (the player's pinned best runs, or their best three), then the two modes side by side, each with its own accent glow, a rank history for Time Attack, and the finished games as icons for Classic. Right: recent activity with game icons. Milestones stay facts, with an icon each (#489). Everything rises 14 px, 40 ms apart, on open. pp keeps its slot (#84). -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <!-- cover -->
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 470px; overflow: hidden"><dc-import name="Backdrop" w="1920px" h="470px" hue="250" scene="castle" blur="2" dim="0.18" tag="none" hint-size="1920px,470px"></dc-import></div>
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 470px; background: radial-gradient(ellipse 60% 90% at 18% 70%, rgba(255,61,85,.28), rgba(255,61,85,0) 70%), linear-gradient(0deg, #0b0d14 0%, rgba(11,13,20,.55) 45%, rgba(11,13,20,.1) 100%)"></div>
   <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="ta" hint-size="1920px,56px"></dc-import></div>
-  <div style="position: absolute; left: 0; right: 0; top: 56px; height: 300px"><dc-import name="Backdrop" w="1920px" h="300px" hue="250" scene="castle" blur="8" dim="0.3" tag="none" hint-size="1920px,300px"></dc-import>
-    <div style="position: absolute; inset: 0; background: linear-gradient(0deg, #0b0d14 0%, rgba(11,13,20,0) 70%)"></div></div>
-  <div style="position: absolute; left: 120px; top: 220px; display: flex; align-items: flex-end; gap: 28px">
-    <div style="width: 150px; height: 150px; border-radius: 14px; background: linear-gradient(135deg, hsl(352 62% 52%), hsl(330 55% 30%)); display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 80px; font-weight: 700; box-shadow: 0 16px 40px rgba(0,0,0,.5)">N</div>
-    <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px">
-      <span style="display: flex; align-items: center; gap: 12px"><span style="font-size: 44px; font-weight: 700">nugamus</span><span style="width: 30px; height: 20px; border-radius: 3px; background: linear-gradient(90deg, transparent 9px, #fecc00 9px 14px, transparent 14px), linear-gradient(transparent 7px, #fecc00 7px 12px, transparent 12px), #006aa7"></span></span>
-      <span style="font-size: 16px; color: #c9cde0">Joined 3 Nov 2026 · last seen today · Discord</span>
+
+  <!-- identity -->
+  <div style="position: absolute; left: 110px; top: 150px; display: flex; align-items: flex-end; gap: 34px; animation: pf-rise 500ms cubic-bezier(.23,1,.32,1) both">
+    <div style="position: relative; width: 210px; height: 210px">
+      <svg width="210" height="210" viewBox="0 0 210 210" style="position: absolute; inset: 0" aria-hidden="true">
+        <circle cx="105" cy="105" r="96" stroke="rgba(255,255,255,.12)" stroke-width="6" fill="none"></circle>
+        <circle cx="105" cy="105" r="96" stroke="url(#pf-g)" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="603" stroke-dashoffset="{{ringOff}}" transform="rotate(-90 105 105)" style="animation: pf-ring 900ms cubic-bezier(.23,1,.32,1) both"></circle>
+        <defs><linearGradient id="pf-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb3bd"></stop><stop offset="1" stop-color="#ff3d55"></stop></linearGradient></defs>
+      </svg>
+      <div style="position: absolute; left: 33px; top: 33px; width: 144px; height: 144px; border-radius: 16px; overflow: hidden; background: linear-gradient(135deg, hsl(352 70% 56%), hsl(330 60% 26%)); transform: skewX(-11.31deg); box-shadow: 0 18px 44px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.25)">
+        <div style="transform: skewX(11.31deg); height: 100%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 84px; font-weight: 700; font-style: italic">N</div>
+      </div>
+      <span style="position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%) skewX(-11.31deg); height: 26px; padding: 0 12px; border-radius: 8px; background: #ffffff; display: flex; align-items: center; box-shadow: 0 6px 16px rgba(0,0,0,.4)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700; color: #10121a; white-space: nowrap">14 / 20 cleared</span></span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px">
+      <span style="display: flex; align-items: center; gap: 16px">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 88px; font-weight: 700; font-style: italic; line-height: .85; text-shadow: 0 6px 30px rgba(0,0,0,.5)">nugamus</span>
+        <span style="width: 36px; height: 24px; border-radius: 4px; background: linear-gradient(90deg, transparent 11px, #fecc00 11px 17px, transparent 17px), linear-gradient(transparent 9px, #fecc00 9px 15px, transparent 15px), #006aa7; box-shadow: 0 4px 10px rgba(0,0,0,.4)"></span>
+      </span>
+      <span style="display: flex; align-items: center; gap: 10px; font-size: 17px; color: #e3e5ee"><span style="width: 10px; height: 10px; border-radius: 5px; background: #45d483; box-shadow: 0 0 10px #45d483"></span>Online · playing Kaenbyou · joined 3 Nov 2026</span>
+      <span style="font-size: 16px; font-style: italic; color: #c9cde0">"one more try"</span>
     </div>
   </div>
-  <div style="position: absolute; right: 120px; top: 250px; display: flex; gap: 14px">
-    <div style="padding: 14px 22px; border-radius: 10px; background: rgba(12,14,22,.8); display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Overall rank</span><span style="font-size: 32px; font-weight: 700">#1,204</span><span style="font-size: 13px; color: #a2a8bc">by clears for now</span></div>
-    <div style="padding: 14px 22px; border-radius: 10px; background: rgba(12,14,22,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Performance</span><span style="font-size: 32px; font-weight: 700; color: #6a7088">— pp</span><span style="font-size: 13px; color: #a2a8bc">slot for #84, not designed</span></div>
-    <button type="button" style="all: unset; align-self: center; height: 44px; padding: 0 20px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">Edit</span></button>
-  </div>
-  <div style="position: absolute; left: 120px; top: 404px; display: flex; gap: 30px">
-    <sc-for list="{{tabs}}" as="b" hint-placeholder-count="4"><span style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 18px; font-weight: {{b.w}}; color: {{b.ink}}">{{b.label}}</span><span style="height: 2px; background: {{b.line}}"></span></span></sc-for>
+
+  <!-- big numbers -->
+  <div style="position: absolute; right: 110px; top: 196px; display: flex; gap: 16px; animation: pf-rise 500ms 80ms cubic-bezier(.23,1,.32,1) both">
+    <div style="position: relative; overflow: hidden; width: 290px; height: 150px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,61,85,.38), rgba(120,20,40,.55)); box-shadow: 0 20px 50px rgba(255,61,85,.25), inset 0 0 0 1px rgba(255,255,255,.18); transform: skewX(-11.31deg)">
+      <span style="position: absolute; top: -20px; bottom: -20px; left: 0; width: 60px; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.28), rgba(255,255,255,0)); animation: pf-sheen 6s ease-in-out infinite"></span>
+      <div style="position: absolute; inset: 0; transform: skewX(11.31deg); padding: 18px 30px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #ffd6dc">Global rank</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 62px; font-weight: 700; line-height: 1">#1,204</span>
+        <span style="font-size: 14px; font-weight: 600; color: #45d483">▲ 312 this month</span>
+      </div>
+    </div>
+    <div style="width: 220px; height: 150px; border-radius: 10px; background: rgba(12,14,22,.72); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); transform: skewX(-11.31deg)"><div style="transform: skewX(11.31deg); padding: 18px 30px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #a2a8bc">Performance</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 62px; font-weight: 700; line-height: 1; color: #6a7088">— pp</span><span style="font-size: 14px; color: #a2a8bc">slot for #84</span></div></div>
+    <div style="width: 220px; height: 150px; border-radius: 10px; background: rgba(12,14,22,.72); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); transform: skewX(-11.31deg)"><div style="transform: skewX(11.31deg); padding: 18px 30px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #a2a8bc">Deaths</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 62px; font-weight: 700; line-height: 1">80,083</span><span style="font-size: 14px; color: #a2a8bc">376h played</span></div></div>
   </div>
 
-  <!-- per mode -->
-  <div style="position: absolute; left: 120px; top: 460px; width: 1000px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px">
-    <sc-for list="{{modes}}" as="m" hint-placeholder-count="2">
-      <div style="padding: 20px 24px; border-radius: 10px; background: rgba(16,18,26,.92); display: flex; flex-direction: column; gap: 14px; box-shadow: inset 0 3px 0 {{m.c}}">
-        <span style="font-size: 18px; font-weight: 700">{{m.name}}</span>
-        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
-          <sc-for list="{{m.stats}}" as="s" hint-placeholder-count="6"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{s.k}}</span><span style="font-size: 22px; font-weight: 600">{{s.v}}</span></div></sc-for>
-        </div>
-      </div>
-    </sc-for>
-    <div style="grid-column: span 2; display: flex; gap: 30px; padding: 4px 6px; font-size: 15px; color: #c9cde0"><span>All modes: <span style="font-weight: 700; color: #ffffff">80,083 deaths</span></span><span><span style="font-weight: 700; color: #ffffff">376h</span> played</span><span><span style="font-weight: 700; color: #ffffff">15</span> games touched</span></div>
+  <!-- tabs -->
+  <div style="position: absolute; left: 110px; top: 410px; display: flex; gap: 34px">
+    <sc-for list="{{tabs}}" as="b" hint-placeholder-count="4"><span style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 19px; font-weight: {{b.w}}; color: {{b.ink}}">{{b.label}}</span><span style="height: 3px; border-radius: 2px; background: {{b.line}}"></span></span></sc-for>
   </div>
-  <!-- PBs -->
-  <div style="position: absolute; left: 1180px; top: 460px; width: 620px; display: flex; flex-direction: column; gap: 3px">
-    <span style="font-size: 18px; font-weight: 700; padding: 0 0 8px 10px">Best placements</span>
-    <sc-for list="{{pbs}}" as="p" hint-placeholder-count="5">
-      <div style="height: 54px; margin-left: 10px; border-radius: 10px; background: rgba(12,14,22,.74); transform: skewX(-11.31deg)">
-        <div style="transform: skewX(11.31deg); height: 100%; display: grid; grid-template-columns: 60px minmax(0, 1fr) 100px; gap: 12px; align-items: center; padding: 0 20px">
-          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; color: {{p.rc}}">{{p.rank}}</span>
-          <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.game}}</span><span style="font-size: 13px; color: #a2a8bc">{{p.map}}</span></span>
-          <span style="font-size: 17px; font-weight: 700; text-align: right">{{p.time}}</span>
+  <button type="button" style="all: unset; position: absolute; right: 110px; top: 400px; height: 44px; padding: 0 22px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">Edit profile</span></button>
+
+  <!-- showcase -->
+  <div style="position: absolute; left: 110px; top: 476px; width: 1140px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px">
+    <sc-for list="{{show}}" as="s" hint-placeholder-count="3">
+      <div style="position: relative; height: 196px; border-radius: 10px; overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.12); animation: pf-rise 500ms {{s.delay}}ms cubic-bezier(.23,1,.32,1) both">
+        <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="366px" h="196px" hue="{{s.hue}}" scene="{{s.scene}}" blur="0" dim="0.35" tag="none" hint-size="366px,196px"></dc-import></div>
+        <div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(8,9,14,.92) 0%, rgba(8,9,14,.2) 70%)"></div>
+        <span style="position: absolute; right: 14px; top: 14px; height: 30px; padding: 0 12px; border-radius: 8px; background: {{s.rBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: 0 6px 16px rgba(0,0,0,.4)"><span style="transform: skewX(11.31deg); font-size: 16px; font-weight: 700; color: {{s.rInk}}">{{s.rank}}</span></span>
+        <div style="position: absolute; left: 16px; top: 14px"><dc-import name="GameIcon" game="{{s.icon}}" size="40" hint-size="40px,40px"></dc-import></div>
+        <div style="position: absolute; left: 18px; right: 18px; bottom: 14px; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 44px; font-weight: 700; line-height: 1">{{s.time}}</span>
+          <span style="font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.title}}</span>
+          <span style="font-size: 13px; color: #c9cde0">{{s.map}}</span>
         </div>
       </div>
     </sc-for>
   </div>
-  <!-- milestones -->
-  <div style="position: absolute; left: 120px; top: 830px; width: 1680px; display: flex; flex-direction: column; gap: 12px">
-    <span style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 18px; font-weight: 700">Milestones</span><span style="font-size: 14px; color: #a2a8bc">facts the stats already know, shown plainly (the #489 recommendation); nothing to collect</span></span>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap">
-      <sc-for list="{{miles}}" as="m" hint-placeholder-count="5">
-        <span style="height: 40px; padding: 0 16px 0 12px; border-radius: 10px; background: rgba(255,255,255,.08); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="14" height="16" style="image-rendering: pixelated; opacity: {{m.o}}">{{m.t}}<span style="font-size: 13px; font-weight: 500; color: #a2a8bc">{{m.d}}</span></span></span>
+
+  <!-- the two modes -->
+  <div style="position: absolute; left: 110px; top: 700px; width: 1140px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px">
+    <div style="position: relative; height: 230px; border-radius: 10px; background: linear-gradient(160deg, rgba(255,61,85,.16), rgba(16,18,26,.92) 55%); box-shadow: inset 0 0 0 1px rgba(255,61,85,.35); padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <span style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 6px; border-radius: 3px; background: #ff3d55; box-shadow: 0 0 12px #ff3d55"></span><span style="font-size: 18px; font-weight: 700">Time Attack</span><span style="flex: 1"></span><span style="font-size: 13px; color: #a2a8bc">best rank #25</span></span>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{ta}}" as="k" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{k.k}}</span><span style="font-size: 24px; font-weight: 600">{{k.v}}</span></div></sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Rank, last 90 days</span>
+        <svg width="490" height="58" viewBox="0 0 490 58" aria-label="Rank from #1,860 to #1,204 over 90 days" role="img">
+          <defs><linearGradient id="pf-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,61,85,.4)"></stop><stop offset="1" stop-color="rgba(255,61,85,0)"></stop></linearGradient></defs>
+          <path d="{{area}}" fill="url(#pf-a)"></path>
+          <path d="{{line}}" stroke="#ff3d55" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"></path>
+          <circle cx="{{endX}}" cy="{{endY}}" r="4.5" fill="#ffffff"></circle>
+        </svg>
+      </div>
+    </div>
+    <div style="position: relative; height: 230px; border-radius: 10px; background: linear-gradient(160deg, rgba(143,123,255,.18), rgba(16,18,26,.92) 55%); box-shadow: inset 0 0 0 1px rgba(143,123,255,.4); padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <span style="display: flex; align-items: center; gap: 10px"><span style="width: 22px; height: 6px; border-radius: 3px; background: #8f7bff; box-shadow: 0 0 12px #8f7bff"></span><span style="font-size: 18px; font-weight: 700">Classic</span><span style="flex: 1"></span><span style="font-size: 13px; color: #a2a8bc">no ranks, just the games</span></span>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{cl}}" as="k" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{k.k}}</span><span style="font-size: 24px; font-weight: 600">{{k.v}}</span></div></sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Finished</span>
+        <div style="display: flex; gap: 8px">
+          <sc-for list="{{done}}" as="d" hint-placeholder-count="9"><dc-import name="GameIcon" game="{{d.g}}" size="44" dim="{{d.dim}}" hint-size="44px,44px"></dc-import></sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- right: recent and milestones -->
+  <div style="position: absolute; left: 1300px; top: 476px; width: 510px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc; padding-bottom: 4px">Recent</span>
+    <sc-for list="{{recent}}" as="r" hint-placeholder-count="5">
+      <div style="display: flex; align-items: center; gap: 14px; height: 56px; padding: 0 14px; border-radius: 10px; background: rgba(16,18,26,.85)">
+        <dc-import name="GameIcon" game="{{r.g}}" size="36" hint-size="36px,36px"></dc-import>
+        <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.t}}</span><span style="font-size: 13px; color: #a2a8bc; white-space: nowrap">{{r.d}}</span></span>
+        <span style="width: 6px; height: 30px; border-radius: 3px; background: {{r.c}}"></span>
+      </div>
+    </sc-for>
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc; padding: 14px 0 4px">Milestones</span>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <sc-for list="{{miles}}" as="m" hint-placeholder-count="4">
+        <div style="display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.05)">
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="{{m.i}}" stroke="#ffc93c" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span style="display: flex; flex-direction: column; line-height: 1.2; min-width: 0"><span style="font-size: 14px; font-weight: 700; white-space: nowrap">{{m.t}}</span><span style="font-size: 12px; color: #a2a8bc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.d}}</span></span>
+        </div>
       </sc-for>
     </div>
   </div>
@@ -73,14 +140,33 @@ body{margin:0}
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
+    const ranks = [1860, 1842, 1810, 1790, 1795, 1720, 1700, 1655, 1610, 1590, 1560, 1520, 1480, 1470, 1420, 1380, 1350, 1330, 1300, 1290, 1260, 1240, 1204];
+    const lo = 1150, hi = 1900, W = 480, H = 52;
+    const pts = ranks.map((r, i) => [4 + i * (W / (ranks.length - 1)), 4 + (r - lo) / (hi - lo) * (H - 6)]);
+    const line = 'M' + pts.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L');
+    const end = pts[pts.length - 1];
     return {
+      ringOff: Math.round(603 * (1 - 14 / 20)),
       tabs: [['Overview', true], ['Time Attack', false], ['Classic', false], ['Replays', false]].map(([label, on]) => ({ label, w: on ? 700 : 600, ink: on ? '#ffffff' : '#a2a8bc', line: on ? '#ff3d55' : 'transparent' })),
-      modes: [
-        { name: 'Time Attack', c: '#ff3d55', stats: [['Games cleared', '13'], ['Maps cleared', '31'], ['Top 100s', '4'], ['Deaths', '48,213'], ['Play time', '212h'], ['Best rank', '#25']].map(([k, v]) => ({ k, v })) },
-        { name: 'Classic', c: '#8f7bff', stats: [['Finished', '9'], ['Difficulties', '14'], ['Saves', 'in 3 games'], ['Deaths', '31,870'], ['Play time', '164h'], ['Furthest', '6 / 7 · Spook']].map(([k, v]) => ({ k, v })) },
-      ],
-      pbs: [['#25', 'I wanna be the Kaenbyou', 'Very Hard · Any%', '38:12.46'], ['#41', 'I wanna eat the lemon', 'Hard · Any% · SD', '12:01.88'], ['#57', 'I wanna go the Spook House', 'Normal · Any%', '26:44.10'], ['#88', 'I wanna be the Little runner', 'Normal · Any%', '9:20.52'], ['#97', 'I wanna help the Fairy tale', 'Hard · 100%', '44:08.30']].map(([rank, game, map, time], i) => ({ rank, game, map, time, rc: i === 0 ? '#ffffff' : '#c9cde0' })),
-      miles: [['First clear', '3 Nov · eat the lemon', 1], ['Deathless stage', 'Kaenbyou Stage 3', 1], ['13 games cleared', 'of 20', 1], ['Sub-40:00', 'Kaenbyou Very Hard', 1], ['First top 100', '#97 · 9 Nov', 1], ['Finished in Classic', '9 games', 0.5]].map(([t, d, o]) => ({ t, d, o })),
+      show: [
+        ['#25', 'I wanna be the Kaenbyou', 'Very Hard · Any%', '38:12.46', 250, 'castle', 'kaenbyou', '#ffc93c', '#2a1d05'],
+        ['#41', 'I wanna eat the lemon', 'Hard · Any% · SD', '12:01.88', 52, 'forest', 'lemon', 'rgba(255,255,255,.9)', '#10121a'],
+        ['#57', 'I wanna go the Spook House', 'Normal · Any%', '26:44.10', 20, 'sea', 'spook', 'rgba(255,255,255,.9)', '#10121a'],
+      ].map(([rank, title, map, time, hue, scene, icon, rBg, rInk], i) => ({ rank, title, map, time, hue, scene, icon, rBg, rInk, delay: 120 + i * 40 })),
+      ta: [['Cleared', '13'], ['Maps', '31'], ['Top 100s', '4'], ['Play time', '212h']].map(([k, v]) => ({ k, v })),
+      cl: [['Finished', '9'], ['Deaths', '31,870'], ['Play time', '164h'], ['Playing', '3']].map(([k, v]) => ({ k, v })),
+      done: ['kaenbyou', 'lemon', 'spook', 'runner', 'fairy', 'needle', 'newyear', 'feather', 'showdown', 'machinary'].map((g, i) => ({ g, dim: i >= 9 })),
+      line, area: line + ` L${end[0].toFixed(1)} 58 L4 58 Z`, endX: end[0].toFixed(1), endY: end[1].toFixed(1),
+      recent: [
+        ['kaenbyou', 'New PB · 38:12.46 on Very Hard', '#25 global · 2 hours ago', '#ff3d55'],
+        ['spook', 'Finished the Spook House in Classic', '412 deaths · yesterday', '#8f7bff'],
+        ['lemon', 'Gold split on Stage 3', 'Hard · Any% · SD · 2 days ago', '#ffc93c'],
+        ['machinary', 'Started the Machinary', 'Classic · 3 days ago', '#8f7bff'],
+      ].map(([g, t, d, c]) => ({ g, t, d, c })),
+      miles: [
+        ['M4 10l4 4 8-8', 'First clear', '3 Nov · eat the lemon'], ['M10 3v14M3 10h14', 'Deathless stage', 'Kaenbyou Stage 3'],
+        ['M10 2l2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.6-.8z', 'First top 100', '#97 · 9 Nov'], ['M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14M10 6v4l3 2', 'Sub-40:00', 'Kaenbyou Very Hard'],
+      ].map(([i, t, d]) => ({ i, t, d })),
     };
   }
 }
