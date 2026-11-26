@@ -16,6 +16,10 @@ mod fmt_files;
 mod iwbz;
 #[path = "kid_script_slots.rs"]
 mod kid_script_slots;
+#[path = "load.rs"]
+mod load;
+#[path = "load_defs.rs"]
+mod load_defs;
 #[path = "load_engine_packs.rs"]
 mod load_engine_packs;
 #[path = "load_game.rs"]
@@ -26,24 +30,20 @@ mod load_objects;
 mod load_particles;
 #[path = "load_physics.rs"]
 mod load_physics;
+#[path = "load_research.rs"]
+mod load_research;
 #[path = "load_rooms.rs"]
 mod load_rooms;
+#[path = "physics_a1.rs"]
+mod physics_a1;
+#[path = "physics_a2_c.rs"]
+mod physics_a2_c;
+#[path = "physics_b.rs"]
+mod physics_b;
+#[path = "restart_steps.rs"]
+mod restart_steps;
 #[path = "room_art.rs"]
 mod room_art;
-#[path = "wp5a_physics.rs"]
-mod wp5a_physics;
-#[path = "wp5a_restart_steps.rs"]
-mod wp5a_restart_steps;
-#[path = "wp5b_physics.rs"]
-mod wp5b_physics;
-#[path = "wp5c_physics.rs"]
-mod wp5c_physics;
-#[path = "wp7a_load.rs"]
-mod wp7a_load;
-#[path = "wp7a_research.rs"]
-mod wp7a_research;
-#[path = "wp7b_loader.rs"]
-mod wp7b_loader;
 
 /// `autotests = false` means a new `tests/*.rs` file runs only once it is listed here or in Cargo.toml.
 #[cfg(not(target_arch = "wasm32"))]

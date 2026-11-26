@@ -1,5 +1,5 @@
-//! WP5c.1 (#128): the family A2 and A3 profiles in `physics.toml` form (docs/format/physics.md,
-//! kid/A2.md, kid/A3.md).
+//! The family A2 to C profiles in `physics.toml` form (#128; docs/format/physics.md, kid/A2.md,
+//! kid/A3.md, kid/A4.md, kid/A5.md, kid/C.md).
 
 use iwbtg_sim::def::KidFamily;
 use iwbtg_sim::def::physics::{AirJump, PhysicsProfileDraft, VineKeys};

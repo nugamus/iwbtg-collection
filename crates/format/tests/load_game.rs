@@ -1,9 +1,9 @@
 //! Loader tests for the `game.toml` parts (docs/format/game.md, validation.md): maps, reachable
-//! timing rooms, collision handler ties, stripped mode. Split from `wp7a_load.rs` (#792), whose
+//! timing rooms, collision handler ties, stripped mode. Split from `load.rs` (#792), whose
 //! package helpers they use.
 
+use crate::load::*;
 use crate::load_objects::scripted_package;
-use crate::wp7a_load::*;
 use iwbtg_format::load::load_report;
 use iwbtg_format::{PackageFiles, Severity};
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};

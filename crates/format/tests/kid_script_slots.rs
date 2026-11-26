@@ -1,7 +1,7 @@
 //! Kid script slots in `physics.toml` (decision 0004, #1074): `[script] file`/`vars`, the slot
 //! table in an event list and a collision row, resolved at load.
 
-use crate::wp7a_load::*;
+use crate::load::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::physics::{KidScriptSlot, ScriptSlotDo};

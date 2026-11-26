@@ -1,6 +1,6 @@
-//! WP7b loader tests (docs/plans/sim-core.md 8.2 step 7): physics (current and legacy forms,
-//! sprite names, `required` tricks), params against `builtins::param_specs`, timelines, paths,
-//! sounds. Packages are built in memory.
+//! Loader tests (docs/architecture/sim/builtins.md; docs/format/physics.md, timelines.md,
+//! paths.md, sounds.md): physics (current and legacy forms, sprite names, `required` tricks),
+//! params against `builtins::param_specs`, timelines, paths, sounds. Packages are built in memory.
 
 use crate::load_physics::LEGACY;
 use iwbtg_format::load::{LoadMode, LoadReport, load_report};

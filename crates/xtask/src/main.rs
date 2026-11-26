@@ -1766,13 +1766,15 @@ source = \"x\"
     /// tests"). Each count is a ceiling: an area that gains one fails. #986 removed the ownership
     /// headers and #1407 excluded the generated schemas, so #1426 set each ceiling to the tracked
     /// count at `fe3d58c`; the PR that removes an area's last ids lowers its ceiling here.
+    /// #1609 renamed the format `wp*` test files, so `crates/format` fell from 63 to 28; the
+    /// remaining ids are fixture ids and history comments that explain where they came from.
     /// `crates/tools` was 1 when #1350 opened: if that PR changes the count, adjust that entry
     /// there.
     const WP_CEILINGS: &[(&str, usize)] = &[
         ("(root)", 1),
         (".claude", 1),
         (".github", 0),
-        ("crates/format", 63),
+        ("crates/format", 28),
         ("crates/sim", 2),
         ("crates/sim/src", 7),
         ("crates/sim/tests", 127),

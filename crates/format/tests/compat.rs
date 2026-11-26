@@ -1,6 +1,6 @@
 //! `ruleset`, `[compat]` and the deviation catalogue (decision 0005, #1160).
 
-use crate::wp7a_load::*;
+use crate::load::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::compat;
 use iwbtg_format::load::load_report;
