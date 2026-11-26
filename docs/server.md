@@ -100,7 +100,19 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 
 `url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent.
 
-`performance` is present when the package has stored clear replays (`tests/replays/*.iwbr`): the class and peaks from `iwbtg profile --summary` ([CLI](architecture/cli.md), [0001](decisions/0001-script-language.md#step-budget)). A package with no stored replay has no `performance` field (not measured) rather than a guessed class. `ms per tick` is printed by the profile command but not stored, because it is specific to the machine and target that ran it. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the full performance display — is #805; `pkg publish` emits what the package measures today.
+`performance` is present when the package has stored clear replays (`tests/replays/*.iwbr`): the class and peaks from `iwbtg profile --summary` ([CLI](architecture/cli.md), [0001](decisions/0001-script-language.md#step-budget)). A package with no stored replay has no `performance` field (not measured) rather than a guessed class. `ms per tick` is printed by the profile command but not stored, because it is specific to the machine and target that ran it. The game metadata model and the owner of every field is [format/game-metadata.md](format/game-metadata.md) (#805). `pkg publish` writes the package half of the entry today; the server half (status, fidelity proof, free tags, known differences, stars and page text) is [Game page metadata](#game-page-metadata), with status and the proof under #62.
+
+### Game page metadata
+
+The catalog entry is the published projection of the game metadata model ([format/game-metadata.md](format/game-metadata.md)). `pkg publish` writes the package half — id, title, version, creators, source, hashes, URL and performance, plus (once their format issues land) the release date, core tags and the derived custom-physics flag. The server overlays the server half when it answers `GET /catalog.json`:
+
+- `port_status` (`beta`, `ranked`, `loved`) and `fidelity`, set by the ranking and curation flow (#62).
+- `free_tags`, the community tags on a game, moderated on the server.
+- `description`, the page text a claimed creator edits.
+- `known_differences`, generated from the `### Known differences` section of `docs/games/<game-id>.md` ([games](games/README.md#deviation-log), #784). Only that section is published; kept quirks, fixed bugs and open items are not game-page fields.
+- `stars`, the per-map difficulty from play data (#111).
+
+The overlay is computed when serving and never written into `catalog.json`: a republish replaces an entry, so a written copy would go stale. A missing field means unknown; an empty list means none known. With no server in front, the file serves the package half and the client treats the server fields as absent. The changelog, stage previews, trick list and music preview stay in the package and never enter the catalog.
 
 ### Removal list
 
