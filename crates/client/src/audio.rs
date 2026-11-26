@@ -782,6 +782,12 @@ fn follows_live_tick(viewer: Option<&crate::viewer::Viewer>) -> bool {
 /// Keeps looping tunes on the tick clock: a tune that has drifted more than two ticks (40 ms at
 /// 50 Hz) from where the sim tick count says it should be is seeked back to that position;
 /// smaller drift is left alone, so normal play has no audible skips.
+///
+/// The browser build cannot seek a playing voice: rodio's `Player::try_seek` blocks the caller
+/// until the audio callback answers on a channel, and cpal's WebAudio backend runs that callback
+/// on this same main thread (a `setTimeout`/"ended" pull loop), so the page deadlocks on the first
+/// correction (#1127). A web tune keeps the position it started at; `unlock::start_held` still
+/// starts it where the tick clock says it is, and pause and speed changes still re-anchor it.
 pub fn sync_music(
     game: NonSend<Game>,
     viewer: Option<Res<crate::viewer::Viewer>>,
@@ -791,12 +797,19 @@ pub fn sync_music(
     if !follows_live_tick(viewer.as_deref()) {
         return;
     }
-    let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
-    let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
-    for (sink, mut sync) in &mut tunes {
-        if let Some(to) = sync.correction(now_tick, tick_rate, sink.position().as_secs_f64()) {
-            // A source that cannot seek stays where it is; the next check tries again.
-            let _ = sink.try_seek(Duration::from_secs_f64(to));
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        let _ = (&game, &fixed, &mut tunes);
+    }
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
+        let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
+        for (sink, mut sync) in &mut tunes {
+            if let Some(to) = sync.correction(now_tick, tick_rate, sink.position().as_secs_f64()) {
+                // A source that cannot seek stays where it is; the next check tries again.
+                let _ = sink.try_seek(Duration::from_secs_f64(to));
+            }
         }
     }
 }
