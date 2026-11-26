@@ -5,12 +5,14 @@
 # longer resolves is refused (`crates/sim/tests/entity_identity.rs`).
 id = "checkpoint/point_identity"
 impact = "F2"
-package = "fixture:retry"
-start = { new_game = true, difficulty = 0 }
+# The same scenario on the base fixture and on a variant with a room inserted before the play
+# room: the key names the room, so the assertion must hold in both (#1592).
+packages = ["fixture:retry", "fixture:retry_reordered"]
+start = { room = "room_0" }
 play_mode = "original"
 seed = 0
 mods = []
-evidence = ["#1153", "#1297"]
+evidence = ["#1153", "#1297", "#1592"]
 
 inputs = """
 frame 0: end

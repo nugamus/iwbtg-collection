@@ -19,6 +19,9 @@ use iwbtg_sim::num::Real;
 ///
 /// - `jump`: an empty floor room; the kid starts at its left end.
 /// - `retry`: the same room with a save point under the kid (a retry restores it).
+/// - `retry_reordered`: `retry` with a room inserted before the play room; the save key is
+///   name-based, so it must not move (#1592).
+/// - `retry_moved_save`: `retry` with its placed save moved one pixel; the old key is stale.
 /// - `collision`: the same room with a spike and a killer overlapping on the floor, so a kid
 ///   walking right meets both on one tick.
 /// - `lifecycle_retry`: the #1149 retry fixture: an engine Boot room, one play room with its
@@ -31,15 +34,51 @@ pub fn fixture(name: &str) -> Result<GameDef, String> {
     match name {
         "jump" => Ok(build("feel-jump", false, false, false, false)),
         "retry" => Ok(build("feel-retry", true, false, false, false)),
+        "retry_reordered" => Ok(reordered(build(
+            "feel-retry-reordered",
+            true,
+            false,
+            false,
+            false,
+        ))),
+        "retry_moved_save" => Ok(moved_save(build(
+            "feel-retry-moved-save",
+            true,
+            false,
+            false,
+            false,
+        ))),
         "collision" => Ok(build("feel-collision", true, true, false, false)),
         "sound_events" => Ok(build("feel-sound", false, false, true, false)),
         "sound_unknown_length" => Ok(sound_unknown_length()),
         "rng_effects" => Ok(build("feel-rng-effects", false, false, false, true)),
         "lifecycle_retry" => Ok(lifecycle_retry()),
         other => Err(format!(
-            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, sound_unknown_length, rng_effects, lifecycle_retry)"
+            "no public fixture named {other:?} (known: jump, retry, retry_reordered, retry_moved_save, collision, sound_events, sound_unknown_length, rng_effects, lifecycle_retry)"
         )),
     }
+}
+
+/// The retry fixture with a room inserted before the play room. The save key names the room, so
+/// an index shift must not change it (#1592, #1297).
+fn reordered(mut def: GameDef) -> GameDef {
+    def.rooms.insert(0, RoomDef::new("before", 800, 608));
+    def
+}
+
+/// The retry fixture with its placed save moved one pixel: the old `save.point` no longer resolves.
+fn moved_save(mut def: GameDef) -> GameDef {
+    let Some(save) = def.kinds.iter().position(|k| k.name == "save") else {
+        return def;
+    };
+    for room in &mut def.rooms {
+        for instance in &mut room.instances {
+            if instance.kind.0 as usize == save {
+                instance.x = Real::new(instance.x.get() + 1.0);
+            }
+        }
+    }
+    def
 }
 
 /// `sound_events` with the track a one-shot of unknown length (#1173).
