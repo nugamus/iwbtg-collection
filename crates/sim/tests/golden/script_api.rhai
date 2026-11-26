@@ -36,6 +36,23 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Views (#1531): read and write every view function on view 0.
+    if t == 3.0 {
+        set_view_xview(0, view_xview(0));
+        set_view_yview(0, view_yview(0));
+        set_view_wview(0, view_wview(0));
+        set_view_hview(0, view_hview(0));
+        set_view_angle(0, view_angle(0));
+        set_view_enabled(0, view_enabled(0));
+        set_view_visible(0, view_visible(0));
+        set_view_hborder(0, view_hborder(0));
+        set_view_vborder(0, view_vborder(0));
+        set_view_hspeed(0, view_hspeed(0));
+        set_view_vspeed(0, view_vspeed(0));
+        set_view_object(0, "api");
+        let followed = view_object(0);
+        this.phase = this.phase + view_current();
+    }
     // Paths (#1530): start once, read and write every property, then end it.
     if t == 1.0 {
         this.path_start("api_line", 4.0, "stop", false);
