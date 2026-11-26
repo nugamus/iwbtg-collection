@@ -131,8 +131,6 @@ path = [
   "crates/client/tests/fixtures/**",
   "crates/format/tests/valid/**",
   "crates/format/tests/invalid/**",
-  # The `.iwbz` fuzz seeds are packed from those fixtures (#992).
-  "fuzz/corpus/**",
 ]
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "LicenseRef-Game-Content"
