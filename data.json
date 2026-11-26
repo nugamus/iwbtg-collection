@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:17:22Z",
+ "generated_at": "2026-11-26T12:23:42Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -172,13 +172,13 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 50,
+   "open": 51,
    "closed": 19,
-   "total": 69,
-   "pct_closed": 27.5,
-   "size_points": 129,
+   "total": 70,
+   "pct_closed": 27.1,
+   "size_points": 130,
    "sizes": {
-    "size:S": 24,
+    "size:S": 25,
     "size:M": 19,
     "size:L": 6,
     "unknown": 1
@@ -267,12 +267,12 @@
    "closed": 668,
    "pct_closed": 70.5
   },
-  "open_prs": 5,
+  "open_prs": 7,
   "process": {
-   "agent-ready": 126,
+   "agent-ready": 127,
    "in-progress": 12,
-   "triage": 50,
    "needs-user": 34,
+   "triage": 49,
    "blocked": 25,
    "revisit": 3
   },
