@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Auto-retry placement</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- #773: where the auto-retry switch lives. Left: the approved mod select footer (built in #497). Right: a switch in the HUD, as product.md says. Recommended: the footer switch only, plus a small AR mark in the HUD's mod row while it is on, so you always know why a death restarted the run. A switch in the HUD would need a key or a mouse during a run, where neither belongs. -->
+<div style="position: relative; width: 1920px; height: 760px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; left: 40px; top: 30px; width: 1100px; display: flex; flex-direction: column; gap: 14px">
+    <span style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 22px; font-weight: 700">A · Mod select footer</span><span style="height: 24px; padding: 0 10px; border-radius: 8px; background: #ffffff; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #10121a">Recommended</span></span></span>
+    <div style="position: relative; width: 1100px; height: 619px; overflow: hidden; border-radius: 10px"><div style="width: 1920px; height: 1080px; transform: scale(.573); transform-origin: 0 0"><dc-import name="ModSheet" retry="{{ true }}" hint-size="1920px,1080px"></dc-import></div>
+      <div style="position: absolute; left: 30px; bottom: 6px; width: 250px; height: 46px; border-radius: 10px; box-shadow: 0 0 0 3px #ffffff"></div></div>
+  </div>
+  <div style="position: absolute; left: 1200px; top: 30px; width: 680px; display: flex; flex-direction: column; gap: 14px">
+    <span style="font-size: 22px; font-weight: 700">B · In the HUD</span>
+    <div style="position: relative; height: 619px; border-radius: 10px; overflow: hidden">
+      <dc-import name="Backdrop" w="680px" h="619px" hue="250" blur="60" dim="0.45" tag="none" hint-size="680px,619px"></dc-import>
+      <div style="position: absolute; left: 0; top: 0; width: 420px; height: 619px; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.6)"><div style="width: 800px; height: 608px; transform: translate(-380px, 0) scale(1.02); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div></div>
+      <div style="position: absolute; left: 450px; top: 40px"><dc-import name="RunInfo" mode="mods" time="38:02.56" width="206" hint-size="206px,420px"></dc-import></div>
+      <div style="position: absolute; left: 450px; top: 470px; width: 206px; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 44px; padding: 0 12px; border-radius: 10px; background: rgba(255,61,85,.2); display: flex; align-items: center; gap: 10px; transform: skewX(-11.31deg); box-shadow: inset 0 0 0 2px #ff3d55"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px"><span style="width: 34px; height: 20px; border-radius: 10px; background: #ff3d55; position: relative"><span style="position: absolute; left: 16px; top: 2px; width: 16px; height: 16px; border-radius: 8px; background: #ffffff"></span></span><span style="font-size: 14px; font-weight: 700">Auto-retry · F4</span></span></div>
+        <span style="font-size: 13px; line-height: 1.4; color: #a2a8bc">Needs a new client key (F4) and a mouse target over the game column; easy to hit by accident mid-run.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

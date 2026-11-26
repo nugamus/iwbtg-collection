@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause on a controller</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Pause B from m4 with a controller (pause.md, #624 revisit). The PAUSE box stays the game's own; the hints sit outside it, in our type, under the game, so the box keeps its look. Each item that has a shortcut shows its button at the right end of the box's row in the hint bar: A picks, B and Start continue, Y is Retry from save (what restart is bound to), Back + A is Restart run. The hint bar appears with the box (200 ms fade) only when the last input came from a pad. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="60" dim="0.45" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+    <div style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
+    <div style="position: absolute; left: 444px; top: 300px; width: 300px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="PauseBox" selected="1" hint-size="300px,240px"></dc-import></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 60px; display: flex; justify-content: center">
+      <div style="padding: 6px 22px; border-radius: 10px; background: rgba(8,9,14,.82)"><dc-import name="Hints" items="A:Choose|B:Continue|Y:Retry from save|Back + A:Restart run|Start:Continue" hint-size="900px,40px"></dc-import></div>
+    </div>
+  </div>
+  <div style="position: absolute; left: 0; top: 352px"><dc-import name="Leaderboard" scenario="p25" density="full" width="232" rows="7" hint-size="232px,360px"></dc-import></div>
+  <div style="position: absolute; left: 1694px; top: 300px"><dc-import name="RunInfo" mode="ranked" paused="{{ true }}" time="38:09.02" width="206" hint-size="206px,420px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

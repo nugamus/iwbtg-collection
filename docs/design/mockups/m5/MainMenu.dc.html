@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Main menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes mm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes mm-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- The main menu (osu!'s ButtonSystem, our look). Initial: the fruit alone in the middle, "Press any key". Any key: the fruit slides left and shrinks to 0.72 (800 ms OutExpo) while the button band opens from it to the right (each button grows from zero width, 500 ms OutExpo, 40 ms apart). Play swaps the band's buttons for the modes in place (the old ones collapse 400 ms InSine, the new grow 500 ms OutExpo). Hover or focus widens a button 1.5x (500 ms OutElastic) and fills it with its own colour. Escape steps back a level; at the top it is Exit. -->
+<div style="position: relative; width: {{w}}px; height: {{h}}px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="{{w}}px" h="{{h}}px" hue="{{hue}}" scene="{{scene}}" blur="30" dim="0.42" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; inset: 0; background: radial-gradient(ellipse at {{glowX}}px {{cy}}px, {{glow}} 0%, rgba(0,0,0,0) 38%)"></div>
+
+  <sc-if value="{{band}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: 0; right: 0; top: {{bandTop}}px; height: {{bandH}}px; background: linear-gradient(90deg, rgba(8,9,14,.25), rgba(8,9,14,.78) 30%, rgba(8,9,14,.78))"></div>
+    <div style="position: absolute; left: {{rowX}}px; top: {{bandTop}}px; height: {{bandH}}px; display: flex; gap: {{gapB}}px">
+      <sc-for list="{{buttons}}" as="b" hint-placeholder-count="5">
+        <button type="button" style="all: unset; position: relative; width: {{b.w}}px; height: {{bandH}}px; border-radius: 10px; background: {{b.bg}}; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{b.shadow}}; opacity: {{b.op}}">
+          <span style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; flex-direction: column; justify-content: flex-end; gap: {{b.gap}}px; padding: 0 0 {{padB}}px {{padL}}px">
+            <svg width="{{icon}}" height="{{icon}}" viewBox="0 0 32 32" aria-hidden="true"><path d="{{b.icon}}" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-size: {{b.size}}px; font-weight: 700; line-height: 1.05; white-space: nowrap">{{b.label}}</span>
+            <sc-if value="{{b.sub}}" hint-placeholder-val="{{ false }}"><span style="font-size: {{subSize}}px; font-weight: 600; color: rgba(255,255,255,.86); white-space: nowrap">{{b.sub}}</span></sc-if>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+    <sc-if value="{{caption}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; left: {{capX}}px; top: {{capY}}px; width: {{capW}}px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: {{capSize}}px; line-height: 1.4; color: #e3e5ee">{{caption}}</span>
+        <span style="font-size: {{subSize}}px; color: #a2a8bc">{{caption2}}</span>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <!-- the centrepiece: the delicious fruit, our own wordmark slot under it -->
+  <div style="position: absolute; left: {{fruitX}}px; top: {{fruitY}}px; width: {{fruitW}}px; height: {{fruitH}}px; animation: mm-bob 1.6s ease-in-out infinite">
+    <div style="position: absolute; left: -30%; top: -24%; right: -30%; bottom: -24%; border-radius: 50%; background: radial-gradient(circle, rgba(255,61,85,.32) 0%, rgba(255,61,85,0) 62%)"></div>
+    <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="{{fruitW}}" height="{{fruitH}}" style="position: relative; display: block; image-rendering: pixelated; filter: drop-shadow(0 {{shadowY}}px 0 rgba(0,0,0,.35))">
+  </div>
+  <div style="position: absolute; left: {{wmX}}px; top: {{wmY}}px; width: {{wmW}}px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+    <span style="font-family: 'Barlow Condensed', 'Noto Sans JP', sans-serif; font-size: {{wmSize}}px; font-weight: 700; font-style: italic; letter-spacing: -.01em; line-height: 1; white-space: nowrap; text-shadow: 0 4px 24px rgba(0,0,0,.5)">IWBTG Collection</span>
+    <span style="height: 22px; padding: 0 10px; border-radius: 8px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 600; color: #c9cde0; white-space: nowrap">{{t.slot}}</span></span>
+  </div>
+  <sc-if value="{{initial}}" hint-placeholder-val="{{ false }}">
+    <span style="position: absolute; left: 0; right: 0; top: {{pressY}}px; text-align: center; font-size: {{capSize}}px; font-weight: 600; color: #e3e5ee; animation: mm-pulse 2s ease-in-out infinite">{{t.press}}</span>
+  </sc-if>
+
+  <sc-if value="{{toolbar}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="{{w}}" mode="{{mode}}" lang="{{lang}}" user="{{user}}" badge="2" pad="{{pad}}" hint-size="1920px,56px"></dc-import></div>
+  </sc-if>
+
+  <!-- footer -->
+  <div style="position: absolute; left: {{edge}}px; bottom: {{edgeB}}px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #a2a8bc">
+    <span><span style="font-weight: 700; color: #e3e5ee">nightly 2026.11.26</span> · {{t.fan}}</span>
+    <span>{{t.credits}}</span>
+  </div>
+  <sc-if value="{{pad}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: 0; right: 0; bottom: {{hintB}}px; display: flex; justify-content: center"><dc-import name="Hints" items="{{hints}}" hint-size="600px,40px"></dc-import></div>
+  </sc-if>
+  <sc-if value="{{showCard}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; right: {{edge}}px; bottom: {{edgeB}}px; width: 420px; height: 108px"><dc-import name="ProfileCard" variant="footer" mode="{{mode}}" hint-size="420px,108px"></dc-import></div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["initial","top","play"],"default":"play"},"focus":{"editor":"enum","options":["ta","classic"],"default":"ta"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"deck":{"editor":"boolean","default":false},"pad":{"editor":"boolean","default":false},"user":{"editor":"enum","options":["in","out","expired"],"default":"in"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const state = this.props.state ?? 'play';
+    const focus = this.props.focus ?? 'ta';
+    const lang = this.props.lang ?? 'en';
+    const ja = lang === 'ja';
+    const deck = this.props.deck === true || this.props.deck === 'true';
+    const pad = deck || this.props.pad === true || this.props.pad === 'true';
+    const w = deck ? 1280 : 1920, h = deck ? 800 : 1080;
+    const k = deck ? 0.8 : 1;
+    const T = ja ? {
+      play: 'プレイ', browse: 'ゲームを探す', replays: 'リプレイ', settings: '設定', exit: '終了', back: '戻る',
+      ta: 'タイムアタック', classic: 'クラシック', race: 'レース', later: '準備中',
+      taSub: 'ランキングあり', classicSub: '続きから: Kaenbyou',
+      taCap: 'タイトルもメニューもなし。最初の入力でタイマーが始まり、クリアはランキングに載ります。',
+      classicCap: 'タイトル画面、セーブ、難易度選択まで、元のゲームそのままに。記録は自分だけのものです。',
+      cap2ta: '20作品 · 52マップ · 13作品クリア済み', cap2classic: '3作品にセーブあり · 最後のプレイ: 2日前',
+      press: 'どれかのキーを押してください', playCap: 'タイムアタックかクラシックを選びます。', cap2top: 'Enter でプレイ · Esc で終了', slot: '仮タイトル · ロゴ枠 (#201)',
+      fan: 'ファンプロジェクト · Kayin とは無関係 · 非営利', credits: 'クレジット · バグを報告',
+    } : {
+      play: 'Play', browse: 'Browse', replays: 'Replays', settings: 'Settings', exit: 'Exit', back: 'Back',
+      ta: 'Time Attack', classic: 'Classic', race: 'Race', later: 'Later',
+      taSub: 'Leaderboards', classicSub: 'Continue Kaenbyou',
+      taCap: 'The game stripped to the run: no title or menus, the timer starts on your first input, and a clear can reach the leaderboards.',
+      classicCap: 'The game as it was made: its title screen, its saves, its own difficulty select. Your stats stay yours; no leaderboard.',
+      cap2ta: '20 games · 52 maps · 13 cleared', cap2classic: 'Saves in 3 games · last played 2 days ago',
+      press: 'Press any key', playCap: 'Pick Time Attack or Classic next.', cap2top: 'Enter plays · Esc exits', slot: 'Working title · logo slot (#201)',
+      fan: 'A fan project, not affiliated with Kayin · non-commercial', credits: 'Credits · Report a bug',
+    };
+    const I = {
+      play: 'M11 7l14 9-14 9z', browse: 'M16 5v13M10.5 12.5L16 18l5.5-5.5M6 25h20',
+      replays: 'M7.5 16a8.5 8.5 0 1 0 2.8-6.3M7 6v4.5h4.5M16 11.5v5l3.5 2', settings: 'M16 12a4 4 0 1 0 0 8a4 4 0 1 0 0-8M16 4v3M16 25v3M4 16h3M25 16h3M7.5 7.5l2.1 2.1M22.4 22.4l2.1 2.1M7.5 24.5l2.1-2.1M22.4 9.6l2.1-2.1',
+      exit: 'M14 6H7v20h7M19.5 10.5L25 16l-5.5 5.5M25 16H13', back: 'M19 8l-8 8 8 8',
+      ta: 'M16 9a9 9 0 1 0 0 18a9 9 0 1 0 0-18M16 13v5l3 2M13 4.5h6M23 9l2-2', classic: 'M6 5h15.5L26 9.5V27H6zM10 5v7h10V5M10 27v-8h12v8', race: 'M8 27V5M8 6h15l-3.5 5 3.5 5H8',
+    };
+    const COL = { ta: '#ff3d55', classic: '#8f7bff' };
+    const mode = state === 'play' ? focus : 'ta';
+    const bandH = Math.round(150 * k), base = Math.round(210 * k);
+    let buttons = [];
+    const mk = (key, label, bg, opt) => Object.assign({ key, label, icon: I[key], w: base, bg, sub: '', size: Math.round((ja ? 19 : 21) * Math.max(k, .9)), gap: 8, shadow: 'none', op: 1 }, opt || {});
+    if (state === 'top') {
+      buttons = [
+        mk('play', T.play, '#ff3d55', { w: Math.round(base * 1.5), shadow: '0 10px 30px rgba(255,61,85,.35)' }),
+        mk('browse', T.browse, 'rgba(255,255,255,.1)'), mk('replays', T.replays, 'rgba(255,255,255,.1)'),
+        mk('settings', T.settings, 'rgba(255,255,255,.1)'), mk('exit', T.exit, 'rgba(255,255,255,.1)'),
+      ];
+    } else if (state === 'play') {
+      const f = (key) => key === focus;
+      buttons = [
+        mk('back', T.back, 'rgba(255,255,255,.08)', { w: Math.round(base * 0.62) }),
+        mk('ta', T.ta, f('ta') ? COL.ta : 'rgba(255,61,85,.22)', { w: Math.round(base * (f('ta') ? 1.55 : 1.15)), sub: T.taSub, shadow: f('ta') ? '0 10px 30px rgba(255,61,85,.35)' : 'none' }),
+        mk('classic', T.classic, f('classic') ? COL.classic : 'rgba(143,123,255,.24)', { w: Math.round(base * (f('classic') ? 1.55 : 1.15)), sub: T.classicSub, shadow: f('classic') ? '0 10px 30px rgba(143,123,255,.35)' : 'none' }),
+        mk('race', T.race, 'rgba(255,255,255,.06)', { sub: T.later, op: 0.45 }),
+      ];
+    }
+    const initial = state === 'initial';
+    const fs = initial ? 11 : 7.6;
+    const fruitW = Math.round(21 * fs * k), fruitH = Math.round(24 * fs * k);
+    const cy = Math.round((initial ? 450 : 470) * k);
+    const fruitX = initial ? Math.round(w / 2 - fruitW / 2) : Math.round(150 * k);
+    const fruitY = initial ? Math.round(cy - fruitH / 2) : Math.round(cy - fruitH / 2 - 6 * k);
+    const wmW = initial ? 700 : Math.round(420 * k);
+    const wmX = initial ? Math.round(w / 2 - wmW / 2) : Math.round(fruitX + fruitW / 2 - wmW / 2);
+    const rowX = Math.round(470 * k);
+    let gx = rowX; const fb = buttons.findIndex((b) => b.key === focus);
+    for (let i = 0; i < fb; i++) gx += buttons[i].w + 6;
+    const hints = state === 'play' ? 'A:Choose|B:Back|LB:Mode left|RB:Mode right' : state === 'top' ? 'A:Choose|B:Exit|Y:Settings' : 'A:Start';
+    const user = this.props.user ?? 'in';
+    return {
+      w, h, lang, pad, mode, t: T, user,
+      hue: 250, scene: 'castle',
+      glow: initial ? 'rgba(255,61,85,.16)' : (mode === 'classic' ? 'rgba(143,123,255,.14)' : 'rgba(255,61,85,.12)'),
+      glowX: fruitX + fruitW / 2, cy,
+      band: !initial, bandTop: cy - bandH / 2, bandH, rowX, gapB: 6, buttons,
+      icon: Math.round(32 * Math.max(k, .9)), padB: Math.round(18 * k), padL: Math.round(26 * k), subSize: Math.round(14 * Math.max(k, .95)),
+      caption: state === 'play' ? (focus === 'ta' ? T.taCap : T.classicCap) : state === 'top' ? T.playCap : '', caption2: state === 'top' ? T.cap2top : focus === 'ta' ? T.cap2ta : T.cap2classic,
+      capX: gx + 10, capY: cy + bandH / 2 + 22, capW: Math.round(520 * Math.max(k, .9)), capSize: Math.round(17 * Math.max(k, .95)),
+      fruitX, fruitY, fruitW, fruitH, shadowY: Math.round(fs * k),
+      wmX, wmY: initial ? fruitY + fruitH + Math.round(34 * k) : cy + bandH / 2 + Math.round(22 * k), wmW, wmSize: Math.round((initial ? 72 : 40) * k),
+      pressY: Math.round(cy + fruitH / 2 + 190 * k), initial,
+      toolbar: !initial, showCard: !initial && !deck,
+      edge: Math.round(40 * k), edgeB: Math.round(28 * k), hintB: Math.round(26 * k), hints,
+    };
+  }
+}
+</script>
+</body>
+</html>

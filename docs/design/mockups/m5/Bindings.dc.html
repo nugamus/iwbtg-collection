@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Key bindings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes kb-listen{0%,100%{box-shadow:inset 0 0 0 2px rgba(255,61,85,.5)}50%{box-shadow:inset 0 0 0 2px #ff3d55}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- Key bindings (#52), opened from Settings → Input. A second panel slides over the settings panel from the left (600 ms OutQuint), osu!'s key binding panel in our look. Columns: keyboard (two slots) and controller (one). Click a slot, or A on it, and it listens: the next key or button binds, Esc cancels, Delete clears. A key already in use asks before swapping; Esc and Start are the pause key and cannot be bound (#761). -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <dc-import name="Settings" view="audio" hint-size="1920px,1080px"></dc-import>
+  <div style="position: absolute; inset: 0; background: rgba(5,6,10,.5)"></div>
+  <div style="position: absolute; left: 72px; top: 0; bottom: 0; width: 1260px; background: #10121a; box-shadow: 20px 0 60px rgba(0,0,0,.5); display: grid; grid-template-columns: 340px minmax(0, 1fr)">
+    <!-- left: groups and the game picker -->
+    <div style="background: #0d0f16; padding: 34px 24px 24px 30px; display: flex; flex-direction: column; gap: 6px">
+      <span style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: #a2a8bc"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2L4 7l5 5" stroke="#a2a8bc" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>Settings · Input</span>
+      <span style="font-size: 30px; font-weight: 700; padding: 4px 0 12px">Key bindings</span>
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+        <button type="button" style="all: unset; height: 46px; padding: 0 16px; border-radius: 10px; background: {{g.bg}}; display: flex; align-items: center; justify-content: space-between; cursor: pointer"><span style="font-size: 16px; font-weight: {{g.w}}">{{g.label}}</span><span style="font-size: 13px; color: #a2a8bc">{{g.n}}</span></button>
+      </sc-for>
+      <span style="padding: 18px 0 6px 4px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Per game</span>
+      <label for="kb-game" style="height: 42px; border-radius: 10px; background: rgba(255,255,255,.07); display: flex; align-items: center; gap: 10px; padding: 0 14px; box-shadow: {{searchRing}}">
+        <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>
+        <input id="kb-game" type="search" placeholder="Search games" value="{{gq}}" style="all: unset; flex: 1; font-size: 15px; color: #f3f4f8">
+      </label>
+      <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 6px">
+        <sc-for list="{{games}}" as="g" hint-placeholder-count="6">
+          <button type="button" style="all: unset; padding: 9px 14px; border-radius: 10px; background: {{g.bg}}; display: flex; flex-direction: column; gap: 2px; cursor: pointer"><span style="font-size: 15px; font-weight: {{g.w}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{g.title}}</span><span style="font-size: 12px; font-weight: 600; color: {{g.ink}}">{{g.note}}</span></button>
+        </sc-for>
+      </div>
+    </div>
+    <!-- right: the table -->
+    <div style="padding: 34px 40px 24px; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 14px; padding-bottom: 6px">
+        <span style="font-size: 24px; font-weight: 700">{{heading}}</span>
+        <span style="font-size: 14px; color: #a2a8bc">{{headNote}}</span>
+        <span style="flex: 1"></span>
+        <button type="button" style="all: unset; height: 36px; padding: 0 16px; border-radius: 10px; background: rgba(255,255,255,.08); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700">Reset all to defaults</span></button>
+      </div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 150px 150px 150px 36px; gap: 10px; padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc"><span>Action</span><span>Keyboard</span><span>Second key</span><span>Controller</span><span></span></div>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+        <sc-if value="{{r.head}}" hint-placeholder-val="{{ false }}">
+          <span style="padding: 14px 14px 4px; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #c9cde0">{{r.head}}</span>
+        </sc-if>
+        <sc-if value="{{r.row}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; border-radius: 10px; background: {{r.bg}}">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 150px 150px 150px 36px; gap: 10px; align-items: center; min-height: 48px; padding: 4px 14px">
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-size: 16px; font-weight: 600; white-space: nowrap">{{r.name}}</span><sc-if value="{{r.note}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: {{r.noteInk}}">{{r.note}}</span></sc-if></span>
+              <sc-for list="{{r.slots}}" as="s" hint-placeholder-count="3">
+                <span style="height: 36px; border-radius: 9px; background: {{s.bg}}; display: flex; align-items: center; justify-content: center; gap: 6px; transform: skewX(-11.31deg); box-shadow: {{s.ring}}; animation: {{s.anim}}"><span style="transform: skewX(11.31deg); font-size: {{s.size}}px; font-weight: {{s.w}}; color: {{s.ink}}; white-space: nowrap">{{s.label}}</span></span>
+              </sc-for>
+              <span style="display: grid; place-items: center; color: #6a7088; font-size: 16px">{{r.tail}}</span>
+            </div>
+            <sc-if value="{{r.conflict}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 4px 14px 12px">
+                <span style="font-size: 14px; color: #ffd9a0"><span style="font-weight: 700; color: #ffc46b">Z is already Shoot.</span> Two actions cannot share a key.</span>
+                <span style="flex: 1"></span>
+                <span style="height: 32px; padding: 0 14px; border-radius: 9px; background: #ffc46b; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700; color: #2a1d05">Swap: Shoot gets Shift</span></span>
+                <span style="height: 32px; padding: 0 14px; border-radius: 9px; background: rgba(255,255,255,.1); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700">Keep Shift</span></span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["global","game"],"default":"global"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const game = (this.props.view ?? 'global') === 'game';
+    const slot = (label, st) => {
+      const empty = !label;
+      const S = {
+        idle: { bg: 'rgba(255,255,255,.09)', ink: '#ffffff', ring: 'none', anim: 'none', w: 700 },
+        empty: { bg: 'rgba(255,255,255,.03)', ink: '#6a7088', ring: 'inset 0 0 0 1px rgba(255,255,255,.08)', anim: 'none', w: 500 },
+        listen: { bg: 'rgba(255,61,85,.16)', ink: '#ffffff', ring: 'inset 0 0 0 2px #ff3d55', anim: 'kb-listen 1.2s ease-in-out infinite', w: 600 },
+        conflict: { bg: 'rgba(255,196,107,.22)', ink: '#ffc46b', ring: 'inset 0 0 0 2px #ffc46b', anim: 'none', w: 700 },
+        fixed: { bg: 'rgba(255,255,255,.05)', ink: '#c9cde0', ring: 'none', anim: 'none', w: 600 },
+        warn: { bg: 'rgba(255,107,107,.1)', ink: '#ff8a8a', ring: 'inset 0 0 0 1px rgba(255,107,107,.4)', anim: 'none', w: 600 },
+      }[st || (empty ? 'empty' : 'idle')];
+      return Object.assign({ label: empty ? 'Not bound' : label, size: empty ? 13 : 15 }, S);
+    };
+    const row = (name, slots, opt) => Object.assign({ row: true, head: '', name, slots, note: '', noteInk: '#a2a8bc', tail: '↺', bg: 'transparent', conflict: false }, opt || {});
+    const head = (h) => ({ head: h, row: false });
+    let rows;
+    if (!game) rows = [
+      head('Client keys · games and replays never see these'),
+      row('Quick retry', [slot('`'), slot(''), slot('Back + A')]),
+      row('Skip cutscene', [slot('Backspace'), slot(''), slot('')], { note: 'Time Attack only; the timer is frozen while a scene plays' }),
+      row('Frame advance', [slot('F'), slot(''), slot('')], { note: 'Frame advance mod (FA)' }),
+      row('Save state', [slot('Press a key…', 'listen'), slot(''), slot('')], { note: 'Esc cancels · Delete clears · proposed for #39', noteInk: '#ff8a9a', bg: 'rgba(255,61,85,.06)' }),
+      row('Load state', [slot('F8'), slot(''), slot('')], { note: 'proposed for #39' }),
+      row('Pause', [slot('Esc', 'fixed'), slot(''), slot('Start', 'fixed')], { note: 'fixed: the pause key is never a game key (#758)', tail: '' }),
+      head('Game actions · what the games read'),
+      row('Left · Right', [slot('← →'), slot('A D'), slot('D-pad, stick')]),
+      row('Jump', [slot('Z', 'conflict'), slot(''), slot('A')], { bg: 'rgba(255,196,107,.07)', conflict: true }),
+      row('Shoot', [slot('Z'), slot(''), slot('X')]),
+      row('Restart from save', [slot('R'), slot(''), slot('Y')]),
+      row('Suicide', [slot('Q'), slot(''), slot('B')]),
+      row('Skip (game\'s own)', [slot('S'), slot(''), slot('')]),
+      row('Menu', [slot(''), slot(''), slot('')], { note: 'no default, so Esc stays the pause key' }),
+      row('Extra 1 – 4', [slot(''), slot(''), slot('')], { note: 'only some games use them; see Per game', tail: '' }),
+    ];
+    else rows = [
+      head('Labels this game gives its actions'),
+      row('Jump', [slot('Shift'), slot(''), slot('A')]),
+      row('Shoot', [slot('Z'), slot(''), slot('X')]),
+      row('Extra 1 · Bomb', [slot('C'), slot(''), slot('LB')], { note: 'label from the package (sample)', noteInk: '#ffc46b', bg: 'rgba(255,196,107,.06)' }),
+      row('Extra 2 · Switch gravity', [slot(''), slot(''), slot('', 'warn')], { note: 'Needed to finish: bind it before playing', noteInk: '#ff8a8a', bg: 'rgba(255,107,107,.06)' }),
+      row('Extra 3', [slot(''), slot(''), slot('')], { note: 'not used by this game', tail: '' }),
+      row('Extra 4', [slot(''), slot(''), slot('')], { note: 'not used by this game', tail: '' }),
+    ];
+    const groups = [['Client keys', '6'], ['Game actions', '13']].map(([label, n], i) => ({ label, n, bg: !game && i === 0 ? 'rgba(255,255,255,.09)' : 'transparent', w: !game && i === 0 ? 700 : 500 }));
+    const G = [['I wanna be the Kaenbyou', 'standard actions'], ['I Wanna Rely The Needle 4.2', '2 extra actions'], ['I wanna be the Machinary', '1 extra action'], ['I wanna eat the lemon', 'standard actions'], ['I wanna go the Spook House', 'standard actions'], ['I wanna be the Showdown', 'standard actions']];
+    const games = (game ? G.filter((g) => g[1] !== 'standard actions' || true) : G).map(([title, note], i) => ({ title, note, bg: game && i === 1 ? 'rgba(255,255,255,.09)' : 'transparent', w: game && i === 1 ? 700 : 500, ink: note === 'standard actions' ? '#6a7088' : '#ffc46b' }));
+    return {
+      groups, games, rows, gq: game ? '' : '', searchRing: 'none',
+      heading: game ? 'I Wanna Rely The Needle 4.2' : 'Client keys and game actions',
+      headNote: game ? 'Changes here apply to this game only' : 'Apply to every game',
+    };
+  }
+}
+</script>
+</body>
+</html>

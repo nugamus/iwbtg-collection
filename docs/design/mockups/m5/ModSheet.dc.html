@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mod select variants</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- m4's mod select sheet (ModSelect.dc.html) with the two open questions of #554 drawn both ways. Variant "ranked": Hitboxes stays a ranked visual mod on its own board, Flashlight joins Challenge, Mirror is dropped. Variant "practice": Hitboxes moves to Practice and makes the run unranked. The header and footer always say which board the run counts for, so either choice explains itself. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Select" mode="ta" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; inset: 0; background: rgba(5,6,10,.55)"></div>
+  <div style="position: absolute; left: 0; right: 0; top: 300px; bottom: 0; background: linear-gradient(180deg, rgba(14,16,24,.94), rgba(8,9,14,.99)); box-shadow: 0 -30px 80px rgba(0,0,0,.5)">
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, #ff3d55, rgba(255,61,85,0) 60%)"></div>
+    <div style="position: absolute; left: 64px; right: 64px; top: 34px; display: flex; align-items: flex-end; justify-content: space-between">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 54px; font-weight: 700; font-style: italic; line-height: .9">Mods</span>
+        <span style="font-size: 16px; color: #c9cde0">Mods change how a run plays. Every combination has its own leaderboard.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
+        <div style="height: 30px; padding: 0 16px; border-radius: 10px; background: {{pillBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{pillInk}}">{{pill}}</span></div>
+        <span style="font-size: 14px; color: #c9cde0">{{counts}}</span>
+      </div>
+    </div>
+    <div style="position: absolute; left: 54px; right: 64px; top: 150px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px">
+      <sc-for list="{{columns}}" as="col" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 0 0 6px 10px">
+            <span style="width: 18px; height: 4px; border-radius: 2px; background: {{col.color}}"></span>
+            <span style="font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase">{{col.name}}</span>
+            <span style="font-size: 13px; font-weight: 600; color: {{col.noteColor}}">{{col.note}}</span>
+          </div>
+          <sc-for list="{{col.mods}}" as="m" hint-placeholder-count="3">
+            <button type="button" aria-pressed="{{m.pressed}}" style="all: unset; position: relative; margin-left: 10px; height: 70px; border-radius: 10px; background: {{m.bg}}; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{m.shadow}}; opacity: {{m.op}}">
+              <span style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; gap: 16px; padding: 0 20px 0 14px">
+                <span style="width: 48px; height: 44px; flex: none; border-radius: 9px; background: {{m.tileBg}}; display: grid; place-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 21px; font-weight: 700; color: {{m.tileInk}}">{{m.code}}</span></span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1">
+                  <span style="font-size: 17px; font-weight: 700; color: {{m.ink}}">{{m.name}}<sc-if value="{{m.tag}}" hint-placeholder-val="{{ false }}"><span style="margin-left: 8px; padding: 1px 6px; border-radius: 5px; background: rgba(255,255,255,.12); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #c9cde0">{{m.tag}}</span></sc-if></span>
+                  <span style="font-size: 13px; color: {{m.descInk}}; line-height: 1.3">{{m.desc}}</span>
+                </span>
+                <sc-if value="{{m.hasOpts}}" hint-placeholder-val="{{ false }}">
+                  <span style="display: flex; gap: 4px">
+                    <sc-for list="{{m.opts}}" as="o" hint-placeholder-count="2"><span style="height: 24px; padding: 0 8px; border-radius: 6px; background: {{o.bg}}; display: flex; align-items: center; font-size: 13px; font-weight: 700; color: {{o.ink}}">{{o.label}}</span></sc-for>
+                  </span>
+                </sc-if>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <span style="position: absolute; left: 64px; bottom: 100px; font-size: 14px; color: #a2a8bc">{{dropNote}}</span>
+    <div style="position: absolute; left: 64px; right: 64px; bottom: 26px; display: flex; align-items: center; gap: 14px">
+      <span style="height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 600">Back</span></span>
+      <button type="button" role="switch" aria-checked="{{retryOn}}" style="all: unset; height: 52px; padding: 0 20px; border-radius: 10px; background: {{retryBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{retryRing}}">
+        <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px">
+          <span style="width: 38px; height: 22px; border-radius: 11px; background: {{trackBg}}; position: relative"><span style="position: absolute; left: {{knobX}}px; top: 3px; width: 16px; height: 16px; border-radius: 8px; background: {{knobBg}}"></span></span>
+          <span style="display: flex; flex-direction: column; line-height: 1.15"><span style="font-size: 15px; font-weight: 700">Auto-retry</span><span style="font-size: 12px; color: #a2a8bc">Restart from the start after a death</span></span>
+        </span>
+      </button>
+      <span style="flex: 1"></span>
+      <span style="font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Selected</span>
+      <sc-for list="{{chosen}}" as="c" hint-placeholder-count="2">
+        <span style="height: 32px; min-width: 48px; padding: 0 10px; box-sizing: border-box; border-radius: 10px; background: {{c.color}}; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; color: #10121a">{{c.code}}</span></span>
+      </sc-for>
+      <span style="height: 52px; padding: 0 22px; margin-left: 10px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 16px; font-weight: 700">Deselect all</span></span>
+      <span style="height: 52px; padding: 0 30px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: 0 8px 24px rgba(255,61,85,.35)"><span style="transform: skewX(11.31deg); font-size: 19px; font-weight: 700">Done</span></span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["ranked","practice"],"default":"ranked"},"retry":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const practiceHB = (this.props.variant ?? 'ranked') === 'practice';
+    const retry = this.props.retry === true || this.props.retry === 'true';
+    const on = { SD: true, HB: true };
+    const mk = (color, code, name, desc, opts, tag) => {
+      const sel = !!on[code];
+      return {
+        code, name, desc, tag: tag || '', pressed: sel ? 'true' : 'false', op: 1,
+        bg: sel ? color.replace('rgb(', 'rgba(').replace(')', ',.22)') : 'rgba(255,255,255,.05)',
+        shadow: sel ? `inset 0 0 0 2px ${color}` : 'none',
+        tileBg: sel ? color : 'rgba(255,255,255,.1)', tileInk: sel ? '#10121a' : '#c9cde0',
+        ink: sel ? '#ffffff' : '#e3e5ee', descInk: sel ? '#e3e5ee' : '#a2a8bc',
+        hasOpts: !!opts, opts: (opts || []).map((o, i) => ({ label: o, bg: i === 0 ? 'rgba(255,255,255,.18)' : 'transparent', ink: i === 0 ? '#ffffff' : '#a2a8bc' })),
+      };
+    };
+    const red = 'rgb(255,96,112)', blue = 'rgb(142,203,255)', amber = 'rgb(255,196,107)';
+    const hb = mk(practiceHB ? amber : blue, 'HB', 'Hitboxes', 'Draw the kid’s and every hazard’s hitbox.', null, practiceHB ? 'moved' : '');
+    const columns = [
+      { name: 'Challenge', color: red, note: '', noteColor: '#a2a8bc', mods: [mk(red, 'SD', 'Sudden Death', 'One death ends the run.'), mk(red, 'FL', 'Flashlight', 'Only a circle around the kid is lit. Client-only.', null, 'new')] },
+      { name: 'Visual', color: blue, note: '', noteColor: '#a2a8bc', mods: practiceHB ? [mk(blue, 'NB', 'No background', 'Plain backdrop behind the room.')] : [hb, mk(blue, 'NB', 'No background', 'Plain backdrop behind the room.')] },
+      { name: 'Practice', color: amber, note: '· never ranked', noteColor: '#ffc46b', mods: (practiceHB ? [hb] : []).concat([mk(amber, 'SS', 'Save states', 'Save and load anywhere.'), mk(amber, 'SL', 'Slow motion', 'Play at a lower speed.', ['75%', '50%']), mk(amber, 'FA', 'Frame advance', 'Step one tick at a time.')]) },
+    ];
+    return {
+      columns,
+      chosen: [{ code: 'SD', color: red }, { code: 'HB', color: practiceHB ? amber : blue }],
+      pill: practiceHB ? 'Unranked' : 'Ranked', pillBg: practiceHB ? '#ffc46b' : '#8ecbff', pillInk: practiceHB ? '#2a1d05' : '#0b1a2a',
+      counts: practiceHB ? 'Hitboxes is a practice aid, so this run won’t reach the leaderboard.' : 'Counts for Very Hard · Any% + SD + HB',
+      dropNote: 'Mirror (MR) is not offered: it needs sim work and a per-game check (rooms that read the kid’s x), for a mod few would play. Flashlight is drawn by the client only.',
+      retryOn: retry ? 'true' : 'false', retryBg: retry ? 'rgba(255,61,85,.2)' : 'rgba(255,255,255,.06)', retryRing: retry ? 'inset 0 0 0 2px #ff3d55' : 'none',
+      trackBg: retry ? '#ff3d55' : 'rgba(255,255,255,.2)', knobX: retry ? 19 : 3, knobBg: retry ? '#ffffff' : '#c9cde0',
+    };
+  }
+}
+</script>
+</body>
+</html>

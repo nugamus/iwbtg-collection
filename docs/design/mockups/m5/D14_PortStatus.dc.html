@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Port status marks</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Port status (#62): one pill per status, the same everywhere it appears. Ranked keeps m4's blue. Loved is pink. Beta is an outline, not a colour, so it never reads as a state of your run. Unranked reuses the amber that already means "this run will not reach a leaderboard". Each pill also says its word, so no colour has to carry it alone (#106). -->
+<div style="position: relative; width: 1920px; height: 880px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="880px" hue="250" blur="40" dim="0.55" tag="none" hint-size="1920px,880px"></dc-import></div>
+  <div style="position: absolute; left: 60px; top: 40px; display: grid; grid-template-columns: repeat(4, 440px); gap: 0 26px">
+    <sc-for list="{{statuses}}" as="s" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 22px 24px; border-radius: 10px; background: rgba(12,14,22,.78)">
+        <div style="align-self: flex-start; height: 30px; padding: 0 14px; border-radius: 10px; background: {{s.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: {{s.ring}}"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{s.ink}}">{{s.name}}</span></div>
+        <span style="font-size: 16px; line-height: 1.5; color: #e3e5ee">{{s.means}}</span>
+        <span style="font-size: 14px; line-height: 1.5; color: #a2a8bc">{{s.where}}</span>
+      </div>
+    </sc-for>
+  </div>
+  <span style="position: absolute; left: 60px; top: 330px; font-size: 18px; font-weight: 700">Where it shows</span>
+  <div style="position: absolute; left: 60px; top: 370px; display: grid; grid-template-columns: 900px 480px 400px; gap: 30px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 14px; font-weight: 600; color: #c9cde0">List panel: right of the title (Ranked shows nothing: it is the normal case)</span>
+      <div style="position: relative; height: 72px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); margin-left: 14px">
+        <div style="position: absolute; left: -30px; top: 0; width: 960px; height: 72px; transform: skewX(11.31deg)"><dc-import name="Backdrop" w="960px" h="72px" hue="190" scene="cave" blur="0" dim="0" tag="none" hint-size="960px,72px"></dc-import></div>
+        <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.9) 0%, rgba(8,9,14,.6) 45%, rgba(8,9,14,.2) 100%)"></div>
+        <div style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; gap: 16px; padding: 0 26px">
+          <span style="display: flex; flex-direction: column; width: 480px"><span style="font-size: 23px; font-weight: 700">I wanna be the Machinary</span><span style="font-size: 14px; color: #dfe2ec">メガビリー</span></span>
+          <span style="height: 22px; padding: 0 9px; border-radius: 8px; background: rgba(10,12,18,.6); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Beta</span></span>
+        </div>
+      </div>
+      <span style="font-size: 14px; font-weight: 600; color: #c9cde0; padding-top: 14px">Title wedge and loading card: first pill of the row, with a line saying what it means for this run</span>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-radius: 10px; background: rgba(12,14,22,.82)">
+        <span style="height: 26px; padding: 0 12px; border-radius: 10px; background: rgba(10,12,18,.6); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Beta</span></span>
+        <span style="font-size: 15px; color: #e3e5ee">Times on Beta boards may be reset when the port changes.</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 14px; font-weight: 600; color: #c9cde0">HUD: under the timer, Beta and Loved only</span>
+      <div style="padding: 20px; border-radius: 10px; background: rgba(12,14,22,.6)"><dc-import name="RunInfo" mode="ranked" status="Beta" status-note="board may reset" time="12:40.18" width="206" hint-size="206px,420px"></dc-import></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 14px; font-weight: 600; color: #c9cde0">Group by Status headers (D4) and Browse cards (C15) use the same pills.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { statuses: [
+      { name: 'Ranked', bg: '#8ecbff', ink: '#0b1a2a', ring: 'none', means: 'Curated, checked port. Its boards count for the overall rank (and pp later).', where: 'Normal case: no pill on list panels; shown on the wedge and the loading card.' },
+      { name: 'Loved', bg: '#ff8fc7', ink: '#2a0b1c', ring: 'none', means: 'Good port with boards that stay, but it does not count for the overall rank (osu!’s Loved).', where: 'List panel, wedge, loading card, HUD.' },
+      { name: 'Beta', bg: 'rgba(10,12,18,.6)', ink: '#f3f4f8', ring: 'inset 0 0 0 1.5px rgba(255,255,255,.7)', means: 'Playable, still being checked. Boards exist but may be reset when the port changes.', where: 'List panel, wedge, loading card, HUD.' },
+      { name: 'Unranked', bg: '#ffc46b', ink: '#2a1d05', ring: 'none', means: 'No boards at all yet: the game plays and keeps your stats. Same amber as an unranked run.', where: 'List panel, wedge, loading card (as the run’s Unranked pill), HUD.' },
+    ] };
+  }
+}
+</script>
+</body>
+</html>

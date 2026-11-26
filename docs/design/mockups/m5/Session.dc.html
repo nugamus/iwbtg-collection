@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Classic session summary</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Leaving a Classic game (Back to the shelf, or after its ending) shows this, not the Time Attack results: what the session did, no placement, no splits. Same page grammar as m4's results (hero number top left, card top right, details below) so the two read as one family. The hero counts up over 600 ms OutQuint; the bars grow 400 ms each, 40 ms apart. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="45" dim="0.62" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 80px; top: 64px; display: flex; align-items: baseline; gap: 16px">
+    <span style="font-size: 26px; font-weight: 700">I wanna be the Kaenbyou</span>
+    <span style="height: 24px; padding: 0 10px; border-radius: 8px; background: #8f7bff; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Classic · Slot 1</span></span>
+    <span style="font-size: 15px; color: #a2a8bc">Very Hard · 26 Nov 2026, 21:14 – 22:26</span>
+  </div>
+
+  <div style="position: absolute; left: 80px; top: 130px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{heroKey}}</span>
+    <div style="display: flex; align-items: baseline; gap: 24px">
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 150px; font-weight: 700; line-height: .9">{{hero}}</span>
+      <sc-if value="{{finished}}" hint-placeholder-val="{{ false }}">
+        <span style="height: 40px; padding: 0 16px; border-radius: 10px; background: rgba(143,123,255,.3); display: inline-flex; align-items: center; transform: skewX(-11.31deg); box-shadow: inset 0 0 0 2px #b9adff"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="18" height="21" style="image-rendering: pixelated">Finished on Very Hard</span></span>
+      </sc-if>
+    </div>
+    <div style="display: flex; gap: 56px; margin-top: 18px">
+      <sc-for list="{{facts}}" as="f" hint-placeholder-count="4">
+        <div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{f.k}}</span><span style="font-size: 30px; font-weight: 600; white-space: nowrap">{{f.v}}</span><span style="font-size: 14px; color: {{f.dc}}; white-space: nowrap">{{f.d}}</span></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position: absolute; right: 80px; top: 64px; width: 620px; height: 280px"><dc-import name="ProfileCard" variant="results" mode="classic" hint-size="620px,280px"></dc-import></div>
+
+  <!-- this session, stage by stage -->
+  <div style="position: absolute; left: 80px; top: 520px; width: 1760px; display: grid; grid-template-columns: 860px minmax(0, 1fr); gap: 80px">
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Deaths this session, by stage</span>
+      <div style="display: flex; align-items: flex-end; gap: 14px; height: 200px">
+        <sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
+          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; height: 100%">
+            <span style="font-size: 15px; font-weight: 600; color: {{b.ink}}">{{b.v}}</span>
+            <div style="width: 100%; height: {{b.h}}px; border-radius: 6px 6px 0 0; background: {{b.c}}"></div>
+            <span style="font-size: 14px; color: #a2a8bc">{{b.name}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">The session, start to finish</span>
+      <div style="position: relative; height: 90px">
+        <div style="position: absolute; left: 0; right: 0; top: 44px; height: 2px; background: rgba(255,255,255,.18)"></div>
+        <sc-for list="{{ticks}}" as="t" hint-placeholder-count="40">
+          <span style="position: absolute; left: {{t}}%; top: 30px; width: 2px; height: 16px; background: rgba(255,107,107,.75)"></span>
+        </sc-for>
+        <sc-for list="{{saves}}" as="s" hint-placeholder-count="6">
+          <span style="position: absolute; left: {{s.x}}%; top: 50px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="width: 12px; height: 12px; border-radius: 3px; background: #8f7bff; transform: rotate(45deg)"></span><span style="font-size: 12px; color: #c9cde0; white-space: nowrap">{{s.label}}</span></span>
+        </sc-for>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #a2a8bc"><span>21:14</span><span>red ticks: deaths · diamonds: saves</span><span>22:26</span></div>
+      <span style="margin-top: 16px; font-size: 16px; line-height: 1.5; color: #e3e5ee; max-width: 760px">{{note}}</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 80px; right: 80px; bottom: 36px; display: flex; gap: 12px; align-items: center">
+    <button type="button" style="all: unset; height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2L4 7l5 5" stroke="#f3f4f8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>Back to the shelf</span></button>
+    <span style="flex: 1"></span>
+    <button type="button" style="all: unset; height: 52px; padding: 0 22px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 16px; font-weight: 700">Save replay</span></button>
+    <button type="button" style="all: unset; height: 52px; padding: 0 28px; border-radius: 10px; background: #8f7bff; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: 0 8px 24px rgba(143,123,255,.35)"><span style="transform: skewX(11.31deg); font-size: 19px; font-weight: 700">{{primary}}</span></button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"finished":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const fin = this.props.finished === true || this.props.finished === 'true';
+    const sd = fin ? [0, 0, 0, 0, 0, 96, 318] : [0, 0, 41, 371, 0, 0, 0];
+    const max = Math.max(...sd);
+    const bars = sd.map((n, i) => ({ name: i === 6 ? 'Boss' : 'Stage ' + (i + 1), v: n || '—', ink: n ? '#f3f4f8' : '#6a7088', h: n ? Math.max(6, Math.round(150 * n / max)) : 2, c: n === max ? '#8f7bff' : n ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.08)' }));
+    let seed = 7; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+    const ticks = []; for (let i = 0; i < 90; i++) ticks.push((rnd() ** 0.7 * 98 + 1).toFixed(1));
+    return {
+      finished: fin,
+      heroKey: fin ? 'Last session · the ending' : 'This session',
+      hero: fin ? '1:04:51' : '1:12:05',
+      facts: fin ? [
+        { k: 'Deaths', v: '414', d: '5,608 in this slot', dc: '#a2a8bc' }, { k: 'Slot total', v: '7:17:31', d: 'from new game to the ending', dc: '#a2a8bc' },
+        { k: 'Stages', v: '6 → end', d: 'Stage 6 and the boss', dc: '#a2a8bc' }, { k: 'Finished', v: '2 of 4', d: 'Hard, Very Hard', dc: '#a2a8bc' },
+      ] : [
+        { k: 'Deaths', v: '412', d: '1,696 in this slot', dc: '#a2a8bc' }, { k: 'Progress', v: 'Stage 3 → 4', d: 'first time in Stage 4', dc: '#b9adff' },
+        { k: 'Saves', v: '6', d: 'last: Misty forest 3', dc: '#a2a8bc' }, { k: 'Rooms', v: '14', d: '5 new', dc: '#a2a8bc' },
+      ],
+      bars, ticks,
+      saves: fin ? [{ x: 12, label: '6-2' }, { x: 40, label: '6-4' }, { x: 66, label: 'Boss' }] : [{ x: 8, label: '3-3' }, { x: 21, label: '3-4' }, { x: 37, label: '4-1' }, { x: 58, label: '4-2' }, { x: 79, label: '4-3' }, { x: 96, label: 'Misty 3' }],
+      note: fin ? 'A Classic finish shows here and on the shelf (the fruit on the cover). It is a personal record only; the same game’s Time Attack boards are unaffected.' : 'No leaderboard and no splits in Classic: the game’s own saves decide where you are. The replay of this session is kept like any other.',
+      primary: fin ? 'Play again' : 'Continue playing',
+    };
+  }
+}
+</script>
+</body>
+</html>

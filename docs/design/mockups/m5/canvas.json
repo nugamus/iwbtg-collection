@@ -1,0 +1,1028 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-26T01:00:00Z"
+ },
+ "title": "IWBTG Collection: play modes, app shell and the rest of the client",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 300,
+   "w": 1920,
+   "h": 1080,
+   "title": "A1 Main menu: Play opens the two modes (direction A)"
+  },
+  "A2_MenuClassic.dc.html": {
+   "x": 2000,
+   "y": 300,
+   "w": 1920,
+   "h": 1080,
+   "title": "A2 Main menu: Classic focused, the accent turns violet"
+  },
+  "A3_SelectTimeAttack.dc.html": {
+   "x": 4000,
+   "y": 300,
+   "w": 1920,
+   "h": 1080,
+   "title": "A3 Time Attack: the m4 game select under the toolbar (A)"
+  },
+  "A4_Shelf.dc.html": {
+   "x": 6000,
+   "y": 300,
+   "w": 1920,
+   "h": 1080,
+   "title": "A4 Classic: the shelf, Continue or New game (A, #851)"
+  },
+  "A5_ShelfNewGame.dc.html": {
+   "x": 8000,
+   "y": 300,
+   "w": 1920,
+   "h": 1080,
+   "title": "A5 Classic: New game over a slot with a save (#851)"
+  },
+  "A6_LoadingClassic.dc.html": {
+   "x": 0,
+   "y": 1540,
+   "w": 1920,
+   "h": 1080,
+   "title": "A6 Loading card in Classic"
+  },
+  "A7_ClassicTitle.dc.html": {
+   "x": 2000,
+   "y": 1540,
+   "w": 1920,
+   "h": 1080,
+   "title": "A7 Classic run: the game's own title, session panel"
+  },
+  "A8_ClassicPause.dc.html": {
+   "x": 4000,
+   "y": 1540,
+   "w": 1920,
+   "h": 1080,
+   "title": "A8 Classic pause: Back to the shelf"
+  },
+  "A9_Session.dc.html": {
+   "x": 6000,
+   "y": 1540,
+   "w": 1920,
+   "h": 1080,
+   "title": "A9 Session summary on leaving Classic"
+  },
+  "A10_SessionFinished.dc.html": {
+   "x": 8000,
+   "y": 1540,
+   "w": 1920,
+   "h": 1080,
+   "title": "A10 Session summary after the ending"
+  },
+  "A11_FallbackTitle.dc.html": {
+   "x": 0,
+   "y": 2780,
+   "w": 1920,
+   "h": 640,
+   "title": "A11 Client-drawn title and menus for ports without their own (#100)"
+  },
+  "A12_CardModes.dc.html": {
+   "x": 2000,
+   "y": 2780,
+   "w": 1100,
+   "h": 460,
+   "title": "A12 Player card per mode"
+  },
+  "A13_BClassic.dc.html": {
+   "x": 3180,
+   "y": 2780,
+   "w": 1920,
+   "h": 1080,
+   "title": "A13 Direction B: one select with mode tabs, Classic"
+  },
+  "A14_BTimeAttack.dc.html": {
+   "x": 5180,
+   "y": 2780,
+   "w": 1920,
+   "h": 1080,
+   "title": "A14 Direction B: one select with mode tabs, Time Attack"
+  },
+  "B1_Intro.dc.html": {
+   "x": 0,
+   "y": 5413,
+   "w": 1920,
+   "h": 1080,
+   "title": "B1 Intro: the fruit lands on the spikes (1.8 s, any key skips)"
+  },
+  "B2_Notice.dc.html": {
+   "x": 2000,
+   "y": 5413,
+   "w": 1920,
+   "h": 1080,
+   "title": "B2 First launch: fan project, not affiliated, credits (#73)"
+  },
+  "B3_SetupLanguage.dc.html": {
+   "x": 4000,
+   "y": 5413,
+   "w": 1920,
+   "h": 1080,
+   "title": "B3 First run 1/3: language (#196)"
+  },
+  "B4_SetupControls.dc.html": {
+   "x": 6000,
+   "y": 5413,
+   "w": 1920,
+   "h": 1080,
+   "title": "B4 First run 2/3: controls check"
+  },
+  "B5_SetupGames.dc.html": {
+   "x": 8000,
+   "y": 5413,
+   "w": 1920,
+   "h": 1080,
+   "title": "B5 First run 3/3: where games come from (#51)"
+  },
+  "B6_MenuInitial.dc.html": {
+   "x": 0,
+   "y": 6653,
+   "w": 1920,
+   "h": 1080,
+   "title": "B6 Main menu: initial (press any key)"
+  },
+  "B7_MenuTop.dc.html": {
+   "x": 2000,
+   "y": 6653,
+   "w": 1920,
+   "h": 1080,
+   "title": "B7 Main menu: top level"
+  },
+  "B8_Toolbar.dc.html": {
+   "x": 4000,
+   "y": 6653,
+   "w": 1920,
+   "h": 680,
+   "title": "B8 Toolbar states"
+  },
+  "B9_Exit.dc.html": {
+   "x": 6000,
+   "y": 6653,
+   "w": 1920,
+   "h": 1080,
+   "title": "B9 Exit confirmation (only when something is running)"
+  },
+  "B10_Update.dc.html": {
+   "x": 8000,
+   "y": 6653,
+   "w": 1920,
+   "h": 1080,
+   "title": "B10 Update available (#115)"
+  },
+  "B11_WebStart.dc.html": {
+   "x": 0,
+   "y": 7893,
+   "w": 1600,
+   "h": 900,
+   "title": "B11 Web: click to start (audio unlock)"
+  },
+  "B12_WebLoading.dc.html": {
+   "x": 1680,
+   "y": 7893,
+   "w": 1600,
+   "h": 900,
+   "title": "B12 Web: loading the package"
+  },
+  "B13_WebError.dc.html": {
+   "x": 3360,
+   "y": 7893,
+   "w": 1600,
+   "h": 900,
+   "title": "B13 Web: the package did not load"
+  },
+  "C1_Settings.dc.html": {
+   "x": 0,
+   "y": 10293,
+   "w": 1920,
+   "h": 1080,
+   "title": "C1 Settings: General and Graphics (#53)"
+  },
+  "C2_SettingsAudio.dc.html": {
+   "x": 2000,
+   "y": 10293,
+   "w": 1920,
+   "h": 1080,
+   "title": "C2 Settings: Audio, Input, Gameplay and HUD"
+  },
+  "C3_SettingsOnline.dc.html": {
+   "x": 4000,
+   "y": 10293,
+   "w": 1920,
+   "h": 1080,
+   "title": "C3 Settings: Online, account and data (#1491)"
+  },
+  "C4_SettingsSearch.dc.html": {
+   "x": 6000,
+   "y": 10293,
+   "w": 1920,
+   "h": 1080,
+   "title": "C4 Settings: search"
+  },
+  "C5_Bindings.dc.html": {
+   "x": 8000,
+   "y": 10293,
+   "w": 1920,
+   "h": 1080,
+   "title": "C5 Key bindings: listening, and a conflict (#52)"
+  },
+  "C6_BindingsGame.dc.html": {
+   "x": 0,
+   "y": 11533,
+   "w": 1920,
+   "h": 1080,
+   "title": "C6 Key bindings: per game, extra actions (#52)"
+  },
+  "C7_Calibrate.dc.html": {
+   "x": 2000,
+   "y": 11533,
+   "w": 1920,
+   "h": 1080,
+   "title": "C7 Audio offset calibration (#464)"
+  },
+  "C8_ExtraActions.dc.html": {
+   "x": 4000,
+   "y": 11533,
+   "w": 1920,
+   "h": 1080,
+   "title": "C8 Before play: the game uses extra actions (#52)"
+  },
+  "C9_PracticePicker.dc.html": {
+   "x": 6000,
+   "y": 11533,
+   "w": 1920,
+   "h": 1080,
+   "title": "C9 Practice: start from a stage, save or room (#39)"
+  },
+  "C10_PracticeHud.dc.html": {
+   "x": 8000,
+   "y": 11533,
+   "w": 1920,
+   "h": 1080,
+   "title": "C10 Practice HUD: save states, SL, FA, Unranked (#39)"
+  },
+  "C11_Details.dc.html": {
+   "x": 0,
+   "y": 12773,
+   "w": 1920,
+   "h": 1080,
+   "title": "C11 Game select: Details tab (#498, #805, #1050)"
+  },
+  "C12_Collections.dc.html": {
+   "x": 2000,
+   "y": 12773,
+   "w": 1920,
+   "h": 1080,
+   "title": "C12 Collections and favourites (#105)"
+  },
+  "C13_Replays.dc.html": {
+   "x": 4000,
+   "y": 12773,
+   "w": 1920,
+   "h": 1080,
+   "title": "C13 Replays: the local browser"
+  },
+  "C14_ReplayPlayer.dc.html": {
+   "x": 6000,
+   "y": 12773,
+   "w": 1920,
+   "h": 1080,
+   "title": "C14 Replay player"
+  },
+  "C15_Browse.dc.html": {
+   "x": 8000,
+   "y": 12773,
+   "w": 1920,
+   "h": 1080,
+   "title": "C15 Browse: catalog, downloads, removal list (#50)"
+  },
+  "C16_Profile.dc.html": {
+   "x": 0,
+   "y": 14013,
+   "w": 1920,
+   "h": 1080,
+   "title": "C16 Profile with per-mode stats, pp and badge slots (#60)"
+  },
+  "C17_SignIn.dc.html": {
+   "x": 2000,
+   "y": 14013,
+   "w": 1920,
+   "h": 1080,
+   "title": "C17 Sign in: Google or Discord (#158)"
+  },
+  "C18_SignInWaiting.dc.html": {
+   "x": 4000,
+   "y": 14013,
+   "w": 1920,
+   "h": 1080,
+   "title": "C18 Sign in: finish in your browser (#159)"
+  },
+  "C19_SessionExpired.dc.html": {
+   "x": 6000,
+   "y": 14013,
+   "w": 1920,
+   "h": 1080,
+   "title": "C19 Session expired"
+  },
+  "D1_ScriptError.dc.html": {
+   "x": 0,
+   "y": 16593,
+   "w": 1920,
+   "h": 1080,
+   "title": "D1 Script error, redesigned (#953)"
+  },
+  "D2_Notifications.dc.html": {
+   "x": 2000,
+   "y": 16593,
+   "w": 1920,
+   "h": 1080,
+   "title": "D2 Notifications: the overlay under the bell"
+  },
+  "D3_NoticesInRun.dc.html": {
+   "x": 4000,
+   "y": 16593,
+   "w": 1920,
+   "h": 1080,
+   "title": "D3 Notices in a run: leaderboard column"
+  },
+  "D4_SortGroups.dc.html": {
+   "x": 6000,
+   "y": 16593,
+   "w": 1920,
+   "h": 1080,
+   "title": "D4 Game select: Sort open, grouped by status"
+  },
+  "D5_ListDim.dc.html": {
+   "x": 8000,
+   "y": 16593,
+   "w": 1920,
+   "h": 1080,
+   "title": "D5 Game select: the list dims while the left side has focus"
+  },
+  "D6_ListStates.dc.html": {
+   "x": 0,
+   "y": 17833,
+   "w": 1920,
+   "h": 760,
+   "title": "D6 Game list: empty, no results, loading"
+  },
+  "D7_Filters.dc.html": {
+   "x": 2000,
+   "y": 17833,
+   "w": 1920,
+   "h": 1080,
+   "title": "D7 Game select: Status, Year and Tag filters (#805)"
+  },
+  "D8_AutoRetry.dc.html": {
+   "x": 4000,
+   "y": 17833,
+   "w": 1920,
+   "h": 760,
+   "title": "D8 Auto-retry: footer or HUD (#773)"
+  },
+  "D9_ModsHbRanked.dc.html": {
+   "x": 6000,
+   "y": 17833,
+   "w": 1920,
+   "h": 1080,
+   "title": "D9 Mod select: Hitboxes ranked, Flashlight added, Mirror dropped (#554)"
+  },
+  "D9b_ModsHbPractice.dc.html": {
+   "x": 8000,
+   "y": 17833,
+   "w": 1920,
+   "h": 1080,
+   "title": "D9b Mod select: Hitboxes as a practice aid (#554)"
+  },
+  "D10_ExitFlow.dc.html": {
+   "x": 0,
+   "y": 19073,
+   "w": 1920,
+   "h": 860,
+   "title": "D10 Leaving a run in both modes (#1553)"
+  },
+  "D11_DropImport.dc.html": {
+   "x": 2000,
+   "y": 19073,
+   "w": 1920,
+   "h": 1080,
+   "title": "D11 Drag and drop import"
+  },
+  "D12_Skip.dc.html": {
+   "x": 4000,
+   "y": 19073,
+   "w": 1920,
+   "h": 1080,
+   "title": "D12 Skip cutscene hint and the frozen timer (#573)"
+  },
+  "D13_PausePad.dc.html": {
+   "x": 6000,
+   "y": 19073,
+   "w": 1920,
+   "h": 1080,
+   "title": "D13 Pause on a controller (#624)"
+  },
+  "D14_PortStatus.dc.html": {
+   "x": 8000,
+   "y": 19073,
+   "w": 1920,
+   "h": 880,
+   "title": "D14 Port status marks (#62)"
+  },
+  "E1_MenuDeck.dc.html": {
+   "x": 0,
+   "y": 21706,
+   "w": 1280,
+   "h": 800,
+   "title": "E1 Main menu at 1280x800 (Steam Deck), controller hints (#117)"
+  },
+  "E2_SelectDeck.dc.html": {
+   "x": 1360,
+   "y": 21706,
+   "w": 1280,
+   "h": 800,
+   "title": "E2 Time Attack select at 1280x800 (#117)"
+  },
+  "E3_SettingsDeck.dc.html": {
+   "x": 2720,
+   "y": 21706,
+   "w": 1280,
+   "h": 800,
+   "title": "E3 Settings at 1280x800 (#117)"
+  },
+  "E4_MenuJa.dc.html": {
+   "x": 4080,
+   "y": 21706,
+   "w": 1920,
+   "h": 1080,
+   "title": "E4 Main menu in Japanese (#196)"
+  },
+  "E5_SettingsJa.dc.html": {
+   "x": 6080,
+   "y": 21706,
+   "w": 1920,
+   "h": 1080,
+   "title": "E5 Settings in Japanese (#196)"
+  },
+  "E6_Colourblind.dc.html": {
+   "x": 8080,
+   "y": 21706,
+   "w": 1920,
+   "h": 900,
+   "title": "E6 Colourblind check of every meaning colour (#106)"
+  },
+  "F1_RaceLobby.dc.html": {
+   "x": 0,
+   "y": 24339,
+   "w": 1920,
+   "h": 1080,
+   "title": "F1 Race lobby (#168), rough"
+  },
+  "F2_RaceLive.dc.html": {
+   "x": 2000,
+   "y": 24339,
+   "w": 1920,
+   "h": 1080,
+   "title": "F2 Race in progress: live ghosts (#169), rough"
+  },
+  "F3_RaceResults.dc.html": {
+   "x": 4000,
+   "y": 24339,
+   "w": 1920,
+   "h": 1080,
+   "title": "F3 Race results and finish order (#170), rough"
+  },
+  "Toolbar.dc.html": {
+   "x": 0,
+   "y": 27025,
+   "w": 1920,
+   "h": 56,
+   "title": "Toolbar (component)"
+  },
+  "Hints.dc.html": {
+   "x": 2000,
+   "y": 27025,
+   "w": 560,
+   "h": 40,
+   "title": "Button hint bar (component)"
+  },
+  "MainMenu.dc.html": {
+   "x": 2640,
+   "y": 27025,
+   "w": 1920,
+   "h": 1080,
+   "title": "Main menu (component)"
+  },
+  "Select.dc.html": {
+   "x": 4640,
+   "y": 27025,
+   "w": 1920,
+   "h": 1080,
+   "title": "Game select (component)"
+  },
+  "Shelf.dc.html": {
+   "x": 6640,
+   "y": 27025,
+   "w": 1920,
+   "h": 1080,
+   "title": "Classic shelf (component)"
+  },
+  "Loading2.dc.html": {
+   "x": 0,
+   "y": 28265,
+   "w": 1920,
+   "h": 1080,
+   "title": "Loading card by mode (component)"
+  },
+  "ClassicRun.dc.html": {
+   "x": 2000,
+   "y": 28265,
+   "w": 1920,
+   "h": 1080,
+   "title": "Classic run (component)"
+  },
+  "Session.dc.html": {
+   "x": 4000,
+   "y": 28265,
+   "w": 1920,
+   "h": 1080,
+   "title": "Session summary (component)"
+  },
+  "Opening.dc.html": {
+   "x": 6000,
+   "y": 28265,
+   "w": 1920,
+   "h": 1080,
+   "title": "Opening and first run (component)"
+  },
+  "MenuDialog.dc.html": {
+   "x": 8000,
+   "y": 28265,
+   "w": 1920,
+   "h": 1080,
+   "title": "Dialogs over the main menu (component)"
+  },
+  "Web.dc.html": {
+   "x": 0,
+   "y": 29505,
+   "w": 1600,
+   "h": 900,
+   "title": "Web start and loading (component)"
+  },
+  "Settings.dc.html": {
+   "x": 1680,
+   "y": 29505,
+   "w": 1920,
+   "h": 1080,
+   "title": "Settings overlay (component)"
+  },
+  "Bindings.dc.html": {
+   "x": 3680,
+   "y": 29505,
+   "w": 1920,
+   "h": 1080,
+   "title": "Key bindings (component)"
+  },
+  "Practice.dc.html": {
+   "x": 5680,
+   "y": 29505,
+   "w": 1920,
+   "h": 1080,
+   "title": "Practice (component)"
+  },
+  "Details.dc.html": {
+   "x": 7680,
+   "y": 29505,
+   "w": 860,
+   "h": 380,
+   "title": "Details tab (component)"
+  },
+  "Replays.dc.html": {
+   "x": 0,
+   "y": 30745,
+   "w": 1920,
+   "h": 1080,
+   "title": "Replays (component)"
+  },
+  "Notices.dc.html": {
+   "x": 2000,
+   "y": 30745,
+   "w": 1920,
+   "h": 1080,
+   "title": "Notifications (component)"
+  },
+  "ModSheet.dc.html": {
+   "x": 4000,
+   "y": 30745,
+   "w": 1920,
+   "h": 1080,
+   "title": "Mod select variants (component)"
+  },
+  "Race.dc.html": {
+   "x": 6000,
+   "y": 30745,
+   "w": 1920,
+   "h": 1080,
+   "title": "Races (component)"
+  },
+  "Backdrop.dc.html": {
+   "x": 8000,
+   "y": 30745,
+   "w": 1600,
+   "h": 900,
+   "title": "Background system (from m4)"
+  },
+  "GameScene.dc.html": {
+   "x": 0,
+   "y": 31985,
+   "w": 800,
+   "h": 608,
+   "title": "Placeholder game room (from m4)"
+  },
+  "Leaderboard.dc.html": {
+   "x": 880,
+   "y": 31985,
+   "w": 260,
+   "h": 400,
+   "title": "Leaderboard (from m4)"
+  },
+  "RunInfo.dc.html": {
+   "x": 1220,
+   "y": 31985,
+   "w": 240,
+   "h": 420,
+   "title": "Run info (from m4)"
+  },
+  "PauseBox.dc.html": {
+   "x": 1540,
+   "y": 31985,
+   "w": 320,
+   "h": 260,
+   "title": "Pause box (from m4, items prop added)"
+  },
+  "ProfileCard.dc.html": {
+   "x": 1940,
+   "y": 31985,
+   "w": 420,
+   "h": 108,
+   "title": "Player card (from m4, mode prop added)"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "A2_MenuClassic.dc.html",
+  "A3_SelectTimeAttack.dc.html",
+  "A4_Shelf.dc.html",
+  "A5_ShelfNewGame.dc.html",
+  "A6_LoadingClassic.dc.html",
+  "A7_ClassicTitle.dc.html",
+  "A8_ClassicPause.dc.html",
+  "A9_Session.dc.html",
+  "A10_SessionFinished.dc.html",
+  "A11_FallbackTitle.dc.html",
+  "A12_CardModes.dc.html",
+  "A13_BClassic.dc.html",
+  "A14_BTimeAttack.dc.html",
+  "B1_Intro.dc.html",
+  "B2_Notice.dc.html",
+  "B3_SetupLanguage.dc.html",
+  "B4_SetupControls.dc.html",
+  "B5_SetupGames.dc.html",
+  "B6_MenuInitial.dc.html",
+  "B7_MenuTop.dc.html",
+  "B8_Toolbar.dc.html",
+  "B9_Exit.dc.html",
+  "B10_Update.dc.html",
+  "B11_WebStart.dc.html",
+  "B12_WebLoading.dc.html",
+  "B13_WebError.dc.html",
+  "C1_Settings.dc.html",
+  "C2_SettingsAudio.dc.html",
+  "C3_SettingsOnline.dc.html",
+  "C4_SettingsSearch.dc.html",
+  "C5_Bindings.dc.html",
+  "C6_BindingsGame.dc.html",
+  "C7_Calibrate.dc.html",
+  "C8_ExtraActions.dc.html",
+  "C9_PracticePicker.dc.html",
+  "C10_PracticeHud.dc.html",
+  "C11_Details.dc.html",
+  "C12_Collections.dc.html",
+  "C13_Replays.dc.html",
+  "C14_ReplayPlayer.dc.html",
+  "C15_Browse.dc.html",
+  "C16_Profile.dc.html",
+  "C17_SignIn.dc.html",
+  "C18_SignInWaiting.dc.html",
+  "C19_SessionExpired.dc.html",
+  "D1_ScriptError.dc.html",
+  "D2_Notifications.dc.html",
+  "D3_NoticesInRun.dc.html",
+  "D4_SortGroups.dc.html",
+  "D5_ListDim.dc.html",
+  "D6_ListStates.dc.html",
+  "D7_Filters.dc.html",
+  "D8_AutoRetry.dc.html",
+  "D9_ModsHbRanked.dc.html",
+  "D9b_ModsHbPractice.dc.html",
+  "D10_ExitFlow.dc.html",
+  "D11_DropImport.dc.html",
+  "D12_Skip.dc.html",
+  "D13_PausePad.dc.html",
+  "D14_PortStatus.dc.html",
+  "E1_MenuDeck.dc.html",
+  "E2_SelectDeck.dc.html",
+  "E3_SettingsDeck.dc.html",
+  "E4_MenuJa.dc.html",
+  "E5_SettingsJa.dc.html",
+  "E6_Colourblind.dc.html",
+  "F1_RaceLobby.dc.html",
+  "F2_RaceLive.dc.html",
+  "F3_RaceResults.dc.html",
+  "Toolbar.dc.html",
+  "Hints.dc.html",
+  "MainMenu.dc.html",
+  "Select.dc.html",
+  "Shelf.dc.html",
+  "Loading2.dc.html",
+  "ClassicRun.dc.html",
+  "Session.dc.html",
+  "Opening.dc.html",
+  "MenuDialog.dc.html",
+  "Web.dc.html",
+  "Settings.dc.html",
+  "Bindings.dc.html",
+  "Practice.dc.html",
+  "Details.dc.html",
+  "Replays.dc.html",
+  "Notices.dc.html",
+  "ModSheet.dc.html",
+  "Race.dc.html",
+  "Backdrop.dc.html",
+  "GameScene.dc.html",
+  "Leaderboard.dc.html",
+  "RunInfo.dc.html",
+  "PauseBox.dc.html",
+  "ProfileCard.dc.html"
+ ],
+ "notes": {
+  "tA": {
+   "kind": "title1",
+   "x": 0,
+   "y": 0,
+   "text": "A · Two play modes: Time Attack and Classic",
+   "maxW": 10400
+  },
+  "a_rec": {
+   "x": 0,
+   "y": 3980,
+   "w": 520,
+   "size": "m",
+   "fill": "blue",
+   "text": "Recommendation: direction A (A1–A12). The mode is a way of using the app, so it is picked once, on the main menu, and the toolbar switches it from anywhere. Each mode gets the screen that fits it: Time Attack keeps m4's map list and leaderboards; Classic gets a shelf of games with saves, like a console library. Direction B (A13, A14) keeps one select and swaps its left side; it is cheaper but still reads as one screen with a toggle, which is the complaint about today's two buttons."
+  },
+  "a_names": {
+   "x": 580,
+   "y": 3980,
+   "w": 520,
+   "size": "m",
+   "fill": "purple",
+   "text": "Mode names. Recommended: Time Attack (stripped, timed, ranked; an arcade term players know, and a practice run is then simply an unranked Time Attack run) and Classic (the game as it was made). Japanese: タイムアタック / クラシック. Alternatives: Ranked / Original (today's working names), Speedrun / Playthrough, Arcade / Classic. Colours: Time Attack keeps cherry #ff3d55; Classic is violet #8f7bff, apart from green ahead, red behind, gold best, amber Unranked and the blue Ranked status (E6)."
+  },
+  "a_costA": {
+   "x": 1160,
+   "y": 3980,
+   "w": 520,
+   "size": "m",
+   "fill": "teal",
+   "text": "Cost of A against today's shell. AppScreen gains Menu and Shelf; Select stays and becomes Time Attack's. The run already carries its PlayMode through PendingStart (#1544), so Run and its RunScreen sub-states stay; RunScreen gains Summary for Classic (Results stays Time Attack's). New: the toolbar, a mode accent token, save slots in savefile (today one save per game), the shelf (L), the main menu (M), the session summary (M). The two buttons of #1544 go away."
+  },
+  "a_costB": {
+   "x": 1740,
+   "y": 3980,
+   "w": 520,
+   "size": "m",
+   "fill": "teal",
+   "text": "Cost of B. No new top-level screen: Select gains a mode tab (a resource the list and the left side read). In Classic the list hides map panels, the left side swaps Ranking for Saves and the footer swaps Mods for Continue. Still needed as in A: save slots, the Classic loading card, the session summary and the per-mode card. Roughly half of A's new UI, but every later Select change has to work in two layouts, and the main menu has nothing to choose."
+  },
+  "a_changes": {
+   "x": 2320,
+   "y": 3980,
+   "w": 520,
+   "size": "m",
+   "fill": "green",
+   "text": "What each mode changes on existing screens. Time Attack: loading card, HUD, pause and results stay as approved in m4; the toolbar shows over select; Back on results returns to select (#1553, D10). Classic: the loading card names the slot (A6); the HUD is only the session panel, which can be turned off (A7); pause offers Continue, Retry from save, Back to the shelf (A8); no results page, a session summary instead (A9, A10); the player card counts Classic only (A12). #851 is answered by Continue / New game and the slots (A4, A5); #100 by A11."
+  },
+  "tB": {
+   "kind": "title1",
+   "x": 0,
+   "y": 5113,
+   "text": "B · The app shell: opening, main menu, toolbar, exit, web",
+   "maxW": 10400
+  },
+  "b_flow": {
+   "x": 0,
+   "y": 8913,
+   "w": 480,
+   "size": "m",
+   "fill": "blue",
+   "text": "Start order. Every start: intro (B1, 1.8 s, any key skips) → main menu initial (B6). First start only: intro → notice (B2, #73) → setup (B3 language, B4 controls, B5 games) → main menu. The notice wording is a proposal; #73 (contacting Kayin) is still open, so the text says only what is true today."
+  },
+  "b_menu": {
+   "x": 540,
+   "y": 8913,
+   "w": 480,
+   "size": "m",
+   "fill": "purple",
+   "text": "Main menu (osu!'s button system, our centrepiece). The delicious fruit stands in for the logo until #201: it bobs (1.6 s), and the wordmark slot under it reads the working title. Top level: Play, Browse, Replays, Settings, Exit. Play opens Time Attack, Classic and a faded Race (phase 8). The Classic button doubles as a quick Continue of the last save. Esc steps back a level; at the top it is Exit."
+  },
+  "b_toolbar": {
+   "x": 1080,
+   "y": 8913,
+   "w": 480,
+   "size": "m",
+   "fill": "teal",
+   "text": "Toolbar (B8). On every screen outside a run, 56 px at 1080p: Home, mode switch, now playing, clock with session time, notifications, settings, you. Controller: LB / RB switch modes from anywhere, Y opens settings, View opens notifications. Screens that are not a mode (Settings, Replays, Browse, Race) show their name where the switch was."
+  },
+  "b_exit": {
+   "x": 1620,
+   "y": 8913,
+   "w": 480,
+   "size": "m",
+   "fill": "orange",
+   "text": "Exit asks only when something would be lost or is still running (downloads, a queued clear); otherwise it closes at once. Holding Esc for 1 s on the main menu also exits, with a fill bar under the toolbar. The update prompt (B10) never shows during a run; it waits for a menu."
+  },
+  "b_web": {
+   "x": 2160,
+   "y": 8913,
+   "w": 480,
+   "size": "m",
+   "fill": "gray",
+   "text": "Web (#1127). The start screen exists because browsers keep audio off until a key, click or touch; it says that a controller press does not count, which is true today (web.md). Loading shows the phases the page already measures, so the bar is honest. Game select in the browser comes with #148; until then the page plays one package."
+  },
+  "tC": {
+   "kind": "title1",
+   "x": 0,
+   "y": 9993,
+   "text": "C · Play, settings and tools",
+   "maxW": 10400
+  },
+  "c_settings": {
+   "x": 0,
+   "y": 15213,
+   "w": 480,
+   "size": "m",
+   "fill": "blue",
+   "text": "Settings (C1–C5, #53): every row is a value settings.toml already holds or one #53 asks for (frame limit). Changes apply and save at once, like the existing hotkeys. Search filters rows across sections (C4). Online (C3): sign-out is #1491; export and delete are proposals that need server issues. Signed out, the Online section is the C17 sign-in card."
+  },
+  "c_bind": {
+   "x": 540,
+   "y": 15213,
+   "w": 480,
+   "size": "m",
+   "fill": "purple",
+   "text": "Key bindings (C5, C6, #52). Client keys and game actions are separate groups, as in bindings.rs. Save state / Load state on F5 / F8 is a proposal for #39. A key already in use asks to swap (C5). Esc and Start show as fixed. Per game: the picker lists every game with its extra-action count; a game that needs an unbound extra action warns there and on the loading card (C8)."
+  },
+  "c_practice": {
+   "x": 1080,
+   "y": 15213,
+   "w": 480,
+   "size": "m",
+   "fill": "teal",
+   "text": "Practice (C9, C10, #39). Entry: a Practice button in the Time Attack footer, beside Mods, opening a sheet like the mod sheet. Start from a stage, a save point or a room; the assists (SS, SL, FA) are in the same sheet, and the run says Unranked everywhere. In the run the left column becomes a practice panel (attempts, best, save-state slots), because a live leaderboard means nothing there."
+  },
+  "c_misc": {
+   "x": 1620,
+   "y": 15213,
+   "w": 480,
+   "size": "m",
+   "fill": "green",
+   "text": "Details (C11) reads only #805 fields; brackets mark text that will come from the package or catalog. Collections (C12) is today's #105 feature in the Collections dropdown, with the heart on the wedge as the favourite toggle. Replays (C13, C14) list replays/index.txt and give today's viewer a face. Browse (C15) is the #50 catalog with removal-list games greyed. Profile (C16) keeps a slot for pp (#84) and shows milestones instead of badges (#489)."
+  },
+  "c_signin": {
+   "x": 2160,
+   "y": 15213,
+   "w": 480,
+   "size": "m",
+   "fill": "orange",
+   "text": "Sign-in (C17–C19, #158, #159). One card with Google and Discord, then a waiting state while the system browser finishes, with the device-code fallback. An expired session toasts once and marks the toolbar avatar amber; queued clears wait. Question for you: you mentioned a reference website for accounts; these cards are a placeholder until you name it."
+  },
+  "tD": {
+   "kind": "title1",
+   "x": 0,
+   "y": 16293,
+   "text": "D · Redesigns: screens built without an artboard or marked revisit",
+   "maxW": 10400
+  },
+  "d_answers": {
+   "x": 0,
+   "y": 20273,
+   "w": 520,
+   "size": "m",
+   "fill": "blue",
+   "text": "Proposed answers. #953 script error: change it (D1): show the frozen game, add Report to the porter and Copy details. #773 auto-retry: the mod select footer only, plus an AR mark in the HUD's mod row while it is on (D8). #554: Hitboxes stays ranked on its own board (D9; every combination already has its own board, so it never touches a no-HB board), Flashlight joins Challenge as a ranked client-only mod, Mirror is dropped. D9b draws the other answer."
+  },
+  "d_notices": {
+   "x": 580,
+   "y": 20273,
+   "w": 520,
+   "size": "m",
+   "fill": "purple",
+   "text": "Notifications (D2, D3): one list, one look. Toasts: outside a run under the bell (top right); in a run at the bottom of the leaderboard column (today's place, kept). In a run only messages that need attention toast: storage problems, a controller change, a failed drop. Downloads, uploads, placements and updates go to the list quietly until the run ends. A toast shows 6 s; its thin bar counts down."
+  },
+  "d_select": {
+   "x": 1160,
+   "y": 20273,
+   "w": 520,
+   "size": "m",
+   "fill": "teal",
+   "text": "Game select gaps (D4–D7). Dropdowns open as a solid card under their control (the click-catcher stays). Group headers carry a status dot and a count. ListDim: the list dims to 50% while the left side (tabs, ranking rows) has the keyboard focus; Right or RB returns. Empty, no-results and loading keep the controls in place (D6). Status, Year and Tag filters wait for #805 data (D7)."
+  },
+  "d_kept": {
+   "x": 1740,
+   "y": 20273,
+   "w": 520,
+   "size": "m",
+   "fill": "gray",
+   "text": "Confirmed as they are, no change: the PAUSE box itself (m4; D13 only adds hints outside it), the notice position in a run (the leaderboard column, #668), the results page (m4; only its Back target changes, D10) and the Unranked pill on the loading card."
+  },
+  "tE": {
+   "kind": "title1",
+   "x": 0,
+   "y": 21406,
+   "text": "E · Cross-cutting: Steam Deck, Japanese, colourblind, sounds",
+   "maxW": 10400
+  },
+  "e_pad": {
+   "x": 0,
+   "y": 22906,
+   "w": 520,
+   "size": "m",
+   "fill": "blue",
+   "text": "Controller-first (#117). Every screen has a hint bar showing the last device's glyphs (pad faces by position, or keycaps). Shared rules: A confirm, B back, X secondary (Mods, New game), Y favourite or settings, LB / RB mode or section, Start pause, View notifications. The Deck boards (E1–E3) lay out at 1600x1000 and scale by 0.8, so text stays readable; the player card hides there."
+  },
+  "e_ja": {
+   "x": 580,
+   "y": 22906,
+   "w": 520,
+   "size": "m",
+   "fill": "purple",
+   "text": "Japanese (#196). The main menu (E4) and settings (E5) are drawn in Japanese with Noto Sans JP, the fallback the client already bundles. Labels fit at the same sizes; the longest (タイムアタック) fits the mode button and the toolbar. The Japanese strings are drafts for review, not final translations."
+  },
+  "e_sounds": {
+   "x": 1160,
+   "y": 22906,
+   "w": 520,
+   "size": "m",
+   "fill": "teal",
+   "text": "UI sounds (#488, no files yet): hover tick on buttons and list panels; select click on Enter or A; a lower click for back; mode switch (two notes rising for Time Attack, falling for Classic); dropdown open and close; toggle on and off; slider tick every 5%; notification chime (a lower one for errors); hold-to-confirm rising tone (release cancels); HUD pass and pace flash sting (off by default); results new-PB fanfare. All follow the Sound effects volume."
+  },
+  "e_cb": {
+   "x": 1740,
+   "y": 22906,
+   "w": 520,
+   "size": "m",
+   "fill": "green",
+   "text": "Colourblind (#106, E6): every meaning colour has a second cue (a sign, the star, a word or a position). The pair to watch is green ahead and red behind, which merge for protan and deutan viewers; the + and − signs carry it, so they stay on every delta."
+  },
+  "tF": {
+   "kind": "title1",
+   "x": 0,
+   "y": 24039,
+   "text": "F · Later milestones: rough layouts",
+   "maxW": 10400
+  },
+  "f_rough": {
+   "x": 0,
+   "y": 25539,
+   "w": 560,
+   "size": "m",
+   "fill": "gray",
+   "text": "Rough layouts for phase 8, only to check that the shell and HUD leave room. Race is a third mode on the main menu (faded today), with its own lobby (F1), a run where the left column becomes the race order and racers are ghosts in your room (F2), and a finish-order page (F3). Ghosts of leaderboard runs (#64) would use the same ghost drawing, picked from a leaderboard row."
+  },
+  "f_data": {
+   "x": 620,
+   "y": 25539,
+   "w": 560,
+   "size": "m",
+   "fill": "orange",
+   "text": "Sample data: titles and creators come from our port list (creators we have not recorded show as [creator]). Every number, player name, save, music title, extra-action label and changelog line is invented, and brackets mark text that will come from the package or catalog. All art is placeholder except the delicious fruit, the real sprite uploaded to the canvas (not committed). The fidelity count in C11 (46 pass, 3 open) is today's kaenbyou baseline."
+  },
+  "tS": {
+   "kind": "title1",
+   "x": 0,
+   "y": 26725,
+   "text": "Shared parts",
+   "maxW": 10400
+  }
+ },
+ "designSystems": []
+}

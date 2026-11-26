@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notifications and notices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- One notification system (ui.md notice.rs + osu!'s notification overlay). Every message is a notification with a kind; the kind decides whether it also toasts. Outside a run a toast drops in under the bell (top right, 600 ms OutQuint, 6 s, then it moves into the list); in a run it slides in at the bottom of the leaderboard column, as notices do today, and never covers the game. The bell's list keeps everything from this session; progress (downloads, uploads) lives at its top and updates in place. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <sc-if value="{{overlay}}" hint-placeholder-val="{{ true }}">
+    <dc-import name="Select" mode="ta" hint-size="1920px,1080px"></dc-import>
+    <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="ta" badge="3" open="notif" hint-size="1920px,56px"></dc-import></div>
+    <div style="position: absolute; left: 0; top: 56px; right: 0; bottom: 0; background: rgba(5,6,10,.35)"></div>
+    <div style="position: absolute; right: 0; top: 56px; bottom: 0; width: 460px; background: #10121a; box-shadow: -20px 0 60px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 8px; padding: 22px 22px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 24px; font-weight: 700">Notifications</span><span style="font-size: 14px; font-weight: 700; color: #a2a8bc">Clear all</span></div>
+      <span style="padding-top: 8px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">In progress</span>
+      <sc-for list="{{running}}" as="r" hint-placeholder-count="2">
+        <div style="padding: 14px 16px; border-radius: 10px; background: rgba(255,255,255,.05); display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; justify-content: space-between; gap: 10px"><span style="font-size: 15px; font-weight: 700">{{r.a}}</span><span style="font-size: 14px; color: #c9cde0; white-space: nowrap">{{r.c}}</span></div>
+          <div style="height: 5px; border-radius: 3px; background: rgba(255,255,255,.12)"><div style="width: {{r.p}}%; height: 100%; border-radius: 3px; background: #ff3d55"></div></div>
+          <span style="font-size: 13px; color: #a2a8bc">{{r.b}}</span>
+        </div>
+      </sc-for>
+      <span style="padding-top: 10px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Today</span>
+      <sc-for list="{{items}}" as="n" hint-placeholder-count="5">
+        <div style="display: flex; border-radius: 10px; background: {{n.bg}}; overflow: hidden">
+          <div style="width: 4px; background: {{n.c}}"></div>
+          <div style="flex: 1; padding: 12px 16px; display: flex; flex-direction: column; gap: 3px">
+            <div style="display: flex; justify-content: space-between"><span style="font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{n.c}}">{{n.k}}</span><span style="font-size: 12px; color: #a2a8bc">{{n.t}}</span></div>
+            <span style="font-size: 15px; line-height: 1.4; color: #e3e5ee">{{n.m}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{inrun}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="60" dim="0.45" tag="none" hint-size="1920px,1080px"></dc-import></div>
+    <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)"><div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div></div>
+    <div style="position: absolute; left: 0; top: 352px"><dc-import name="Leaderboard" scenario="p25" density="full" width="232" rows="7" hint-size="232px,360px"></dc-import></div>
+    <div style="position: absolute; left: 1694px; top: 300px"><dc-import name="RunInfo" mode="ranked" time="38:02.56" width="206" hint-size="206px,420px"></dc-import></div>
+    <div style="position: absolute; left: 12px; bottom: 24px; width: 225px; display: flex; flex-direction: column; gap: 10px">
+      <sc-for list="{{toasts}}" as="n" hint-placeholder-count="2">
+        <div style="display: flex; border-radius: 10px; background: #14161f; box-shadow: 0 12px 30px rgba(0,0,0,.5); overflow: hidden; transform: skewX(-6deg)">
+          <div style="width: 4px; background: {{n.c}}"></div>
+          <div style="flex: 1; padding: 10px 12px 10px; display: flex; flex-direction: column; gap: 4px; transform: skewX(6deg)">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{n.c}}">{{n.k}}</span>
+            <span style="font-size: 14px; line-height: 1.35; color: #e3e5ee">{{n.m}}</span>
+            <div style="height: 2px; border-radius: 1px; background: rgba(255,255,255,.1)"><div style="width: {{n.left}}%; height: 100%; background: rgba(255,255,255,.4)"></div></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["overlay","inrun"],"default":"overlay"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const inrun = (this.props.view ?? 'overlay') === 'inrun';
+    const C = { ok: '#45d483', info: '#8ecbff', warn: '#ffc46b', err: '#ff6b6b', you: '#ff3d55' };
+    return {
+      overlay: !inrun, inrun,
+      running: [
+        { a: 'Downloading I wanna be the Machinary', b: 'Resumes after a restart · hash checked before install', c: '64% · 2.1 MB/s', p: 64 },
+        { a: 'Uploading 1 clear', b: 'Kaenbyou · Very Hard · 38:12.46', c: 'verifying', p: 30 },
+      ],
+      items: [
+        { k: 'New placement', m: 'Kaenbyou Very Hard: #25 Global, up from #30.', t: '21:16', c: C.you, bg: 'rgba(255,61,85,.07)' },
+        { k: 'Update ready', m: 'Version 0.9.0 installs when you restart.', t: '20:58', c: C.info, bg: 'rgba(255,255,255,.04)' },
+        { k: 'Port updated', m: 'I wanna go the Spook House 1.2 · your PBs stay on their boards.', t: '20:40', c: C.info, bg: 'rgba(255,255,255,.04)' },
+        { k: 'Not opened', m: 'level.zip is not a game package.', t: '19:12', c: C.err, bg: 'rgba(255,255,255,.04)' },
+        { k: 'Storage', m: 'Could not write stats.toml; changes are kept until the next try.', t: '18:30', c: C.warn, bg: 'rgba(255,255,255,.04)' },
+      ],
+      toasts: [
+        { k: 'Controller', m: 'Pad 1 connected.', c: C.info, left: 30 },
+        { k: 'Storage', m: 'Stats could not be saved; trying again.', c: C.warn, left: 80 },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

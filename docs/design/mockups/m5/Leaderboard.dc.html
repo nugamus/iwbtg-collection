@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Live leaderboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Gameplay leaderboard, reused frozen on results. Rows: 0.2 shear, 10 px radius, 3 px spacing; your row is 20 px wider and a little brighter. -->
+<div style="width: {{width}}px; display: flex; flex-direction: column; gap: 8px; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="display: flex; align-items: center; gap: 8px; padding-left: 10px; height: 18px">
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #c9cde0">{{scopeLabel}}</span>
+    <sc-if value="{{offline}}" hint-placeholder-val="{{ false }}">
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #ffc46b"><span style="width: 6px; height: 6px; border-radius: 3px; background: #ffc46b"></span>Offline · cached 3h ago</span>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{pinned}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{pinRows}}" as="r" hint-placeholder-count="1">
+        <div style="position: relative; width: {{r.w}}px; height: {{rowH}}px; margin-left: 10px; border-radius: 10px; background: {{r.bg}}; transform: skewX(-11.31deg)">
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 10px; transform: skewX(11.31deg)">
+            <span style="width: 34px; flex: none; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: {{r.rankColor}}">{{r.rank}}</span>
+            <div style="width: 30px; height: 30px; flex: none; border-radius: 7px; background: {{r.avBg}}; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: rgba(255,255,255,.88)">{{r.initial}}</div>
+            <div style="min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.1">
+              <span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600">{{r.name}}</span><sc-if value="{{r.hasFlag}}" hint-placeholder-val="{{ true }}"><span style="width: 16px; height: 11px; flex: none; border-radius: 2px; background: {{r.flag}}"></span></sc-if></span>
+              <span style="font-size: 14px; font-weight: 500; color: {{r.subColor}}">{{r.sub}}</span>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+      <div style="margin-left: 22px; display: flex; gap: 5px" aria-hidden="true"><span style="width: 3px; height: 3px; border-radius: 2px; background: #6a7088"></span><span style="width: 3px; height: 3px; border-radius: 2px; background: #6a7088"></span><span style="width: 3px; height: 3px; border-radius: 2px; background: #6a7088"></span></div>
+    </div>
+  </sc-if>
+
+  <div style="display: flex; flex-direction: column; gap: 3px; -webkit-mask-image: {{mask}}; mask-image: {{mask}}">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+      <div style="position: relative; width: {{r.w}}px; height: {{rowH}}px; margin-left: 10px; border-radius: 10px; background: {{r.bg}}; box-shadow: {{r.shadow}}; transform: skewX(-11.31deg)">
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: {{gap}}px; padding: {{pad}}; transform: skewX(11.31deg)">
+          <span style="width: {{rankW}}px; flex: none; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: {{r.rankColor}}">{{r.rank}}</span>
+          <sc-if value="{{r.missing}}" hint-placeholder-val="{{ false }}">
+            <div style="width: 30px; height: 30px; flex: none; border-radius: 7px; background: #2a2e3d; display: grid; place-items: center">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="3" fill="#5d6378"></circle><path d="M2.5 15c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5z" fill="#5d6378"></path></svg>
+            </div>
+          </sc-if>
+          <sc-if value="{{r.hasAvatar}}" hint-placeholder-val="{{ true }}">
+            <div style="width: 30px; height: 30px; flex: none; border-radius: 7px; background: {{r.avBg}}; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: rgba(255,255,255,.88)">{{r.initial}}</div>
+          </sc-if>
+          <sc-if value="{{showText}}" hint-placeholder-val="{{ true }}">
+            <div style="min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.1">
+              <span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: {{r.nameWeight}}; color: {{r.nameColor}}">{{r.name}}</span><sc-if value="{{r.hasFlag}}" hint-placeholder-val="{{ true }}"><span style="width: 16px; height: 11px; flex: none; border-radius: 2px; background: {{r.flag}}"></span></sc-if></span>
+              <span style="font-size: 14px; font-weight: {{r.subWeight}}; color: {{r.subColor}}; white-space: nowrap">{{r.sub}}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{r.miniTime}}" hint-placeholder-val="{{ false }}">
+            <span style="font-size: 13px; font-weight: 600; white-space: nowrap">{{r.sub}}</span>
+          </sc-if>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+    <span style="padding-left: 14px; font-size: 14px; font-weight: 500; color: #a2a8bc">No clears yet — be the first</span>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"scenario":{"editor":"enum","options":["top","p25","below","local","final","finalSlow","empty","offline"],"default":"p25"},"density":{"editor":"enum","options":["full","noflag","mini"],"default":"full"},"width":{"editor":"int","min":100,"max":420,"default":240},"rows":{"editor":"int","min":3,"max":12,"default":7},"$preview":{"width":260,"height":400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const scenario = this.props.scenario ?? 'p25';
+    const density = this.props.density ?? 'full';
+    const W = Number(this.props.width ?? 240);
+    const N = Number(this.props.rows ?? 7);
+    const rowH = 44;
+    const mini = density === 'mini';
+
+    // shared sample data: runs are tick counts at 50 per second, shown to hundredths
+    const snap = (s) => Math.round(s * 50) / 50;
+    const t = (i) => snap(1902.18 + 11.4 * (i - 1) + 0.85 * Math.pow(i - 1, 1.55));
+    const fmt = (s) => {
+      const c = Math.round(s * 100), h = Math.floor(c / 360000), m = Math.floor(c / 6000) % 60, sec = Math.floor(c / 100) % 60, cs = c % 100;
+      const p = (n) => String(n).padStart(2, '0');
+      return (h ? h + ':' + p(m) : String(m)) + ':' + p(sec) + '.' + p(cs);
+    };
+    const NAMES = ['tsukimi', 'bluespike', 'kestrel', 'mochi_dash', 'VaultHop', 'frostbyte', 'akane_r', 'sundial', 'pelican', 'driftwood', 'neko_jump', 'lumen', 'zigzag', 'hoshi', 'marble', 'quill', 'yuzu', 'ferro', 'tamago', 'pixelwren', 'cobalt', 'rindo', 'saltwater', 'vesper', 'kumo', 'plinth', 'ember_k', 'orbit7', 'kirin', 'sakuya_no', 'gale', 'tidepool', 'mizore', 'brisk', 'umbra', 'sorrel', 'kaede', 'nimbus', 'harrow', 'juniper'];
+    const FLAGS = [
+      'radial-gradient(circle at 50% 50%, #bc002d 3px, #ffffff 3.6px)',
+      'linear-gradient(#111 33%, #dd0000 33% 66%, #ffce00 66%)',
+      'linear-gradient(90deg, #0055a4 33%, #ffffff 33% 66%, #ef4135 66%)',
+      'linear-gradient(90deg, transparent 5px, #fecc00 5px 8px, transparent 8px), linear-gradient(transparent 4px, #fecc00 4px 7px, transparent 7px), #006aa7',
+      'linear-gradient(#ffffff 50%, #dc143c 50%)',
+      'linear-gradient(#ae1c28 33%, #ffffff 33% 66%, #21468b 66%)',
+      'radial-gradient(circle at 28% 32%, #ffde00 2px, #de2910 2.6px)',
+      'linear-gradient(90deg, transparent 5px, #003580 5px 8px, transparent 8px), linear-gradient(transparent 4px, #003580 4px 7px, transparent 7px), #ffffff',
+      'linear-gradient(#0057b7 50%, #ffd700 50%)',
+      'linear-gradient(90deg, #009246 33%, #ffffff 33% 66%, #ce2b37 66%)',
+    ];
+    const showFlag = density === 'full';
+    const other = (i, shown) => {
+      const name = NAMES[(i - 1) % NAMES.length] + (i > NAMES.length ? String(i) : '');
+      return {
+        rank: '#' + shown, name, sub: fmt(t(i)), initial: name[0].toUpperCase(),
+        avBg: `hsl(${(i * 47) % 360} 42% 36%)`, missing: i % 9 === 4, flag: FLAGS[(i * 3) % FLAGS.length], you: false,
+      };
+    };
+    const youRow = (shown, sub, extra) => Object.assign({ rank: '#' + shown, name: 'nugamus', sub, initial: 'N', avBg: 'hsl(352 58% 46%)', missing: false, flag: FLAGS[3], you: true }, extra || {});
+
+    let rows = [], pin = null, fadeTop = true, fadeBottom = true, scopeLabel = 'Global', offline = false, empty = false;
+    if (scenario === 'top') {
+      rows.push(youRow(1, '0:00.00'));
+      for (let i = 1; i < N; i++) rows.push(other(i, i + 1));
+      fadeTop = false;
+    } else if (scenario === 'p25' || scenario === 'offline') {
+      const live = 25, half = Math.floor(N / 2);
+      const el = snap(t(24) + 0.45 * (t(25) - t(24)));
+      for (let k = live - half; k < live; k++) rows.push(other(k, k));
+      rows.push(youRow(live, fmt(el), scenario === 'p25' ? { pace: '−1.20 vs #24', paceColor: '#45d483' } : null));
+      for (let k = live; rows.length < N; k++) rows.push(other(k, k + 1));
+      offline = scenario === 'offline';
+    } else if (scenario === 'below') {
+      const live = 143;
+      const el = snap(t(142) + 0.4 * (t(143) - t(142)));
+      for (let k = live - N + 1; k < live; k++) rows.push(other(k, k));
+      rows.push(youRow(live, fmt(el)));
+      fadeBottom = false;
+    } else if (scenario === 'local') {
+      scopeLabel = 'Local · your runs';
+      const mine = [2292.46, 2380.12, 2465.30, 2571.88, 2660.06, 2731.40, 2810.92, 2902.14, 2987.50];
+      const dates = ['3 Nov 2026', '29 Oct 2026', '28 Oct 2026', '21 Oct 2026', '20 Oct 2026', '14 Oct 2026', '9 Oct 2026', '2 Oct 2026', '30 Sep 2026'];
+      const el = 2402.10;
+      const live = 1 + mine.filter((m) => m < el).length;
+      const before = Math.min(live - 1, Math.floor(N / 2));
+      for (let k = live - before; k < live; k++) rows.push(youRow(k, fmt(mine[k - 1]), { name: dates[k - 1], you: false, past: true }));
+      rows.push(youRow(live, fmt(el), { name: 'Now' }));
+      for (let k = live; rows.length < N; k++) rows.push(youRow(k + 1, fmt(mine[k - 1]), { name: dates[k - 1], you: false, past: true }));
+      fadeTop = live - before > 1;
+    } else if (scenario === 'final' || scenario === 'finalSlow') {
+      const F = scenario === 'final' ? 2292.46 : 2398.40;
+      let P = 1; while (t(P) < F) P++;
+      pin = other(1, 1);
+      const half = Math.floor(N / 2);
+      for (let k = P - half; k < P; k++) rows.push(other(k, k));
+      rows.push(youRow(P, fmt(F), scenario === 'finalSlow' ? { name: 'nugamus · this run' } : null));
+      for (let k = P; rows.length < N; k++) rows.push(other(k, k + 1));
+    } else if (scenario === 'empty') {
+      rows.push(youRow(1, '12:41.36'));
+      empty = true; fadeTop = false; fadeBottom = false;
+    }
+
+    const yourW = mini ? W : W - 10;
+    const theirW = mini ? 84 : W - 30;
+    const decorate = (r) => {
+      const live = r.you;
+      return Object.assign(r, {
+        w: live ? yourW : theirW,
+        bg: live ? 'rgba(255,255,255,.22)' : r.past ? 'rgba(255,255,255,.07)' : 'rgba(12,14,22,.62)',
+        shadow: live ? '0 6px 18px rgba(0,0,0,.35)' : 'none',
+        rankColor: live ? '#ffffff' : '#a2a8bc',
+        nameColor: live ? '#ffffff' : '#e3e5ee',
+        nameWeight: live ? 700 : 600,
+        sub: r.pace || r.sub,
+        subColor: r.pace ? r.paceColor : live ? '#ffffff' : '#a2a8bc',
+        subWeight: r.pace || live ? 700 : 500,
+        hasFlag: showFlag && !r.past && r.name !== 'Now',
+        hasAvatar: !r.missing,
+        miniTime: mini && live,
+      });
+    };
+    rows = rows.map(decorate);
+    const pinRows = pin ? [decorate(pin)] : [];
+    const f = rowH + 'px';
+    const mask = `linear-gradient(to bottom, ${fadeTop ? 'transparent 0, #000 ' + f : '#000 0'}, ${fadeBottom ? '#000 calc(100% - ' + f + '), transparent 100%' : '#000 100%'})`;
+    return {
+      width: W, rowH, rows, pinRows, pinned: !!pin, mask, scopeLabel, offline, empty,
+      rankW: mini ? 28 : 34, showText: !mini, gap: mini ? 6 : 10, pad: mini ? '0 8px 0 8px' : '0 12px 0 10px',
+    };
+  }
+}
+</script>
+</body>
+</html>

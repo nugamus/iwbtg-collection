@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings overlay</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Settings (#53, #47), osu!'s settings overlay with our look. It slides in from the left over any screen outside a run (600 ms OutQuint; the screen behind dims to 55% and shifts 40 px right), and closes on Esc, B or a click outside. Left: one icon per section; a click scrolls the panel to it (500 ms OutQuint) and the icon follows the scroll. Top: search, focused on open, so typing filters at once. Every change applies and saves immediately (settings::update); there is no Apply button. Controller: Up/Down walks rows, Left/Right changes the value, LB/RB jumps a section. -->
+<div style="position: relative; width: {{w}}px; height: {{h}}px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; left: 40px; top: 0; width: {{w}}px; height: {{h}}px"><dc-import name="MainMenu" state="top" deck="{{deck}}" lang="{{lang}}" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; inset: 0; background: rgba(5,6,10,.55)"></div>
+
+  <!-- section strip -->
+  <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{strip}}px; background: #08090d; display: flex; flex-direction: column; align-items: stretch; padding-top: 18px; gap: 4px">
+    <sc-for list="{{icons}}" as="i" hint-placeholder-count="7">
+      <button type="button" aria-label="{{i.label}}" style="all: unset; position: relative; height: {{iconH}}px; display: grid; place-items: center; cursor: pointer; background: {{i.bg}}">
+        <span style="position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: {{i.bar}}"></span>
+        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="{{i.d}}" stroke="{{i.ink}}" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+    </sc-for>
+  </div>
+
+  <!-- the panel -->
+  <div style="position: absolute; left: {{strip}}px; top: 0; bottom: 0; width: {{pw}}px; background: #10121a; box-shadow: 20px 0 60px rgba(0,0,0,.45); overflow: hidden">
+    <div style="padding: {{padT}}px 36px 0 36px; display: flex; flex-direction: column; gap: 6px">
+      <span style="font-size: {{titleSize}}px; font-weight: 700">{{t.title}}</span>
+      <span style="font-size: 15px; color: #a2a8bc">{{t.sub}}</span>
+    </div>
+    <div style="padding: 18px 36px 8px">
+      <label for="set-search" style="height: 46px; border-radius: 10px; background: rgba(255,255,255,.07); display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: {{searchRing}}">
+        <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px; padding: 0 18px; width: 100%">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>
+          <input id="set-search" type="search" placeholder="{{t.search}}" value="{{query}}" style="all: unset; flex: 1; font-size: 16px; color: #f3f4f8">
+          <span style="font-size: 13px; color: #a2a8bc; white-space: nowrap">{{found}}</span>
+        </span>
+      </label>
+    </div>
+    <div style="position: relative; height: {{scrollH}}px; overflow: hidden">
+      <div style="position: absolute; left: 0; right: 0; top: {{scrollTop}}px; display: flex; flex-direction: column; gap: 6px; padding: 8px 36px 40px">
+        <sc-for list="{{sections}}" as="sec" hint-placeholder-count="2">
+          <div style="display: flex; flex-direction: column; gap: 2px; padding-top: 18px">
+            <span style="display: flex; align-items: center; gap: 10px; padding-bottom: 8px; font-size: {{secSize}}px; font-weight: 700; color: {{sec.ink}}"><span style="width: 4px; height: 20px; border-radius: 2px; background: {{accent}}"></span>{{sec.title}}</span>
+            <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: {{r.cols}}; gap: {{r.gap}}px; align-items: center; min-height: 58px; padding: 8px 14px; margin: 0 -14px; border-radius: 10px; background: {{r.bg}}; box-shadow: {{r.ring}}">
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+                  <span style="font-size: 16px; font-weight: 600">{{r.label}}<sc-if value="{{r.mark}}" hint-placeholder-val="{{ false }}"><span style="margin-left: 8px; padding: 1px 6px; border-radius: 5px; background: rgba(255,196,107,.2); font-size: 12px; font-weight: 700; color: #ffc46b">{{r.mark}}</span></sc-if></span>
+                  <sc-if value="{{r.desc}}" hint-placeholder-val="{{ true }}"><span style="font-size: 13px; line-height: 1.4; color: #a2a8bc">{{r.desc}}</span></sc-if>
+                </span>
+                <span style="display: flex; align-items: center; gap: 6px; justify-content: {{r.justify}}; flex-wrap: wrap">
+                  <sc-if value="{{r.isToggle}}" hint-placeholder-val="{{ false }}">
+                    <span style="position: relative; width: 42px; height: 24px; border-radius: 12px; background: {{r.track}}"><span style="position: absolute; top: 3px; left: {{r.knobX}}px; width: 18px; height: 18px; border-radius: 9px; background: {{r.knob}}"></span></span>
+                  </sc-if>
+                  <sc-if value="{{r.isSelect}}" hint-placeholder-val="{{ false }}">
+                    <span style="height: 38px; min-width: 170px; padding: 0 16px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.09); display: flex; align-items: center; justify-content: space-between; gap: 12px; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 600; white-space: nowrap">{{r.value}}</span><span style="transform: skewX(11.31deg); color: #a2a8bc">▾</span></span>
+                  </sc-if>
+                  <sc-if value="{{r.isChips}}" hint-placeholder-val="{{ false }}">
+                    <sc-for list="{{r.chips}}" as="c" hint-placeholder-count="3">
+                      <span style="height: 34px; padding: 0 11px; border-radius: 9px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: {{c.w}}; color: {{c.ink}}; white-space: nowrap">{{c.label}}</span></span>
+                    </sc-for>
+                  </sc-if>
+                  <sc-if value="{{r.isSlider}}" hint-placeholder-val="{{ false }}">
+                    <span style="position: relative; width: 170px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); transform: skewX(-11.31deg)"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{r.pct}}%; border-radius: 4px; background: {{accent}}"></span><span style="position: absolute; top: -6px; left: {{r.pct}}%; margin-left: -6px; width: 12px; height: 20px; border-radius: 4px; background: #ffffff"></span></span>
+                    <span style="width: 62px; text-align: right; font-size: 15px; font-weight: 600; white-space: nowrap">{{r.value}}</span>
+                  </sc-if>
+                  <sc-if value="{{r.isField}}" hint-placeholder-val="{{ false }}">
+                    <span style="height: 38px; width: 210px; padding: 0 14px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); display: flex; align-items: center; font-size: 15px; font-weight: 600">{{r.value}}</span>
+                  </sc-if>
+                  <sc-if value="{{r.isButton}}" hint-placeholder-val="{{ false }}">
+                    <sc-if value="{{r.value}}" hint-placeholder-val="{{ false }}"><span style="font-size: 15px; font-weight: 600; padding-right: 6px; white-space: nowrap">{{r.value}}</span></sc-if>
+                    <span style="height: 38px; padding: 0 16px; border-radius: 10px; background: {{r.btnBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700; color: {{r.btnInk}}; white-space: nowrap">{{r.btn}}</span></span>
+                  </sc-if>
+                  <sc-if value="{{r.isAccount}}" hint-placeholder-val="{{ false }}">
+                    <span style="display: flex; align-items: center; gap: 12px"><span style="width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, hsl(352 62% 52%), hsl(330 55% 30%)); display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700">N</span><span style="height: 38px; padding: 0 16px; border-radius: 10px; background: rgba(255,255,255,.1); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">{{r.btn}}</span></span></span>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(0deg, #10121a, rgba(16,18,26,0))"></div>
+    </div>
+    <sc-if value="{{deck}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; left: 30px; bottom: 14px"><dc-import name="Hints" items="A:Change|B:Close|LB/RB:Section|Y:Search" hint-size="400px,40px"></dc-import></div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["top","audio","online","search"],"default":"top"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"deck":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const view = this.props.view ?? 'top';
+    const lang = this.props.lang ?? 'en';
+    const ja = lang === 'ja';
+    const deck = this.props.deck === true || this.props.deck === 'true';
+    const accent = '#ff3d55';
+    const tg = (label, desc, on, mark) => ({ type: 'toggle', label, desc, on, mark });
+    const sel = (label, desc, value, mark) => ({ type: 'select', label, desc, value, mark });
+    const chips = (label, desc, opts, on, mark) => ({ type: 'chips', label, desc, opts, on, mark });
+    const sl = (label, desc, pct, value) => ({ type: 'slider', label, desc, pct, value });
+    const fld = (label, desc, value) => ({ type: 'field', label, desc, value });
+    const btn = (label, desc, b, value, danger) => ({ type: 'button', label, desc, btn: b, value, danger });
+    const acct = (label, desc, b) => ({ type: 'account', label, desc, btn: b });
+    const S = ja ? {
+      general: ['一般', [sel('言語', 'メニューと説明の言語。ゲーム内の文字は変わりません。', '日本語'), fld('プロフィール名', 'プレイヤーカードに表示。サインイン中はアカウント名を使います。', 'nugamus'), tg('クラッシュレポート', 'クラッシュ後に、ログとリプレイを送るか毎回たずねます。', true), btn('はじめに', 'ファンプロジェクトについての案内をもう一度表示します。', '表示')]],
+      graphics: ['グラフィック', [chips('表示モード', '', ['ウィンドウ', 'フルスクリーン'], 1), chips('フルスクリーンの比率', '画面に合わせて UI が配置されます。', ['自動', '4:3', '16:9', '16:10', '21:9', '32:9'], 2), sel('ウィンドウサイズ', 'ウィンドウモードのときの大きさ。', '1600 × 900'), tg('整数倍で拡大', 'ゲーム画面をきっちり整数倍に。周りに余白が出ることがあります。', false), sl('背景のぼかし', 'ゲームの周りに見える背景アート。', 60, '60%'), sl('UI の大きさ', 'HUD の左右のパネルだけ。75–150%。', 33, '100%')]],
+    } : {
+      general: ['General', [sel('Language', 'Menus and help text. Text inside the games stays as made.', 'English'), fld('Profile name', 'On your player card. When signed in, your account name is used.', 'nugamus'), tg('Crash reports', 'After a crash, ask each time whether to send the log and replay.', true), btn('About this project', 'The first-launch notice: fan project, credits, removal requests.', 'Show')]],
+      graphics: ['Graphics', [chips('Display', '', ['Windowed', 'Fullscreen'], 1), chips('Fullscreen ratio', 'The UI lays itself out for the shape you pick.', ['Native', '4:3', '16:9', '16:10', '21:9', '32:9'], 2), sel('Window size', 'Used in windowed mode.', '1600 × 900'), tg('Integer scale', 'Largest whole-number game scale that fits; may leave a border.', false), sel('Frame limit', 'The game always ticks at its own rate.', 'Display (144 Hz)'), sl('Backdrop blur', 'The game art around the game and behind menus.', 60, '60%'), sl('UI scale', 'The HUD side panels only, 75–150%.', 33, '100%')]],
+      audio: ['Audio', [sl('Master volume', '', 100, '100%'), sl('Music', '', 80, '80%'), sl('Sound effects', '', 100, '100%'), btn('Audio offset', 'Holds sound back to match your speakers, 0–500 ms. Sound earlier than the picture is not possible yet (#464).', 'Calibrate…', '+24 ms')]],
+      input: ['Input', [btn('Key bindings', 'Global keys, game actions, keyboard and controller, per-game labels.', 'Open'), sel('Controller', 'Standard-layout pad connected.', 'Pad 1 ▸ Player'), tg('Show button hints', 'The hint bar at the bottom of each screen.', true)]],
+      gameplay: ['Gameplay and HUD', [chips('On the HUD', 'Shift+Tab hides it all during a run.', ['Leaderboard', 'Timer', 'Deaths', 'Stage', 'Stage deaths', 'Input', 'Mods'], -1), tg('Auto-retry', 'Restart the run from the start after a death. Also in the mod select footer.', false), chips('Slow motion speed', 'For the SL practice mod.', ['75%', '50%'], 0), tg('Session panel in Classic', 'Session time and deaths beside the game.', true), tg('Death heatmap on results', 'Where you died, on the stage\'s room.', false), tg('Screen shake', 'Turn off if shaking bothers you (#106).', true), tg('Full-screen flashes', '', true)]],
+      online: ['Online', [acct('nugamus', 'Signed in with Discord · since 3 Nov 2026', 'Sign out'), tg('Upload clears automatically', 'Off: results offers Upload replay for each clear.', true), tg('Public profile', 'Off: your profile page is hidden. Leaderboard rows and their replays stay public (product.md, Replays).', true), tg('Show my country flag', 'On leaderboards and your card.', true), btn('Export my data', 'A zip of your account, runs and replays.', 'Export'), btn('Delete account', 'Signs you out everywhere and removes your account and leaderboard rows. Local saves and stats stay on this computer.', 'Delete…', '', true)]],
+    };
+    const ICON = {
+      general: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 11v6M13 8v.5', graphics: 'M4 6h18v12H4zM9 22h8M13 18v4',
+      audio: 'M5 10h4l5-4v14l-5-4H5zM18 9.5a5 5 0 0 1 0 7', input: 'M3 8h20v10H3zM7 13h.5M11 13h.5M15 13h.5M19 13h.5M8 16h10',
+      gameplay: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 8v5l3 2', online: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M4 13h18M13 4c3 3 3 15 0 18M13 4c-3 3-3 15 0 18',
+      about: 'M7 4h12v18H7zM10 8h6M10 12h6M10 16h3',
+    };
+    const order = ['general', 'graphics', 'audio', 'input', 'gameplay', 'online'];
+    let show, active, query = '', found = '', scrollTop = 0;
+    if (view === 'top') { show = ['general', 'graphics']; active = 'general'; }
+    else if (view === 'audio') { show = ['audio', 'input', 'gameplay']; active = 'audio'; scrollTop = 0; }
+    else if (view === 'online') { show = ['online']; active = 'online'; }
+    else { show = ['graphics', 'gameplay']; active = 'graphics'; query = 'scale'; found = '3 results'; }
+    const match = (r) => view !== 'search' || /scale|speed/i.test(r.label);
+    const sections = show.map((k) => {
+      const [title, rows] = S[k];
+      return {
+        title, ink: '#ffffff',
+        rows: rows.filter(match).map((r, i) => {
+          const hit = view === 'search';
+          const focus = (view === 'top' && k === 'graphics' && i === 1) || (view === 'audio' && k === 'audio' && i === 3);
+          const on = !!r.on;
+          return Object.assign({}, r, {
+            isToggle: r.type === 'toggle', isSelect: r.type === 'select', isChips: r.type === 'chips', isSlider: r.type === 'slider', isField: r.type === 'field', isButton: r.type === 'button', isAccount: r.type === 'account',
+            track: on ? accent : 'rgba(255,255,255,.2)', knobX: on ? 21 : 3, knob: on ? '#ffffff' : '#c9cde0',
+            chips: (r.opts || []).map((o, j) => { const c = r.on === -1 ? j !== 5 : j === r.on; return { label: o, bg: c ? 'rgba(255,61,85,.26)' : 'rgba(255,255,255,.07)', ink: c ? '#ffffff' : '#a2a8bc', w: c ? 700 : 500 }; }),
+            btnBg: r.danger ? 'rgba(255,107,107,.16)' : 'rgba(255,255,255,.1)', btnInk: r.danger ? '#ff8a8a' : '#ffffff',
+            bg: focus ? 'rgba(255,255,255,.06)' : hit ? 'rgba(255,61,85,.08)' : 'transparent', ring: focus ? 'inset 0 0 0 2px rgba(255,255,255,.5)' : 'none',
+            desc: r.desc || '', mark: r.mark || '', value: r.value || '',
+            cols: r.type === 'chips' && r.opts.length > 3 ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) auto', gap: r.type === 'chips' && r.opts.length > 3 ? 10 : 18, justify: r.type === 'chips' && r.opts.length > 3 ? 'flex-start' : 'flex-end',
+          });
+        }),
+      };
+    });
+    const w = deck ? 1280 : 1920, h = deck ? 800 : 1080;
+    const T = ja ? { title: '設定', sub: '変更はすぐに保存されます', search: '設定を検索' } : { title: 'Settings', sub: 'Changes apply and save at once', search: 'Search settings' };
+    const labels = ja ? { general: '一般', graphics: 'グラフィック', audio: 'オーディオ', input: '入力', gameplay: 'ゲームプレイ', online: 'オンライン', about: 'このプロジェクト' } : { general: 'General', graphics: 'Graphics', audio: 'Audio', input: 'Input', gameplay: 'Gameplay and HUD', online: 'Online', about: 'About' };
+    const icons = order.concat(['about']).map((k) => ({ d: ICON[k], label: labels[k], bg: k === active ? 'rgba(255,255,255,.06)' : 'transparent', bar: k === active ? accent : 'transparent', ink: k === active ? '#ffffff' : '#8d93a8' }));
+    return {
+      w, h, deck, lang, t: T, accent, icons, sections, query, found,
+      strip: deck ? 60 : 72, iconH: deck ? 52 : 60, pw: deck ? 560 : 660, padT: deck ? 22 : 34, titleSize: deck ? 26 : 30, secSize: deck ? 19 : 20,
+      scrollH: h - (deck ? 150 : 170), scrollTop, searchRing: view === 'search' ? 'inset 0 0 0 2px rgba(255,255,255,.6)' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

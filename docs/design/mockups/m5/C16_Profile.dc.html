@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Profile in the client (#60), osu!'s user profile overlay: it rises over the current screen from the player card or a leaderboard row (600 ms OutQuint) and closes on Esc. Your own and other players' look the same; yours adds Edit. The rank box keeps a slot for pp (#84, not designed). Milestones are the badge question (#489) answered as plain facts: see the note. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="ta" hint-size="1920px,56px"></dc-import></div>
+  <div style="position: absolute; left: 0; right: 0; top: 56px; height: 300px"><dc-import name="Backdrop" w="1920px" h="300px" hue="250" scene="castle" blur="8" dim="0.3" tag="none" hint-size="1920px,300px"></dc-import>
+    <div style="position: absolute; inset: 0; background: linear-gradient(0deg, #0b0d14 0%, rgba(11,13,20,0) 70%)"></div></div>
+  <div style="position: absolute; left: 120px; top: 220px; display: flex; align-items: flex-end; gap: 28px">
+    <div style="width: 150px; height: 150px; border-radius: 14px; background: linear-gradient(135deg, hsl(352 62% 52%), hsl(330 55% 30%)); display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 80px; font-weight: 700; box-shadow: 0 16px 40px rgba(0,0,0,.5)">N</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px">
+      <span style="display: flex; align-items: center; gap: 12px"><span style="font-size: 44px; font-weight: 700">nugamus</span><span style="width: 30px; height: 20px; border-radius: 3px; background: linear-gradient(90deg, transparent 9px, #fecc00 9px 14px, transparent 14px), linear-gradient(transparent 7px, #fecc00 7px 12px, transparent 12px), #006aa7"></span></span>
+      <span style="font-size: 16px; color: #c9cde0">Joined 3 Nov 2026 · last seen today · Discord</span>
+    </div>
+  </div>
+  <div style="position: absolute; right: 120px; top: 250px; display: flex; gap: 14px">
+    <div style="padding: 14px 22px; border-radius: 10px; background: rgba(12,14,22,.8); display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Overall rank</span><span style="font-size: 32px; font-weight: 700">#1,204</span><span style="font-size: 13px; color: #a2a8bc">by clears for now</span></div>
+    <div style="padding: 14px 22px; border-radius: 10px; background: rgba(12,14,22,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Performance</span><span style="font-size: 32px; font-weight: 700; color: #6a7088">— pp</span><span style="font-size: 13px; color: #a2a8bc">slot for #84, not designed</span></div>
+    <button type="button" style="all: unset; align-self: center; height: 44px; padding: 0 20px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">Edit</span></button>
+  </div>
+  <div style="position: absolute; left: 120px; top: 404px; display: flex; gap: 30px">
+    <sc-for list="{{tabs}}" as="b" hint-placeholder-count="4"><span style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 18px; font-weight: {{b.w}}; color: {{b.ink}}">{{b.label}}</span><span style="height: 2px; background: {{b.line}}"></span></span></sc-for>
+  </div>
+
+  <!-- per mode -->
+  <div style="position: absolute; left: 120px; top: 460px; width: 1000px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px">
+    <sc-for list="{{modes}}" as="m" hint-placeholder-count="2">
+      <div style="padding: 20px 24px; border-radius: 10px; background: rgba(16,18,26,.92); display: flex; flex-direction: column; gap: 14px; box-shadow: inset 0 3px 0 {{m.c}}">
+        <span style="font-size: 18px; font-weight: 700">{{m.name}}</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+          <sc-for list="{{m.stats}}" as="s" hint-placeholder-count="6"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{s.k}}</span><span style="font-size: 22px; font-weight: 600">{{s.v}}</span></div></sc-for>
+        </div>
+      </div>
+    </sc-for>
+    <div style="grid-column: span 2; display: flex; gap: 30px; padding: 4px 6px; font-size: 15px; color: #c9cde0"><span>All modes: <span style="font-weight: 700; color: #ffffff">80,083 deaths</span></span><span><span style="font-weight: 700; color: #ffffff">376h</span> played</span><span><span style="font-weight: 700; color: #ffffff">15</span> games touched</span></div>
+  </div>
+  <!-- PBs -->
+  <div style="position: absolute; left: 1180px; top: 460px; width: 620px; display: flex; flex-direction: column; gap: 3px">
+    <span style="font-size: 18px; font-weight: 700; padding: 0 0 8px 10px">Best placements</span>
+    <sc-for list="{{pbs}}" as="p" hint-placeholder-count="5">
+      <div style="height: 54px; margin-left: 10px; border-radius: 10px; background: rgba(12,14,22,.74); transform: skewX(-11.31deg)">
+        <div style="transform: skewX(11.31deg); height: 100%; display: grid; grid-template-columns: 60px minmax(0, 1fr) 100px; gap: 12px; align-items: center; padding: 0 20px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; color: {{p.rc}}">{{p.rank}}</span>
+          <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.game}}</span><span style="font-size: 13px; color: #a2a8bc">{{p.map}}</span></span>
+          <span style="font-size: 17px; font-weight: 700; text-align: right">{{p.time}}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <!-- milestones -->
+  <div style="position: absolute; left: 120px; top: 830px; width: 1680px; display: flex; flex-direction: column; gap: 12px">
+    <span style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 18px; font-weight: 700">Milestones</span><span style="font-size: 14px; color: #a2a8bc">facts the stats already know, shown plainly (the #489 recommendation); nothing to collect</span></span>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap">
+      <sc-for list="{{miles}}" as="m" hint-placeholder-count="5">
+        <span style="height: 40px; padding: 0 16px 0 12px; border-radius: 10px; background: rgba(255,255,255,.08); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="14" height="16" style="image-rendering: pixelated; opacity: {{m.o}}">{{m.t}}<span style="font-size: 13px; font-weight: 500; color: #a2a8bc">{{m.d}}</span></span></span>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tabs: [['Overview', true], ['Time Attack', false], ['Classic', false], ['Replays', false]].map(([label, on]) => ({ label, w: on ? 700 : 600, ink: on ? '#ffffff' : '#a2a8bc', line: on ? '#ff3d55' : 'transparent' })),
+      modes: [
+        { name: 'Time Attack', c: '#ff3d55', stats: [['Games cleared', '13'], ['Maps cleared', '31'], ['Top 100s', '4'], ['Deaths', '48,213'], ['Play time', '212h'], ['Best rank', '#25']].map(([k, v]) => ({ k, v })) },
+        { name: 'Classic', c: '#8f7bff', stats: [['Finished', '9'], ['Difficulties', '14'], ['Saves', 'in 3 games'], ['Deaths', '31,870'], ['Play time', '164h'], ['Furthest', '6 / 7 · Spook']].map(([k, v]) => ({ k, v })) },
+      ],
+      pbs: [['#25', 'I wanna be the Kaenbyou', 'Very Hard · Any%', '38:12.46'], ['#41', 'I wanna eat the lemon', 'Hard · Any% · SD', '12:01.88'], ['#57', 'I wanna go the Spook House', 'Normal · Any%', '26:44.10'], ['#88', 'I wanna be the Little runner', 'Normal · Any%', '9:20.52'], ['#97', 'I wanna help the Fairy tale', 'Hard · 100%', '44:08.30']].map(([rank, game, map, time], i) => ({ rank, game, map, time, rc: i === 0 ? '#ffffff' : '#c9cde0' })),
+      miles: [['First clear', '3 Nov · eat the lemon', 1], ['Deathless stage', 'Kaenbyou Stage 3', 1], ['13 games cleared', 'of 20', 1], ['Sub-40:00', 'Kaenbyou Very Hard', 1], ['First top 100', '#97 · 9 Nov', 1], ['Finished in Classic', '9 games', 0.5]].map(([t, d, o]) => ({ t, d, o })),
+    };
+  }
+}
+</script>
+</body>
+</html>
