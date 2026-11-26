@@ -119,10 +119,11 @@ impl Plugin for SelectPlugin {
                     }
                     let camera = camera(&mut commands);
                     let sel = sel.map(|s| *s).unwrap_or_default();
-                    let same = |l: &Library| {
-                        l.folder.as_deref() == folder.as_deref()
-                            && l.games.iter().map(|g| &g.path).eq(paths.iter())
-                    };
+                    // A package replaced or changed at the same path has a new key (#1593).
+                    let keys: Vec<library::PathKey> =
+                        paths.iter().map(|p| library::path_key(p)).collect();
+                    let same =
+                        |l: &Library| l.matches(folder.as_deref(), &paths, &keys);
                     let sel = match lib {
                         // Back from a run: the art is kept, the PBs and clears are read again.
                         Some(lib) if same(&lib) => {
@@ -199,6 +200,8 @@ impl Plugin for SelectPlugin {
                         list::arrange,
                         list::settle,
                         list::dim,
+                        list::want_previews,
+                        list::previews,
                         picked,
                         collections::favorite_label,
                         collections::chips,

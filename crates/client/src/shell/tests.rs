@@ -103,6 +103,24 @@ fn counts(app: &mut App) -> (usize, usize, usize) {
     (entities, images, sounds)
 }
 
+/// Waits until the select screen's preview worker has delivered everything it asked for, so an
+/// asset count is not compared across a preview arriving (#1593).
+fn settle_previews(app: &mut App) {
+    app.update();
+    for _ in 0..2000 {
+        app.update();
+        let Some(lib) = app.world().get_resource::<select::library::Library>() else {
+            return;
+        };
+        if !lib.busy() {
+            app.update();
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("the select screen's previews never settled");
+}
+
 fn frames(app: &mut App, n: usize) {
     for _ in 0..n {
         app.update();
@@ -152,6 +170,7 @@ fn two_runs_leave_nothing_behind() {
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+    settle_previews(&mut app);
     let before = counts(&mut app);
     play_and_leave(&mut app, "tests/fixtures/audio.pkg");
     assert_eq!(counts(&mut app), before, "after A: (entities, images, sounds)");
@@ -170,6 +189,7 @@ fn two_runs_leave_nothing_behind() {
 fn a_run_holds_images_and_sounds() {
     let mut app = app();
     frames(&mut app, 3);
+    settle_previews(&mut app);
     let before = counts(&mut app);
     start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
     frames(&mut app, 100);
