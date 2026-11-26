@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T21:17:27Z",
+ "generated_at": "2026-11-26T21:32:38Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,14 +126,14 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 24,
-   "closed": 30,
+   "open": 23,
+   "closed": 31,
    "total": 54,
-   "pct_closed": 55.6,
-   "size_points": 48,
+   "pct_closed": 57.4,
+   "size_points": 45,
    "sizes": {
     "size:S": 8,
-    "size:M": 8,
+    "size:M": 7,
     "size:L": 2,
     "unknown": 6
    },
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 973,
-   "open": 277,
-   "closed": 696,
-   "pct_closed": 71.5
+   "open": 276,
+   "closed": 697,
+   "pct_closed": 71.6
   },
   "open_prs": 1,
   "process": {
    "triage": 68,
    "in-progress": 11,
-   "agent-ready": 113,
-   "needs-user": 28,
+   "agent-ready": 112,
+   "needs-user": 27,
    "blocked": 25,
    "revisit": 1
   },
@@ -287,7 +287,7 @@
    },
    {
     "area": "area:format",
-    "count": 44
+    "count": 43
    },
    {
     "area": "area:server",
@@ -303,7 +303,7 @@
    },
    {
     "area": "area:design",
-    "count": 14
+    "count": 13
    },
    {
     "area": "area:tools",
@@ -323,6 +323,24 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 805,
+    "title": "Game metadata model: tags, credits, port status, performance class, known differences, changelog",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/805",
+    "labels": [
+     "agent-ready",
+     "needs-user",
+     "size:M",
+     "area:format",
+     "area:design",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T21:32:29Z",
+    "closed_at": "2026-11-26T21:32:29Z",
+    "created_at": "2026-11-14T17:32:11Z"
+   },
    {
     "number": 1612,
     "title": "Sim/tools: clear the last live-authority plan citations outside src",
@@ -437,40 +455,25 @@
     "updated_at": "2026-11-26T15:57:00Z",
     "closed_at": "2026-11-26T15:57:00Z",
     "created_at": "2026-11-26T15:26:06Z"
-   },
-   {
-    "number": 1129,
-    "title": "Sim: point two src comments at the live register after #1118",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1129",
-    "labels": [
-     "size:S",
-     "area:sim"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-26T15:33:48Z",
-    "closed_at": "2026-11-26T15:33:48Z",
-    "created_at": "2026-11-20T10:21:34Z"
    }
   ],
   "in_progress": [
    {
-    "number": 805,
-    "title": "Game metadata model: tags, credits, port status, performance class, known differences, changelog",
+    "number": 1492,
+    "title": "UI kit: Switch control rest state is 2.1:1 before the settings screen uses it",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/805",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1492",
     "labels": [
+     "enhancement",
      "agent-ready",
-     "needs-user",
-     "size:M",
-     "area:format",
-     "area:design",
+     "size:S",
+     "area:client",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T21:12:39Z",
+    "updated_at": "2026-11-26T21:29:23Z",
     "closed_at": null,
-    "created_at": "2026-11-14T17:32:11Z"
+    "created_at": "2026-11-25T00:20:56Z"
    },
    {
     "number": 1622,
@@ -556,24 +559,6 @@
   ],
   "needs_user": [
    {
-    "number": 805,
-    "title": "Game metadata model: tags, credits, port status, performance class, known differences, changelog",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/805",
-    "labels": [
-     "agent-ready",
-     "needs-user",
-     "size:M",
-     "area:format",
-     "area:design",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T21:12:39Z",
-    "closed_at": null,
-    "created_at": "2026-11-14T17:32:11Z"
-   },
-   {
     "number": 195,
     "title": "Public nightly alpha builds",
     "state": "open",
@@ -647,6 +632,21 @@
     "updated_at": "2026-11-26T01:29:48Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:32:15Z"
+   },
+   {
+    "number": 498,
+    "title": "Design: game select Details tab",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/498",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:design"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T01:29:41Z",
+    "closed_at": null,
+    "created_at": "2026-11-04T03:17:03Z"
    }
   ],
   "agent_ready": [
@@ -742,7 +742,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 270,
+  "closed_7d": 271,
   "opened_7d": 309,
   "burnup": [
    {
@@ -763,7 +763,7 @@
    {
     "week": "2026-11-30",
     "created": 973,
-    "closed": 696
+    "closed": 697
    }
   ]
  },
