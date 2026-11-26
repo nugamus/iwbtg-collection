@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game icon</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Every game gets an icon, so a game is known at a glance in notifications, downloads, replays, the shelf, profile rows and toasts. Source: the package's [icon] (a sprite the porter picks from the game: its boss, its save point, its signature object), drawn pixel-crisp on a tile in the game's hue (the hue its select panel already uses). A package without one gets its title's first letter on the same tile. Square with a 22% radius, upright (icons are not sheared). Sizes 20, 28, 40, 56. The glyphs here are placeholders standing in for each game's own sprite. -->
+<div style="position: relative; width: {{size}}px; height: {{size}}px; border-radius: {{radius}}px; overflow: hidden; background: {{bg}}; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 -{{shade}}px 0 rgba(0,0,0,.22); display: grid; place-items: center; opacity: {{op}}">
+  <sc-if value="{{glyph}}" hint-placeholder-val="{{ true }}">
+    <svg viewBox="0 0 16 16" width="{{g}}" height="{{g}}" style="shape-rendering: crispEdges; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35))" aria-hidden="true">
+      <sc-for list="{{px}}" as="p" hint-placeholder-count="12"><rect x="{{p.x}}" y="{{p.y}}" width="{{p.w}}" height="{{p.h}}" fill="{{p.c}}"></rect></sc-for>
+    </svg>
+  </sc-if>
+  <sc-if value="{{mono}}" hint-placeholder-val="{{ false }}">
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{monoSize}}px; font-weight: 700; color: #ffffff; line-height: 1">{{letter}}</span>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"game":{"editor":"enum","options":["kaenbyou","lemon","runner","fairy","machinary","spook","needle","feather","animus","newyear","showdown","mono"],"default":"kaenbyou"},"size":{"editor":"int","min":16,"max":96,"default":40},"dim":{"editor":"boolean","default":false},"$preview":{"width":40,"height":40}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const game = this.props.game ?? 'kaenbyou';
+    const size = Number(this.props.size ?? 40);
+    const dim = this.props.dim === true || this.props.dim === 'true';
+    const W = '#ffffff', L = '#ffe9a8', R = '#ff5a5a', D = '#2a1430';
+    const r = (x, y, w, h, c) => ({ x, y, w, h, c });
+    const G = {
+      kaenbyou: [250, [r(7, 2, 2, 2, L), r(6, 4, 4, 2, L), r(5, 6, 6, 3, '#ffb347'), r(4, 9, 8, 3, '#ff7b3a'), r(5, 12, 6, 2, '#ff5a3a'), r(7, 8, 2, 4, L)]],
+      lemon: [52, [r(5, 4, 6, 1, '#fff3a0'), r(3, 5, 10, 6, '#ffe14a'), r(5, 11, 6, 1, '#e8c22a'), r(2, 7, 1, 2, '#e8c22a'), r(13, 7, 1, 2, '#e8c22a'), r(9, 2, 3, 2, '#5bd17a'), r(5, 6, 3, 1, W)]],
+      runner: [140, [r(6, 2, 5, 2, D), r(6, 4, 5, 3, '#f2c79a'), r(9, 5, 1, 1, D), r(3, 6, 3, 4, R), r(6, 7, 5, 4, '#3b6fd8'), r(11, 8, 3, 1, '#c9cde0'), r(6, 11, 2, 3, D), r(9, 11, 2, 2, D)]],
+      fairy: [300, [r(7, 2, 2, 12, W), r(2, 7, 12, 2, W), r(5, 5, 6, 6, '#ffd6f4'), r(7, 7, 2, 2, W)]],
+      machinary: [190, [r(6, 2, 4, 2, W), r(6, 12, 4, 2, W), r(2, 6, 2, 4, W), r(12, 6, 2, 4, W), r(4, 4, 8, 8, '#d9f4ff'), r(6, 6, 4, 4, '#1d4a5a'), r(3, 3, 2, 2, W), r(11, 3, 2, 2, W), r(3, 11, 2, 2, W), r(11, 11, 2, 2, W)]],
+      spook: [20, [r(5, 2, 6, 2, W), r(3, 4, 10, 8, W), r(3, 12, 2, 2, W), r(7, 12, 2, 2, W), r(11, 12, 2, 2, W), r(5, 6, 2, 2, D), r(9, 6, 2, 2, D)]],
+      needle: [330, [r(7, 2, 2, 2, W), r(6, 4, 4, 3, W), r(5, 7, 6, 3, '#e3e6ef'), r(4, 10, 8, 2, '#c9cde0'), r(3, 12, 10, 2, '#9ba1b5')]],
+      feather: [95, [r(10, 2, 3, 2, '#ff6b6b'), r(8, 4, 4, 2, '#ffc46b'), r(6, 6, 4, 2, '#fff36b'), r(5, 8, 3, 2, '#6bff9a'), r(4, 10, 2, 2, '#6bc8ff'), r(3, 12, 2, 2, '#b06bff'), r(2, 14, 1, 1, W)]],
+      animus: [280, [r(5, 3, 6, 1, W), r(3, 4, 10, 8, '#f3f0ff'), r(5, 12, 6, 1, W), r(8, 4, 5, 6, '#3a2a6a'), r(9, 10, 3, 2, '#3a2a6a')]],
+      newyear: [20, [r(7, 2, 2, 3, '#ffd36b'), r(7, 11, 2, 3, '#ffd36b'), r(2, 7, 3, 2, '#ffd36b'), r(11, 7, 3, 2, '#ffd36b'), r(4, 4, 2, 2, W), r(10, 4, 2, 2, W), r(4, 10, 2, 2, W), r(10, 10, 2, 2, W), r(7, 7, 2, 2, W)]],
+      showdown: [330, [r(10, 2, 3, 2, W), r(9, 4, 2, 2, W), r(7, 6, 2, 2, W), r(5, 8, 2, 2, W), r(3, 9, 4, 1, '#ffc93c'), r(4, 10, 2, 3, '#8a5a2a'), r(2, 13, 2, 1, '#ffc93c')]],
+    };
+    const mono = game === 'mono' || !G[game];
+    const [hue, px] = G[game] || [210, []];
+    return {
+      size, radius: Math.round(size * 0.22), shade: Math.max(2, Math.round(size / 14)), op: dim ? 0.45 : 1,
+      bg: `linear-gradient(140deg, hsl(${hue} 62% 50%), hsl(${hue} 58% 24%))`,
+      glyph: !mono, mono, px, g: Math.round(size * 0.66), letter: 'W', monoSize: Math.round(size * 0.6),
+    };
+  }
+}
+</script>
+</body>
+</html>

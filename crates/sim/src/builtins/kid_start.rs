@@ -1,5 +1,5 @@
-//! Built-in `kid_start` (playerStart; mechanics `player_start`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/kid_start.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `kid_start` (playerStart; mechanics `player_start`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/kid_start.md). Tier 1.
 //!
 //! Room Start creates the kid at the start's position plus the spawn offset when no kid exists
 //! (the kid check counts both kid kinds, active and alive). Where the offset is added depends on
@@ -32,36 +32,49 @@ const SPECS: &[ParamSpec] = &[
         name: "offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "flipped_offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "flipped_offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "creates",
         ty: ParamType::Enum(CREATES),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["animus"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "grav_gated",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "shift_at",
         ty: ParamType::Enum(SHIFT_AT),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
 ];
 

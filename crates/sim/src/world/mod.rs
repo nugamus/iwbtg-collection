@@ -1,6 +1,4 @@
-//! The mutable world: instances, globals, room state (docs/plans/sim-core.md 1.2, 1.4, 1.5).
-//!
-//! WP0 declares the structs and ships a minimal `Vec` store (`store.rs`); WP1 owns the module.
+//! The mutable world: instances, globals, room state (docs/architecture/sim/world.md).
 
 pub mod api;
 pub mod instance;
@@ -11,7 +9,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use api::{Flow, SpawnInit};
-pub use instance::{InstId, Instance, KindState, Value};
+pub(crate) use instance::set_element;
+pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Persistence, Value, assign_bare};
 
 use crate::collide::grid::Grid;
 use crate::def::{GameDef, PartSystemDefId, RoomId, VarId};
@@ -20,8 +19,8 @@ use crate::input_state::InputState;
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::particles::{PartSystemId, Particles};
-use crate::rng::Rng;
-use crate::room::RoomRequest;
+use crate::rng::{Rng, RngStreams};
+use crate::room::RoomRequests;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
 use crate::script::ScriptRuntime;
@@ -42,37 +41,55 @@ pub struct World {
     pub room: RoomId,
     /// Ticks since the current room was entered.
     pub room_tick: u64,
-    /// GM `room_speed`: the file speed on entry, 50 after the world's Room Start (R14).
+    /// GM `room_speed`: legacy per-room clock data (R14, R30). The file speed on entry, the
+    /// package tick rate after the world's Room Start. `ClockPolicy::Fixed` (standard) never
+    /// reads it as a clock; it stays hashed either way.
     pub room_speed: Real,
-    /// Instances sorted by id (plan 1.2): creation order, except that room-placed instances with
+    /// Instances sorted by id (docs/architecture/sim/world.md): creation order, except that room-placed instances with
     /// a GM8 id (#669) sort below every runtime id. Private to `world` so every
     /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
-    /// (plan 3.4); read them with `World::instances`.
+    /// (docs/architecture/sim/collision.md); read them with `World::instances`.
     pub(in crate::world) instances: Vec<Instance>,
-    /// The next runtime id to hand out (checked, plan 10.3); starts at
+    /// The GM instance list order (`World::instance_list`): each stored id's place in the room's
+    /// entry sequence — the placed instances in file order, then the carried persistent ones in
+    /// their previous list order, then the instances created during the room (research#142).
+    /// Depth sorts over it at query time. Hashed: it decides which instance "the first" is.
+    pub(crate) room_entry: BTreeMap<InstId, u64>,
+    /// The next free value in `room_entry`; reset when a room change starts. Hashed.
+    pub(crate) next_entry: u64,
+    /// The next runtime id to hand out (checked, docs/architecture/sim/determinism.md); starts at
     /// [`World::first_runtime_id`].
     pub next_id: u64,
-    /// Variable names first seen at run time (scripts), plan 1.1.
+    /// Variable names first seen at run time (scripts; docs/architecture/sim/world.md).
     pub var_names: BTreeMap<String, VarId>,
     /// GML globals.
     pub globals: BTreeMap<VarId, Value>,
-    /// Engine state that is not per instance, split by owner (plan 1.5).
+    /// Engine state that is not per instance, split by owner (docs/architecture/sim/world.md).
     pub engine: EngineGlobals,
-    /// The gameplay random generator (WP2).
+    /// The gameplay random generator; the shared stream under `gm8`.
     pub rng: Rng,
-    /// This tick's input and the direct-read latch (WP1).
+    /// The named streams a split layout adds (decision 0005, N10). Hashed: a replay observes the
+    /// layout and each stream's state. Under `Shared` they are seeded but never read.
+    #[serde(default)]
+    pub streams: RngStreams,
+    /// This tick's input and the direct-read latch.
     pub input: InputState,
-    /// The eight views (WP4b).
+    /// The eight views.
     pub views: [View; 8],
-    /// One pending room request; the last request wins (Inferred, R13).
-    pub pending: Option<RoomRequest>,
-    /// Saved instances of persistent rooms (WP4a).
+    /// The room requests waiting for the room-change row, in raise order (Inferred, R13).
+    /// `RoomRules::nested_request` decides what is kept and when it runs: `LastWins` keeps at most
+    /// the request raised last (gm8), `Queue` runs them in raise order before the next tick, and
+    /// `QueueNextTick` runs one per following tick (#1294).
+    pub pending: RoomRequests,
+    /// Instances a **persistent room** keeps while the player is away, restored on return.
+    /// Distinct from [`Persistence::Run`] instances, which follow the room change, and
+    /// from [`Persistence::Save`] save objects, which write the checkpoint.
     pub persistent_rooms: BTreeMap<RoomId, Vec<Instance>>,
-    /// The save slot; `None` means "save file missing" (WP4b).
+    /// The save slot; `None` means "save file missing".
     pub save: Option<SaveSlot>,
-    /// Which sounds play (WP10); hashed, because `sound_isplaying` changes game state.
+    /// Which sounds play; hashed, because `sound_isplaying` changes game state.
     pub sound: SoundState,
-    /// Timing trigger state (WP8b): which splits fired, whether the run started, and the
+    /// Timing trigger state: which splits fired, whether the run started, and the
     /// `run_end` flag `game_clear` raises. Hashed and saved, so a restored run splits the same.
     pub timing: TimingState,
     /// Particle types, systems, emitters and the live particles that still draw (N10, #764):
@@ -106,10 +123,10 @@ pub struct World {
     /// timing chain and ranked start. Hashed: two maps' runs never share a state hash.
     #[serde(default)]
     pub map: u16,
-    /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
-    /// clean verification.
+    /// A trace setup action ran (docs/architecture/sim/determinism.md). Hashed, so a run that
+    /// used setup never matches a clean verification.
     pub setup_applied: bool,
-    /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed, and
+    /// Broadphase cache. Rebuilt on room entry and savestate restore; never hashed, and
     /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).
     #[serde(skip)]
     pub grid: Grid,
@@ -131,14 +148,17 @@ impl World {
             room_tick: 0,
             room_speed: Real::ZERO,
             instances: Vec::new(),
+            room_entry: BTreeMap::new(),
+            next_entry: 0,
             next_id: InstId::FIRST.0,
             var_names: BTreeMap::new(),
             globals: BTreeMap::new(),
             engine: EngineGlobals::default(),
             rng: Rng::new(seed),
+            streams: RngStreams::seeded(seed, crate::rules::rng::StreamLayout::Shared),
             input: InputState::default(),
             views: Default::default(),
-            pending: None,
+            pending: RoomRequests::default(),
             persistent_rooms: BTreeMap::new(),
             save: None,
             sound: SoundState::default(),
@@ -157,14 +177,14 @@ impl World {
     }
 }
 
-/// Engine globals split by owner (plan 1.5). Each part starts empty; only its owner adds fields.
+/// Engine globals split by area (docs/architecture/sim/world.md). Each part starts empty.
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct EngineGlobals {
-    /// WP4b: difficulty, deaths, time, save slot number, clear flag.
+    /// Difficulty, deaths, time, save slot number, clear flag.
     pub run: run_globals::RunGlobals,
-    /// WP5a: grav flag, frozen, reverse, game-side key flags.
+    /// Grav flag, frozen, reverse, game-side key flags.
     pub kid: kid::KidGlobals,
-    /// WP6a: trigger models, boss and item flags.
+    /// Trigger models, boss and item flags.
     pub mech: builtins::MechGlobals,
 }
 
@@ -181,7 +201,7 @@ pub enum SimStatus {
 }
 
 /// What every built-in, the kid, rooms and scripts work through. `Sim` builds it for each tick
-/// from its own fields (WP1); tests build it by hand.
+/// from its own fields; tests build it by hand.
 pub struct Ctx<'a> {
     /// The game.
     pub def: &'a GameDef,
@@ -189,11 +209,11 @@ pub struct Ctx<'a> {
     pub rules: &'a RunnerRules,
     /// The world.
     pub w: &'a mut World,
-    /// The script host with the game's compiled scripts (WP9). Shared, not `&mut`: a script
+    /// The script host with the game's compiled scripts. Shared, not `&mut`: a script
     /// that spawns runs the new instance's Create inside `spawn`, which may run another script,
     /// so the host is re-entered while it runs. Its per-call state stays inside the host.
     pub scripts: &'a ScriptRuntime,
-    /// DLL sound adapters modeled or stubbed (`SimOptions::dll_mode`; WP10). Every kaenbyou
+    /// DLL sound adapters modeled or stubbed (`SimOptions::dll_mode`). Every kaenbyou
     /// trace runs in `Stub` mode.
     pub dll_mode: DllMode,
 }

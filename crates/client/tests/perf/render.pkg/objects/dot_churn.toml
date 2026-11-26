@@ -1,0 +1,6 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# A dot that destroys itself after `LIFE` ticks (`scripts/dot_churn.rhai`), so the churner's
+# population settles at `rate * LIFE` while instances keep being created and destroyed.
+script = "dot_churn"
+sprite = "dot"
+params = { life = 0.0 }

@@ -1,9 +1,10 @@
-//! Built-in `game_over` (GAMEOVER; kid/A1.md Death, kid/A2.md, kid/B.md; docs/plans/sim-core.md
-//! 6.1; docs/format/builtins/game_over.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `game_over` (GAMEOVER; kid/A1.md Death, kid/A2.md, kid/B.md;
+//! docs/architecture/sim/builtins.md; docs/format/builtins/game_over.md). Tier 1.
 //!
 //! Create places it relative to view 0 (`offset_x`, `offset_y`: rely 400, 304; POR 480, 270;
 //! A2 and B 400, 300) and, with a `delay` (A2 and B: 30), hides it until Alarm 0. The kid's death
-//! creates it. The fades run in the Draw slot's `Late` handler (plan: "Late handler for fades"),
+//! creates it. The fades run in the Draw slot's `Late` handler
+//! (docs/architecture/sim/builtins.md: "Late handler for fades"),
 //! which only visible instances get: the image alpha rises 0.01 a tick up to 1, the black overlay
 //! alpha 0.015 up to 0.6, and the bob phase by pi/100 (rely: the text bobs by 32 times the sine
 //! of the phase). The overlay and the bob are draw-only values the client reads with
@@ -26,21 +27,25 @@ const SPECS: &[ParamSpec] = &[
         name: "offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "view_relative",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "delay",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

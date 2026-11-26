@@ -1,7 +1,7 @@
-//! Built-in `music` (mechanics `music`, sound Inferred; docs/plans/sim-core.md 6.1, 7;
-//! docs/format/builtins/music.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `music` (mechanics `music`, sound Inferred; docs/architecture/sim/builtins.md, sound.md;
+//! docs/format/builtins/music.md). Tier 2.
 //!
-//! Plays a track through the sound model (`sound::play`, WP10). `mode`:
+//! Plays a track through the sound model (`sound::play`). `mode`:
 //!
 //! - `on_create` (KOT playMusic, whose creation code plays the track): Create plays the track.
 //! - `every_step_if_not_playing` (SHO playMusic001-005): each Step, while music is on and the
@@ -10,7 +10,7 @@
 //! `loop` (default true) loops it. With `respects_music_off` nothing plays while music is off
 //! (`global.musicD`).
 //!
-//! Tested against the real sound model in `tests/wp6b_music_sound.rs`.
+//! Tested against the real sound model in `tests/builtins_music.rs`.
 
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_error};
 use crate::def::{KindDef, ParamValue, Params, SoundId};
@@ -26,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "track",
         ty: ParamType::Sound,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "loop",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "respects_music_off",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

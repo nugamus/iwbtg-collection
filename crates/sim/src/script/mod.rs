@@ -1,21 +1,26 @@
-//! The script host (docs/plans/sim-core.md 11, decision 0001).
+//! The script host (docs/architecture/sim/scripts.md, decision 0001).
 //!
 //! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
 //! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from
-//! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`. WP0 declares; WP9 owns.
+//! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`.
 
 pub mod api;
+pub mod array;
 pub mod budget;
 pub mod collide;
 mod consts;
 pub mod docs;
+pub mod execute;
 pub mod host;
 pub mod inst;
+pub mod paths;
+pub mod strings;
 pub mod validate;
+pub mod views;
 
 use serde::{Deserialize, Serialize};
 
-pub use host::ScriptRuntime;
+pub use host::{PreparedScripts, ScriptRuntime};
 
 use crate::error::SimError;
 use crate::events::EventKind;
@@ -46,7 +51,7 @@ pub trait ScriptHost {
     fn on_event(&self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError>;
 }
 
-/// A scripted instance's state. WP9 adds the fields.
+/// A scripted instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ScriptState {}
 

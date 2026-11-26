@@ -1,0 +1,34 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# The avoidance stress package (#990): a scripted spawner fills a room with live bullets so the
+# script layer can be measured. Everything here is original and deterministic.
+format = 0
+id = "avoidance"
+title = "Avoidance stress"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+# A replay picks the variant room with `replay run ... --room <id>`; a run without `--room`
+# starts at the 5,000-bullet native room, as does the new game here.
+start_room = "native_5000"
+max_ticks = 180_000
+object_order = [
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "kid_start", "@spawner", "@bullet_native", "@bullet_scripted",
+]
+
+[engine]
+new_game_room = "native_5000"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://github.com/nugamus/iwbtg-collection"
+permission = "granted"
+permission_note = "Original synthetic package made for this repository (a stress test)."
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }

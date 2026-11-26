@@ -1,4 +1,4 @@
-//! Built-in `decor` (docs/plans/sim-core.md 6.1; docs/format/builtins/decor.md). Tier 3.
+//! Built-in `decor` (docs/architecture/sim/builtins.md; docs/format/builtins/decor.md). Tier 3.
 //! Sprite-only objects with no behavior (mechanics `builtin.decor`): no events, no params.
 
 use super::{BuiltinState, ParamError, ParamSpec};

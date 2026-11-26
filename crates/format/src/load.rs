@@ -1,10 +1,9 @@
-//! Package to `GameDef` (docs/plans/sim-core.md 8.1, 8.2). WP7a owns this file, including the
-//! calls to the WP7b steps (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`,
-//! `params::check`), whose signatures WP0 fixed; WP7b owns only their bodies. The manifest's
-//! `[engine]` and `[timing]` sections are WP7a's too (`manifest.rs`).
+//! Package to `GameDef` (docs/format/v0.md). This file runs the loader steps
+//! (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`, `params::check`) and
+//! reads the manifest's `[engine]` and `[timing]` sections (`manifest.rs`).
 //!
-//! Steps (plan 8.2): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
-//! 6 variable ids; 7 (WP7b) physics, params, timelines, paths, sounds; 8 cross-references;
+//! Steps (docs/format/v0.md): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
+//! 6 variable ids; 7 physics, params, timelines, paths, sounds; 8 cross-references;
 //! 9 `gameplay_hash`.
 //!
 //! This file holds `Loader`, `run` (the step order) and the shared helpers; the steps live in one
@@ -25,7 +24,8 @@ use iwbtg_sim::def::{
     Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, KindVariant, Mask,
     MaskId, MaskSet, MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry,
     RankTable, ResetModel, RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef,
-    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, VariantSel, ViewDef, variant_matches,
+    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, TimelineDef, TimelineId, VariantSel, ViewDef,
+    variant_matches,
 };
 use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
@@ -55,6 +55,7 @@ use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_tr
 use crate::vars::intern_vars;
 use crate::{params, particles, paths, physics, sounds, timelines};
 
+mod compat;
 mod game;
 mod hash;
 mod kid;
@@ -100,6 +101,9 @@ pub struct LoadReport {
     /// How the game's physics stands against its engine pack's family preset (#802). `None` when
     /// no definition was built. A catalog or game page reads this for the custom-physics mark.
     pub physics: Option<physics::PhysicsStanding>,
+    /// The resolved ruleset, compatibility profile and declared deviations (decision 0005).
+    /// `None` when no definition was built.
+    pub compat: Option<crate::compat::Resolved>,
 }
 
 /// One map's resolved timing chain (docs/format/game.md, Maps).
@@ -140,6 +144,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 gameplay_hash: None,
                 maps: Vec::new(),
                 physics: None,
+                compat: None,
             };
         }
     };
@@ -147,20 +152,35 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
     let def = l.run();
     diags.append(&mut l.diags);
     l.emit_notes(&mut diags);
-    l.emit_pending(&mut diags);
     let gameplay_hash = match &def {
         Some(def) if !has_errors(&diags) => Some(gameplay_hash(files, &manifest, def)),
         _ => None,
     };
-    let physics_mark = def
-        .as_ref()
-        .map(|def| physics::standing(files, &manifest, &def.physics));
+    let physics_mark = def.as_ref().map(|def| {
+        // Room profiles in id order, with the game's own file left out (`None`): rooms naming it
+        // share the game's profile (#970). Only a profile a built room names counts (#1063): a
+        // stray `physics/<id>.toml` that no room references is package data, not a medley.
+        let referenced: BTreeSet<u16> = def.rooms.iter().filter_map(|room| room.physics).collect();
+        let rooms: Vec<(&str, &PhysicsProfile)> = l
+            .room_physics_ids
+            .iter()
+            .filter_map(|(id, index)| {
+                let index = (*index)?;
+                referenced
+                    .contains(&index)
+                    .then(|| (id.as_str(), &def.room_physics[usize::from(index)]))
+            })
+            .collect();
+        physics::standing(files, &manifest, &def.physics, &rooms)
+    });
+    let compat = def.as_ref().map(|def| crate::compat::resolve(&manifest, def));
     LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
         maps: std::mem::take(&mut l.maps),
         physics: physics_mark,
+        compat,
     }
 }
 
@@ -201,7 +221,7 @@ fn request_text(cr: &str) -> &'static str {
         "CR8" => {
             "the kid's mask comes from the legacy physics.toml `mask`; give the `kid` kind a mask in [defaults.kid]"
         }
-        "CR10" => "kind names are not built-ins of plan 6.1; they load inert",
+        "CR10" => "kind names are not built-ins (docs/format/builtins.md); they load inert",
         "CR11" => "objects use the legacy `roles` key; write `counts_as`",
         "CR12" => {
             "bare built-ins have no [defaults] sprite in game.toml; their sprites came from \
@@ -212,74 +232,6 @@ fn request_text(cr: &str) -> &'static str {
         "CR15" => "sprite strips are wider or taller than 4096 px",
         _ => "",
     }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Calls into work packages that may not be merged yet.
-
-/// Runs a call into another work package. Until that package merges, its WP0 stub panics with
-/// `not implemented: WPn: <function>`; this records the name and returns `None`, so the rest of
-/// the package still loads (with defaults) and `iwbtg pkg check` stays useful. Any other panic is
-/// passed on. Temporary scaffolding: WP11 removes it once every loader dependency is merged.
-/// On targets without unwinding (wasm32-unknown-unknown) the call is made directly.
-pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
-    #[cfg(panic = "unwind")]
-    {
-        quiet_stub_panics();
-        IN_PENDING_CALL.with(|c| c.set(c.get() + 1));
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        IN_PENDING_CALL.with(|c| c.set(c.get() - 1));
-        match result {
-            Ok(v) => Some(v),
-            Err(payload) => {
-                let msg = payload
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| payload.downcast_ref::<&str>().copied());
-                match msg.and_then(stub_name) {
-                    Some(name) => {
-                        pending.insert(name.to_owned());
-                        None
-                    }
-                    None => std::panic::resume_unwind(payload),
-                }
-            }
-        }
-    }
-    #[cfg(not(panic = "unwind"))]
-    {
-        let _ = pending;
-        Some(f())
-    }
-}
-
-/// `WP7b: physics::load` from a WP0 stub's panic message.
-#[cfg(panic = "unwind")]
-fn stub_name(msg: &str) -> Option<&str> {
-    msg.strip_prefix("not implemented: ")
-        .filter(|rest| rest.starts_with("WP"))
-}
-
-#[cfg(panic = "unwind")]
-std::thread_local! {
-    /// How deep this thread is inside [`pending_call`]; the quiet hook only acts above 0.
-    static IN_PENDING_CALL: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-}
-
-/// Keeps WP0 stub panics caught by [`pending_call`] off stderr. A stub panic anywhere else (a
-/// tool running the sim into an unmerged work package) and every other panic print as usual.
-#[cfg(panic = "unwind")]
-fn quiet_stub_panics() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            let caught = IN_PENDING_CALL.with(|c| c.get() > 0);
-            if !caught || info.payload_as_str().and_then(stub_name).is_none() {
-                previous(info);
-            }
-        }));
-    });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -320,8 +272,6 @@ struct Loader<'a> {
     diags: Vec<Diagnostic>,
     /// Converter request id to the items it covers.
     notes: BTreeMap<&'static str, BTreeSet<String>>,
-    /// WP0 stubs reached.
-    pending: BTreeSet<String>,
     trace: Option<TraceMap>,
     sprite_ids: BTreeMap<String, SpriteEntry>,
     /// `particles/<id>.toml`, loaded after sprites so kind params can name them.
@@ -347,7 +297,11 @@ struct Loader<'a> {
     scripts: Vec<ScriptDef>,
     room_ids: BTreeMap<String, RoomId>,
     sounds: Vec<SoundDef>,
-    spec_cache: BTreeMap<Builtin, Option<&'static [ParamSpec]>>,
+    /// `timelines/<id>.toml`, loaded before kinds so the object `timeline` key resolves.
+    timelines: Vec<TimelineDef>,
+    /// Timeline name to its index in `timelines`.
+    timeline_ids: BTreeMap<String, TimelineId>,
+    spec_cache: BTreeMap<Builtin, &'static [ParamSpec]>,
     ranks: RankTable,
     /// Kinds that got a rank after the listed entries (Trace, CR4).
     appended: BTreeSet<KindId>,
@@ -364,6 +318,9 @@ struct Loader<'a> {
     /// Room profile id to its index in `room_physics`; `None` for the file that is the game's
     /// own profile (`game.toml` `physics`), which rooms naming it share.
     room_physics_ids: BTreeMap<String, Option<u16>>,
+    /// Every kid profile's `[script] vars` names, interned with the other variable names
+    /// (decision 0004).
+    kid_script_vars: BTreeSet<String>,
 }
 
 impl<'a> Loader<'a> {
@@ -375,7 +332,6 @@ impl<'a> Loader<'a> {
             manifest_text: read_text(files, MANIFEST_PATH, &mut Vec::new()).unwrap_or(""),
             diags: Vec::new(),
             notes: BTreeMap::new(),
-            pending: BTreeSet::new(),
             trace: None,
             sprite_ids: BTreeMap::new(),
             particles: Vec::new(),
@@ -392,6 +348,8 @@ impl<'a> Loader<'a> {
             scripts: Vec::new(),
             room_ids: BTreeMap::new(),
             sounds: Vec::new(),
+            timelines: Vec::new(),
+            timeline_ids: BTreeMap::new(),
             spec_cache: BTreeMap::new(),
             ranks: RankTable::default(),
             appended: BTreeSet::new(),
@@ -402,6 +360,7 @@ impl<'a> Loader<'a> {
             maps: Vec::new(),
             room_physics: Vec::new(),
             room_physics_ids: BTreeMap::new(),
+            kid_script_vars: BTreeSet::new(),
         }
     }
 
@@ -494,41 +453,6 @@ impl<'a> Loader<'a> {
         }
     }
 
-    fn emit_pending(&self, out: &mut Vec<Diagnostic>) {
-        if self.pending.is_empty() {
-            return;
-        }
-        let mut by_wp: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for name in &self.pending {
-            let (wp, func) = name.split_once(": ").unwrap_or(("WP?", name));
-            by_wp.entry(wp).or_default().push(func);
-        }
-        let parts: Vec<String> = by_wp
-            .iter()
-            .map(|(wp, funcs)| {
-                let shown: Vec<&str> = funcs.iter().take(4).copied().collect();
-                let more = funcs.len().saturating_sub(shown.len());
-                let tail = if more > 0 {
-                    format!(", and {more} more")
-                } else {
-                    String::new()
-                };
-                format!("{wp} ({}{tail})", shown.join(", "))
-            })
-            .collect();
-        out.push(Diagnostic {
-            file: MANIFEST_PATH.to_owned(),
-            line: 1,
-            column: 1,
-            severity: Severity::Warning,
-            message: format!(
-                "this build lacks loader steps of work packages not merged yet, so their defaults \
-                 were used and the definition is incomplete: {}",
-                parts.join("; ")
-            ),
-        });
-    }
-
     fn run(&mut self) -> Option<GameDef> {
         if self.trace_mode()
             && let Some(text) = read_text(self.files, TRACE_MAP_PATH, &mut Vec::new())
@@ -549,22 +473,29 @@ impl<'a> Loader<'a> {
         crate::art::check(self.files, &mut self.diags);
         // Step 4, first half: parse rooms and fix their ids, so params can name rooms.
         let rooms = self.parse_rooms();
-        // Step 7 (WP7b): sounds before kinds, so params can name sounds.
-        let mut sounds = Vec::new();
+        // Step 7: sounds before kinds, so params can name sounds.
         let trace = self.trace_mode();
         let mut d = Vec::new();
-        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, trace, &mut d)) {
-            sounds = s;
-        }
+        let sounds = sounds::load(self.files, trace, &mut d);
         self.diags.append(&mut d);
         self.sounds = sounds;
+        // Step 7: timelines before kinds, so the object `timeline` key resolves.
+        let mut d = Vec::new();
+        let timelines = timelines::load(self.files, &mut d);
+        self.diags.append(&mut d);
+        self.timeline_ids = timelines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((t.name.clone(), TimelineId(u32::try_from(i).ok()?))))
+            .collect();
+        self.timelines = timelines;
         // Step 3.
         self.builtin_kinds();
         self.load_objects();
         self.resolve_kind_params();
         // Step 5, first half: object_order.
         self.load_order();
-        // Step 7 (WP7b): physics.
+        // Step 7: physics.
         let mut d = Vec::new();
         let physics_path = self.m.physics.get_ref().clone();
         let loaded = physics::load(self.files, &physics_path, self.trace_mode(), &mut d);
@@ -580,6 +511,8 @@ impl<'a> Loader<'a> {
             self.legacy_kid_mask();
         }
         self.load_room_physics(&physics);
+        // `[compat]` (decision 0005): the profile and deviations against the resolved physics.
+        self.check_compat(&physics);
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
@@ -595,15 +528,23 @@ impl<'a> Loader<'a> {
         let timing = self.timing();
         self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
-        let timelines =
-            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
-        let paths = pending_call(&mut self.pending, || paths::load(self.files, &mut d)).unwrap_or_default();
+        let paths = paths::load(self.files, &mut d);
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
         self.stripped_refs(&rooms);
         let (stripped, map_starts) = self.stripped_def(&vars);
         let maps = map_defs(&self.maps, map_starts);
+        // A def with maps keeps every chain in `GameDef::maps`; `GameDef::timing` is only the
+        // fallback for a hand-built def with no maps (docs/format/game.md, Maps). Leave it at
+        // its default so a loaded package never carries a duplicate a post-load edit could
+        // change to no effect (#1472).
+        let timing = timing?;
+        let timing = if maps.is_empty() {
+            timing
+        } else {
+            TimingDef::default()
+        };
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -622,7 +563,7 @@ impl<'a> Loader<'a> {
             tick_rate: self.m.tick_rate(),
             max_ticks: *self.m.max_ticks.get_ref(),
             runner: *self.m.runner.get_ref(),
-            engine_rev: *self.m.engine_rev.get_ref(),
+            engine_rev: self.m.engine_rev().unwrap_or_default(),
             float_model: match engine.and_then(|e| e.float_model) {
                 None | Some(crate::manifest::FloatModelName::F64) => FloatModel::F64,
             },
@@ -650,11 +591,11 @@ impl<'a> Loader<'a> {
                 .and_then(|e| e.reset.as_ref())
                 .map_or_else(ResetModel::default, |r| r.model()),
             sounds: std::mem::take(&mut self.sounds),
-            timelines,
+            timelines: std::mem::take(&mut self.timelines),
             paths,
             particle_systems: std::mem::take(&mut self.particles),
             scripts: std::mem::take(&mut self.scripts),
-            timing: timing?,
+            timing,
             maps,
             stripped,
         };
@@ -663,12 +604,12 @@ impl<'a> Loader<'a> {
         self.reachable_timing_rooms(&def);
         // Step 7: kinds that tie for a collision handler (#737).
         self.handler_ties(&def);
-        // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
+        // Step 7: params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
-        let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
+        params::check(&def, trace, &mut d);
         self.diags.append(&mut d);
-        // Scripts: structure, calls, name literals and lints (WP9.3).
+        // Scripts: structure, calls, name literals and lints.
         for issue in iwbtg_sim::script::validate::validate(&def) {
             let (line, column, severity) = (issue.line, issue.column, issue.severity);
             let file = def
@@ -871,31 +812,6 @@ mod tests {
             script_issue_message(&files, unknown_issue("boom")),
             "unknown sound \"boom\""
         );
-    }
-
-    #[test]
-    fn stub_names() {
-        assert_eq!(
-            stub_name("not implemented: WP7b: physics::load"),
-            Some("WP7b: physics::load")
-        );
-        assert_eq!(stub_name("not implemented"), None);
-        assert_eq!(stub_name("index out of bounds"), None);
-    }
-
-    #[cfg(panic = "unwind")]
-    #[test]
-    fn pending_call_catches_only_stubs() {
-        let mut pending = BTreeSet::new();
-        let r: Option<u8> = pending_call(&mut pending, || unimplemented!("WP9: script::x"));
-        assert_eq!(r, None);
-        assert!(pending.contains("WP9: script::x"));
-        assert_eq!(pending_call(&mut pending, || 5), Some(5));
-        let other = std::panic::catch_unwind(|| {
-            let mut p = BTreeSet::new();
-            pending_call(&mut p, || panic!("a real bug"))
-        });
-        assert!(other.is_err());
     }
 }
 

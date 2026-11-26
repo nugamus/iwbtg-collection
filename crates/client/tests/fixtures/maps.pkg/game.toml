@@ -17,6 +17,10 @@ object_order = [
 new_game_room = "stage"
 float_model = "f64"
 
+[stripped]
+# A ranked run starts in the goal room; Play original starts in `stage` (#43).
+start = { room = "goal" }
+
 [defaults.kid]
 sprite = "kid"
 mask = "kid_mask"

@@ -6,13 +6,14 @@
 
 use iwbtg_sim::def::physics::FlipKind;
 use iwbtg_sim::def::testing::GameDefBuilder;
-use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, GameDef, KindDef, KindId, RoomDef};
+use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, GameDef, KindDef, KindId, RestartKind, RoomDef, VarId};
 use iwbtg_sim::num::Real;
+use iwbtg_sim::restart::run_restart;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::save::{SavedPosition, load_into, save_now};
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
-use iwbtg_sim::world::{Ctx, InstId, SpawnInit, World};
+use iwbtg_sim::world::{Ctx, Flow, InstId, SpawnInit, Value, World};
 
 fn r(v: f64) -> Real {
     Real::new(v)
@@ -142,4 +143,35 @@ fn a_game_that_flips_by_kind_still_saves_the_kind_and_loads_the_offset() {
     let inst = c.w.get(loaded).unwrap();
     assert_eq!(inst.kind, g.flipped_kid);
     assert_eq!(inst.m.y(), slot.y + r(4.0), "flipped_load_dy applies");
+}
+
+#[test]
+fn an_array_survives_a_save_restart_and_postcard_round_trip() {
+    // RoomGotoSaved (kaenbyou, eat-the-lemon): the restart keeps the globals (#984).
+    let mut g = game(FlipKind::Yflag);
+    g.def.restart.kind = RestartKind::RoomGotoSaved;
+    let mut s = run(&g);
+    let mut c = ctx(&g, &mut s);
+    let kid = spawn_kid(&mut c, g.kid);
+    c.w.globals.insert(
+        VarId(0),
+        Value::array(vec![Value::Real(r(1.0)), Value::Str("x".into())]).expect("array"),
+    );
+    c.w.globals
+        .insert(VarId(1), Value::array(vec![Value::Real(r(3.0))]).expect("nested"));
+    let before = c.w.globals.clone();
+    save_now(&mut c, kid, SavedPosition::XyBase100Bytes, None).unwrap();
+
+    // The client's postcard encoding of sim state keeps the arrays as they are.
+    let bytes = postcard::to_allocvec(&*c.w).expect("the world serializes");
+    let restored: World = postcard::from_bytes(&bytes).expect("the world deserializes");
+    assert_eq!(restored.globals, before);
+
+    // The restart destroys the kid and loads the slot; the globals, arrays included, stay.
+    assert_eq!(run_restart(&mut c, kid).unwrap(), Flow::AbortTick);
+    assert_eq!(c.w.globals, before, "the restart keeps the global arrays");
+    assert_eq!(
+        c.w.globals[&VarId(1)].as_array().expect("array")[0],
+        Value::Real(r(3.0))
+    );
 }

@@ -3,46 +3,22 @@
 //! CI cannot see the private research repo, so fidelity is checked by this command instead
 //! (`cargo xtask fidelity`, docs/architecture/testing.md). It runs `trace check` for each
 //! package folder under `<research>/build/packages` in one process, prints one row per game
-//! (OK / OPEN / FAIL counts) and one line per case that is not OK, and compares every case
+//! (OK / OPEN / FAIL counts), one line per case that is not OK and, per package, a
+//! `missing-scripts <game> <n>` line for the status hook's port progress (#1425), and compares every case
 //! status with a committed baseline: names and statuses only, no private data. A case whose
-//! status got worse (OK to OPEN or FAIL, OPEN to FAIL) or a new case that fails is a
-//! regression; `--bless` rewrites the baseline with the current statuses.
+//! status got worse (OK to OPEN or FAIL, OPEN to FAIL), a new case that fails, or a baseline case
+//! that disappeared is a regression; `--bless` rewrites the baseline with the current statuses
+//! and is the only way to acknowledge a removed case. A missing or unreadable packages/cases
+//! tree, and an unreadable baseline, are errors rather than an empty comparison (#1016).
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use iwbtg_format::load::{LoadReport, load_report};
+
+use crate::baseline::{Status, Statuses, compare, format_baseline, one_line, parse_baseline, word};
 use crate::trace_cmd::{ToolError, check_case, load_package, package_id, read_case};
-
-/// How one case ran.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Status {
-    /// A difference, an error, a panic or a missing package.
-    Fail,
-    /// The case is marked `open`: it cannot run until its reason is resolved.
-    Open,
-    /// Bit for bit equal to the original trace.
-    Ok,
-}
-
-impl Status {
-    fn word(self) -> &'static str {
-        match self {
-            Status::Ok => "OK",
-            Status::Open => "OPEN",
-            Status::Fail => "FAIL",
-        }
-    }
-
-    fn parse(word: &str) -> Option<Status> {
-        match word {
-            "OK" => Some(Status::Ok),
-            "OPEN" => Some(Status::Open),
-            "FAIL" => Some(Status::Fail),
-            _ => None,
-        }
-    }
-}
 
 /// One case's result: status and, when not OK, a one-line reason.
 #[derive(Debug, Clone)]
@@ -52,44 +28,58 @@ pub struct CaseResult {
 }
 
 /// One game row: its package id (or folder name), an error that kept the package from
-/// loading, and its cases by name.
+/// loading, its cases by name, and its missing-script count (#1425).
 #[derive(Debug, Default)]
 pub struct GameRow {
     pub note: Option<String>,
     pub cases: BTreeMap<String, CaseResult>,
+    /// The `CR1, CR2` item count (objects whose script does not exist) from the trace-mode load;
+    /// `None` when the package did not load and emitted no such warning.
+    pub missing_scripts: Option<usize>,
 }
 
-/// `<pkg id>/<case name>` to status.
-pub type Statuses = BTreeMap<String, Status>;
+/// The paths of every entry of `dir`; a read or entry failure names the folder.
+fn read_dir_paths(dir: &Path) -> Result<Vec<PathBuf>, ToolError> {
+    std::fs::read_dir(dir)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))
+        })
+        .collect()
+}
 
 /// The case files of one package id, sorted.
-fn case_paths(cases: &Path, id: &str) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(cases.join(id))
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.extension().is_some_and(|e| e == "toml"))
-                .collect()
-        })
-        .unwrap_or_default();
+///
+/// A missing `cases/<id>` folder is an empty list: the package has no cases yet. Any other read
+/// failure is an error, not an empty list (#1016): a folder that exists but cannot be enumerated
+/// would otherwise drop every case it holds and the baseline comparison would never see them.
+/// Baseline cases of a genuinely removed folder show up as gone in `compare` and fail the gate
+/// until `--bless` acknowledges the removal.
+fn case_paths(cases: &Path, id: &str) -> Result<Vec<PathBuf>, ToolError> {
+    let dir = cases.join(id);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(ToolError::Message(format!("{}: {e}", dir.display()))),
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "toml") {
+            paths.push(path);
+        }
+    }
     paths.sort();
-    paths
+    Ok(paths)
 }
 
 fn stem(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default()
-}
-
-/// The first line of a message, cut to `max` characters.
-fn one_line(text: &str, max: usize) -> String {
-    let line = text.lines().next().unwrap_or("").trim();
-    if line.chars().count() <= max {
-        line.to_owned()
-    } else {
-        format!("{}...", line.chars().take(max).collect::<String>())
-    }
 }
 
 fn fail(reason: impl Into<String>) -> CaseResult {
@@ -131,7 +121,7 @@ fn run_one(files: &iwbtg_format::PackageFiles, path: &Path, research: &Path) -> 
 }
 
 /// One package folder: its row key (package id, else folder name) and row.
-fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> (String, GameRow) {
+fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> Result<(String, GameRow), ToolError> {
     let folder = dir
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -145,25 +135,88 @@ fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> (String, GameRow)
                 note: Some(reason.clone()),
                 ..GameRow::default()
             };
-            for path in case_paths(cases, &folder) {
+            for path in case_paths(cases, &folder)? {
                 row.cases.insert(stem(&path), fail(reason.clone()));
             }
-            return (folder, row);
+            return Ok((folder, row));
         }
     };
-    let mut row = GameRow::default();
-    for path in case_paths(cases, &id) {
+    let missing_scripts = package_missing_scripts(&files);
+    let mut row = GameRow {
+        missing_scripts,
+        ..GameRow::default()
+    };
+    for path in case_paths(cases, &id)? {
         row.cases.insert(stem(&path), run_one(&files, &path, research));
     }
-    (id, row)
+    Ok((id, row))
+}
+
+/// The `CR1, CR2` item count (objects whose script does not exist) from one trace-mode load: the
+/// same `load_report` and mode `iwbtg pkg check --trace-mode` uses, so the count is identical.
+/// `Some(0)` when a clean report has no such warning; `None` when the package does not load
+/// cleanly and the warning never ran.
+fn package_missing_scripts(files: &iwbtg_format::PackageFiles) -> Option<usize> {
+    let report = load_report(
+        files,
+        iwbtg_format::LoadMode::Trace {
+            unmapped_kinds_inert: true,
+        },
+    );
+    if let Some(count) = missing_script_count(&report) {
+        return Some(count);
+    }
+    report.ok().then_some(0)
+}
+
+/// The `missing-scripts <game> <n>` lines `cargo xtask fidelity` records for the status hook's
+/// per-game port progress (#1425), or `""` when no package reported a count. The line shape is
+/// parsed by `sweep_missing_scripts` in xtask.
+pub fn progress_lines(rows: &BTreeMap<String, GameRow>) -> String {
+    if !rows.values().any(|row| row.missing_scripts.is_some()) {
+        return String::new();
+    }
+    let mut out = String::from("missing scripts per package (objects whose script does not exist):\n");
+    for (id, row) in rows {
+        if let Some(count) = row.missing_scripts {
+            let _ = writeln!(out, "missing-scripts {id} {count}");
+        }
+    }
+    out
+}
+
+/// The item count in the `converter request CR1, CR2:` diagnostic, if the report holds one.
+fn missing_script_count(report: &LoadReport) -> Option<usize> {
+    report.diagnostics.iter().find_map(|diagnostic| {
+        let rest = diagnostic.message.split_once("converter request CR1, CR2:")?.1;
+        item_count(rest)
+    })
+}
+
+/// The `(<n> item(s))` count in a converter-request message, skipping earlier parentheses.
+fn item_count(rest: &str) -> Option<usize> {
+    let mut search = 0;
+    while let Some(found) = rest[search..].find('(') {
+        let start = search + found + 1;
+        let digits: String = rest[start..].chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() && rest[start + digits.len()..].starts_with(" item") {
+            return digits.parse().ok();
+        }
+        search = start;
+    }
+    None
 }
 
 /// Every package folder under `packages`, in parallel (one thread per package), plus a row for
 /// each cases folder whose package is missing.
+///
+/// Both trees must be enumerable: a missing or unreadable `cases` root is an error, not an empty
+/// sweep (#1016). Otherwise every baseline case would look gone (and, before [`Change`] treated
+/// removals as regressions, the gate would pass with no case actually run).
 pub fn sweep(packages: &Path, research: &Path, cases: &Path) -> Result<BTreeMap<String, GameRow>, ToolError> {
-    let mut dirs: Vec<PathBuf> = std::fs::read_dir(packages)
-        .map_err(|e| ToolError::Message(format!("{}: {e}", packages.display())))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
+    let case_dirs: Vec<PathBuf> = read_dir_paths(cases)?;
+    let mut dirs: Vec<PathBuf> = read_dir_paths(packages)?
+        .into_iter()
         .filter(|p| p.is_dir())
         .collect();
     dirs.sort();
@@ -172,25 +225,23 @@ pub fn sweep(packages: &Path, research: &Path, cases: &Path) -> Result<BTreeMap<
             .iter()
             .map(|d| s.spawn(move || sweep_package(d, research, cases)))
             .collect();
-        handles
+        let rows: Result<Vec<_>, ToolError> = handles
             .into_iter()
             .map(|h| h.join().expect("sweep thread"))
-            .collect()
-    });
-    if let Ok(entries) = std::fs::read_dir(cases) {
-        for e in entries.flatten() {
-            let p = e.path();
-            let id = stem(&p);
-            if p.is_dir() && !rows.contains_key(&id) {
-                let mut row = GameRow {
-                    note: Some("no package with this id".into()),
-                    ..GameRow::default()
-                };
-                for path in case_paths(cases, &id) {
-                    row.cases.insert(stem(&path), fail("no package with this id"));
-                }
-                rows.insert(id, row);
+            .collect();
+        rows.map(|pairs| pairs.into_iter().collect())
+    })?;
+    for p in case_dirs {
+        let id = stem(&p);
+        if p.is_dir() && !rows.contains_key(&id) {
+            let mut row = GameRow {
+                note: Some("no package with this id".into()),
+                ..GameRow::default()
+            };
+            for path in case_paths(cases, &id)? {
+                row.cases.insert(stem(&path), fail("no package with this id"));
             }
+            rows.insert(id, row);
         }
     }
     Ok(rows)
@@ -203,72 +254,6 @@ pub fn statuses(rows: &BTreeMap<String, GameRow>) -> Statuses {
             row.cases
                 .iter()
                 .map(move |(name, r)| (format!("{id}/{name}"), r.status))
-        })
-        .collect()
-}
-
-/// Reads a baseline file: `<pkg id>/<case> <STATUS>` lines; `#` starts a comment.
-pub fn parse_baseline(text: &str) -> Result<Statuses, String> {
-    let mut out = Statuses::new();
-    for (n, line) in text.lines().enumerate() {
-        let line = line.split('#').next().unwrap_or("").trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut words = line.split_whitespace();
-        let (Some(key), Some(word), None) = (words.next(), words.next(), words.next()) else {
-            return Err(format!("line {}: expected `<game>/<case> <STATUS>`", n + 1));
-        };
-        let status = Status::parse(word).ok_or_else(|| format!("line {}: unknown status {word:?}", n + 1))?;
-        out.insert(key.to_owned(), status);
-    }
-    Ok(out)
-}
-
-/// Writes a baseline file.
-pub fn format_baseline(statuses: &Statuses) -> String {
-    let mut out = String::from(
-        "# Fidelity baseline (#785): every trace case's status on the converter packages.\n\
-         # Written by `cargo xtask fidelity --bless`; names and statuses only.\n",
-    );
-    for (key, status) in statuses {
-        let _ = writeln!(out, "{key} {}", status.word());
-    }
-    out
-}
-
-/// One change against the baseline.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Change {
-    pub key: String,
-    pub was: Option<Status>,
-    pub now: Option<Status>,
-}
-
-impl Change {
-    /// Worse than before, or new and failing.
-    pub fn is_regression(&self) -> bool {
-        match (self.was, self.now) {
-            (Some(was), Some(now)) => now < was,
-            (None, Some(now)) => now == Status::Fail,
-            _ => false,
-        }
-    }
-}
-
-/// Every case whose status differs from the baseline, added or gone.
-pub fn compare(baseline: &Statuses, now: &Statuses) -> Vec<Change> {
-    let mut keys: Vec<&String> = baseline.keys().chain(now.keys()).collect();
-    keys.sort();
-    keys.dedup();
-    keys.into_iter()
-        .filter_map(|k| {
-            let (was, now) = (baseline.get(k).copied(), now.get(k).copied());
-            (was != now).then(|| Change {
-                key: k.clone(),
-                was,
-                now,
-            })
         })
         .collect()
 }
@@ -313,10 +298,6 @@ pub fn render(rows: &BTreeMap<String, GameRow>) -> String {
     out
 }
 
-fn word(s: Option<Status>) -> &'static str {
-    s.map_or("-", Status::word)
-}
-
 /// `iwbtg trace sweep`: `Ok(false)` on a regression against the baseline.
 pub fn main(
     packages: &Path,
@@ -327,6 +308,10 @@ pub fn main(
 ) -> Result<bool, ToolError> {
     let rows = sweep(packages, research, cases)?;
     print!("{}", render(&rows));
+    let progress = progress_lines(&rows);
+    if !progress.is_empty() {
+        print!("\n{progress}");
+    }
     let now = statuses(&rows);
     let n = |s: Status| now.values().filter(|&&v| v == s).count();
     let with_cases = rows.values().filter(|r| !r.cases.is_empty()).count();
@@ -345,14 +330,16 @@ pub fn main(
                 .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
             summary.push_str("; baseline rewritten");
         } else {
-            let Ok(text) = std::fs::read_to_string(path) else {
-                println!(
-                    "
-{summary}; no baseline at {} (write one with --bless)",
-                    path.display()
-                );
-                return Ok(n(Status::Fail) == 0);
-            };
+            // `--baseline` is explicit: a read failure must fail the sweep, not fall back to a
+            // run without a baseline (#1016).
+            let text = std::fs::read_to_string(path).map_err(|e| {
+                let hint = if e.kind() == std::io::ErrorKind::NotFound {
+                    " (write one with --bless)"
+                } else {
+                    ""
+                };
+                ToolError::Message(format!("{}: {e}{hint}", path.display()))
+            })?;
             let base =
                 parse_baseline(&text).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
             let changes = compare(&base, &now);
@@ -380,40 +367,97 @@ pub fn main(
 mod tests {
     use super::*;
 
-    fn st(pairs: &[(&str, Status)]) -> Statuses {
-        pairs.iter().map(|(k, s)| ((*k).to_owned(), *s)).collect()
+    /// A scratch tree under the system temp dir, empty and removed first.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("iwbtg-sweep-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     #[test]
-    fn the_baseline_round_trips() {
-        let s = st(&[("a/x", Status::Ok), ("a/y", Status::Open), ("b/z", Status::Fail)]);
-        assert_eq!(parse_baseline(&format_baseline(&s)).unwrap(), s);
-        assert!(parse_baseline("a/x MAYBE").is_err());
-        assert!(parse_baseline("a/x").is_err());
+    fn a_missing_cases_root_is_an_error() {
+        let root = scratch("missing-cases");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let err = sweep(&packages, &root, &root.join("cases")).unwrap_err();
+        assert!(err.to_string().contains("cases"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn worse_or_new_failing_cases_are_regressions() {
-        let base = st(&[
-            ("a/ok_to_open", Status::Ok),
-            ("a/open_to_fail", Status::Open),
-            ("a/fail_to_ok", Status::Fail),
-            ("a/gone", Status::Ok),
-        ]);
-        let now = st(&[
-            ("a/ok_to_open", Status::Open),
-            ("a/open_to_fail", Status::Fail),
-            ("a/fail_to_ok", Status::Ok),
-            ("a/new_fail", Status::Fail),
-            ("a/new_open", Status::Open),
-        ]);
-        let regressions: Vec<String> = compare(&base, &now)
-            .into_iter()
-            .filter(Change::is_regression)
-            .map(|c| c.key)
-            .collect();
-        assert_eq!(regressions, ["a/new_fail", "a/ok_to_open", "a/open_to_fail"]);
-        assert_eq!(compare(&base, &base), []);
+    fn an_unreadable_cases_root_is_an_error() {
+        let root = scratch("cases-root-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let cases = root.join("cases");
+        std::fs::write(&cases, "not a folder").unwrap();
+        let err = sweep(&packages, &root, &cases).unwrap_err();
+        assert!(err.to_string().contains("cases"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_case_folder_is_an_error() {
+        let root = scratch("case-folder-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        std::fs::write(cases.join("game_a"), "not a folder").unwrap();
+        let err = sweep(&packages, &root, &cases).unwrap_err();
+        assert!(err.to_string().contains("game_a"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_case_folder_fails_the_gate_until_blessed() {
+        let root = scratch("missing-case-folder");
+        let packages = root.join("packages");
+        // An empty folder does not load as a package, but it still gets a row keyed `game_a`.
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        let baseline = root.join("baseline.txt");
+        std::fs::write(&baseline, "game_a/case OK\n").unwrap();
+        assert!(!main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        // `--bless` is the deliberate acknowledgment: the case is retired, and the next run passes.
+        assert!(main(&packages, &root, &cases, Some(&baseline), true).unwrap());
+        assert!(
+            !std::fs::read_to_string(&baseline)
+                .unwrap()
+                .contains("game_a/case")
+        );
+        assert!(main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_case_file_fails_the_gate() {
+        let root = scratch("missing-case-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        // The folder enumerates, it just no longer holds the baseline's case file.
+        std::fs::create_dir_all(cases.join("game_a")).unwrap();
+        let baseline = root.join("baseline.txt");
+        std::fs::write(&baseline, "game_a/case OK\n").unwrap();
+        assert!(!main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_baseline_is_an_error() {
+        let root = scratch("baseline-dir");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        let baseline = root.join("baseline");
+        std::fs::create_dir_all(&baseline).unwrap();
+        let err = main(&packages, &root, &cases, Some(&baseline), false).unwrap_err();
+        assert!(err.to_string().contains("baseline"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -441,5 +485,46 @@ mod tests {
         assert!(text.contains("game_b     -    -    -  no cases"), "{text}");
         assert!(text.contains("game_a/y OPEN: needs a probe"), "{text}");
         assert!(!text.contains("game_a/x"), "{text}");
+    }
+
+    #[test]
+    fn the_progress_lines_are_machine_readable() {
+        let mut rows = BTreeMap::new();
+        rows.insert(
+            "game_b".to_owned(),
+            GameRow {
+                missing_scripts: Some(37),
+                ..GameRow::default()
+            },
+        );
+        rows.insert(
+            "game_a".to_owned(),
+            GameRow {
+                missing_scripts: Some(0),
+                ..GameRow::default()
+            },
+        );
+        rows.insert("game_c".to_owned(), GameRow::default()); // did not load
+        let text = progress_lines(&rows);
+        assert!(text.starts_with("missing scripts per package"), "{text}");
+        assert!(text.contains("\nmissing-scripts game_a 0\n"), "{text}");
+        assert!(text.contains("\nmissing-scripts game_b 37\n"), "{text}");
+        assert!(!text.contains("game_c"), "{text}");
+        assert_eq!(progress_lines(&BTreeMap::new()), "");
+    }
+
+    #[test]
+    fn the_missing_script_count_reads_the_converter_request_only() {
+        // The request text itself carries parentheses; only `(<n> item` is the count.
+        assert_eq!(
+            item_count(
+                "objects with a script that does not exist load inert (no events; their mask \
+                 still collides) (37 items): a, b"
+            ),
+            Some(37)
+        );
+        assert_eq!(item_count("(1 item): a"), Some(1));
+        assert_eq!(item_count("(no events)"), None);
+        assert_eq!(item_count("(2 rooms)"), None);
     }
 }

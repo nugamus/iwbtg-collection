@@ -1,4 +1,4 @@
-//! The IWS validator (docs/plans/sim-core.md 11, decision 0001 "Validation before running"; WP9.3).
+//! The IWS validator (docs/architecture/sim/scripts.md, decision 0001 "Validation before running").
 //!
 //! [`validate`] checks every script of a [`GameDef`] without running it and returns issues with
 //! file, line and column. The format loader turns them into diagnostics, so the client, the
@@ -101,6 +101,27 @@ pub const STATE_FNS: &[&str] = &[
     "shake",
     "print",
     "debug",
+    // They change the array value they are called on (#1383).
+    "push",
+    "pop",
+    // They change or drop the instance's path run (#1530).
+    "path_start",
+    "path_end",
+    // It can run any package script function (#1533).
+    "script_execute",
+    // They write the hashed view state (#1531).
+    "set_view_xview",
+    "set_view_yview",
+    "set_view_wview",
+    "set_view_hview",
+    "set_view_angle",
+    "set_view_enabled",
+    "set_view_visible",
+    "set_view_object",
+    "set_view_hborder",
+    "set_view_vborder",
+    "set_view_hspeed",
+    "set_view_vspeed",
 ];
 
 /// Registered functions that return a number.
@@ -139,6 +160,23 @@ pub const NUMBER_FNS: &[&str] = &[
     "to_int",
     "tick",
     "room_tick",
+    // The view reads that return a number (#1531).
+    "view_xview",
+    "view_yview",
+    "view_wview",
+    "view_hview",
+    "view_angle",
+    "view_hborder",
+    "view_vborder",
+    "view_hspeed",
+    "view_vspeed",
+    "view_current",
+    // The string functions that return a number (#1532).
+    "string_length",
+    "string_pos",
+    "string_count",
+    "chr",
+    "ord",
     "get_alarm",
     "random",
     "random_range",
@@ -165,6 +203,25 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "collision_point",
     "collision_rect",
     "collision_line",
+    "len",
+    // The view reads that do not return a number (#1531).
+    "view_enabled",
+    "view_visible",
+    "view_object",
+    // The string functions that return a string (#1532).
+    "string",
+    "string_format",
+    "string_char_at",
+    "string_copy",
+    "string_delete",
+    "string_insert",
+    "string_replace",
+    "string_replace_all",
+    "string_upper",
+    "string_lower",
+    "string_digits",
+    "string_letters",
+    "string_lettersdigits",
 ];
 
 /// Instance properties that read as a real number.
@@ -190,7 +247,52 @@ pub const REAL_PROPS: &[&str] = &[
     "image_alpha",
     "depth",
     "id",
+    // The kid's fields that read as a number (decision 0004).
+    "curJumps",
+    "tempHspeed",
+    "maxSpeed",
+    "maxVspeed",
+    "maxFallSpeed",
+    "scale",
+    "yflag",
+    "facing",
+    "walk_h",
+    "jump",
+    "jump2",
+    "jump3",
+    // The path properties (#1530).
+    "path_index",
+    "path_position",
+    "path_positionprevious",
+    "path_speed",
+    "path_endaction",
+    "path_orientation",
+    "path_scale",
+    "path_x",
+    "path_y",
 ];
+
+/// Instance properties that read as a bool: the generic flags and the kid's flag fields.
+pub const BOOL_PROPS: &[&str] = &[
+    "visible",
+    "solid",
+    "djump",
+    "tjump",
+    "onPlatform",
+    "ladder",
+    "frozen",
+    "frozen2",
+    "muteki",
+    "ladderud",
+    "ladderjump",
+    "flipped",
+    "on_slope_last",
+    "onVineL",
+    "onVineR",
+];
+
+/// Instance properties that read as a string (the room-file name and group).
+pub const STR_PROPS: &[&str] = &["name", "group"];
 
 /// Functions Rhai itself handles (function pointers); they cannot be checked statically.
 const ENGINE_FNS: &[&str] = &["Fn", "call", "curry", "is_def_fn", "is_def_var"];
@@ -204,6 +306,8 @@ pub enum Names {
     Sound,
     /// A room id.
     Room,
+    /// A path id.
+    Path,
     /// A collision query target: a role (named class), `"all"` or a kind (`script::collide`).
     Target,
 }
@@ -220,6 +324,11 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     ("play_sound", 0, Names::Sound),
     ("play_music", 0, Names::Sound),
     ("room_goto", 0, Names::Room),
+    // The instance argument moves the path name to index 1: for a method call the receiver is
+    // not in `args`, so `this.path_start("line", ...)` checks `args[0]`.
+    ("path_start", 1, Names::Path),
+    // The index is argument 0, the kind literal argument 1.
+    ("set_view_object", 1, Names::Kind),
     ("place_meeting", 3, Names::Target),
     ("instance_place", 3, Names::Target),
     ("collision_point", 2, Names::Target),
@@ -234,6 +343,7 @@ pub fn resolves(def: &GameDef, what: Names, name: &str) -> bool {
         Names::Kind => def.kinds.iter().any(|k| k.name == name),
         Names::Sound => def.sounds.iter().any(|s| s.name == name),
         Names::Room => def.rooms.iter().any(|r| r.name == name),
+        Names::Path => def.paths.iter().any(|p| p.name == name),
         Names::Target => super::collide::resolves(def, name),
     }
 }
@@ -244,9 +354,24 @@ impl Names {
             Names::Kind => "kind",
             Names::Sound => "sound",
             Names::Room => "room",
+            Names::Path => "path",
             Names::Target => "role or kind",
         }
     }
+}
+
+/// The `(name, parameter count)` of every function `source` defines, or `None` when it does not
+/// compile under the IWS profile. The loader uses this to check the functions a kid profile's
+/// script slots name (decision 0004) while it still has the profile file's text for positions.
+#[must_use]
+pub fn function_arities(source: &str) -> Option<BTreeSet<(String, usize)>> {
+    let iws = Iws::new(RunnerRules::default().num);
+    let ast = iws.compile_ast(source).ok()?;
+    Some(
+        ast.iter_fn_def()
+            .map(|f| (f.name.to_string(), f.params.len()))
+            .collect(),
+    )
 }
 
 /// Checks every script of `def`. Issues come sorted by script, line and column.
@@ -257,9 +382,29 @@ pub fn validate(def: &GameDef) -> Vec<Issue> {
     }
     let iws = Iws::new(RunnerRules::default().num);
     let registry = Registry::new(&iws);
+    // Every function in every script, for `script_execute`'s literal target (#1533). The source
+    // is compiled once more in `check_script`; validation is load-time and the scripts are small.
+    let mut package_fns: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+    for script in &def.scripts {
+        if let Ok(ast) = iws.compile_ast(&script.source) {
+            for f in ast.iter_fn_def() {
+                package_fns
+                    .entry(f.name.to_string())
+                    .or_default()
+                    .insert(f.params.len());
+            }
+        }
+    }
     let mut issues = Vec::new();
     for (index, script) in def.scripts.iter().enumerate() {
-        issues.extend(check_script(&iws, &registry, def, index, &script.source));
+        issues.extend(check_script(
+            &iws,
+            &registry,
+            def,
+            index,
+            &script.source,
+            &package_fns,
+        ));
     }
     issues.sort();
     issues.dedup();
@@ -347,6 +492,8 @@ struct Ctx<'a> {
     def: &'a GameDef,
     registry: &'a Registry,
     script: usize,
+    /// Every script function of the package, for `script_execute` (#1533).
+    package_fns: &'a BTreeMap<String, BTreeSet<usize>>,
     /// Script functions as name to argument counts.
     defined: BTreeMap<String, BTreeSet<usize>>,
     /// Script functions that can draw from the RNG or change state, directly or through a call.
@@ -383,11 +530,19 @@ impl Ctx<'_> {
 }
 
 /// Checks one script's source.
-fn check_script(iws: &Iws, registry: &Registry, def: &GameDef, script: usize, source: &str) -> Vec<Issue> {
+fn check_script(
+    iws: &Iws,
+    registry: &Registry,
+    def: &GameDef,
+    script: usize,
+    source: &str,
+    package_fns: &BTreeMap<String, BTreeSet<usize>>,
+) -> Vec<Issue> {
     let mut cx = Ctx {
         def,
         registry,
         script,
+        package_fns,
         defined: BTreeMap::new(),
         impure: BTreeSet::new(),
         issues: Vec::new(),
@@ -731,6 +886,31 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
         };
         cx.error(pos, message);
     }
+    // `script_execute` targets a package script function by a literal name (#1533).
+    if name == "script_execute" {
+        let arity = c.args.len().saturating_sub(1);
+        match c.args.first() {
+            Some(Expr::StringConstant(s, p)) => {
+                let known = cx
+                    .package_fns
+                    .get(s.as_str())
+                    .is_some_and(|arities| arities.contains(&arity));
+                if !known {
+                    cx.error(
+                        *p,
+                        format!(
+                            "script_execute: no script function `{s}` taking {arity} argument{}",
+                            if arity == 1 { "" } else { "s" }
+                        ),
+                    );
+                }
+            }
+            _ => cx.error(
+                pos,
+                "script_execute needs a literal script name: `script_execute(\"name\", ...)`",
+            ),
+        }
+    }
     // A method call (`this.place_meeting(x, y, "block")`) has its first argument before the dot.
     for (f, index, what) in NAME_ARGS {
         let at = if method {
@@ -903,10 +1083,10 @@ fn g() { let t = S + OFF + B; t + N }
             assert!(getters.contains(*p), "`{p}` is not a registered getter");
         }
         for g in &getters {
-            if !["visible", "solid", "kind"].contains(&g.as_str()) {
+            if g != "kind" && !BOOL_PROPS.contains(&g.as_str()) {
                 assert!(
-                    REAL_PROPS.contains(&g.as_str()),
-                    "getter `{g}` is not in REAL_PROPS"
+                    REAL_PROPS.contains(&g.as_str()) || STR_PROPS.contains(&g.as_str()),
+                    "getter `{g}` is not in REAL_PROPS, BOOL_PROPS or STR_PROPS"
                 );
             }
         }
@@ -932,7 +1112,8 @@ fn g() { let t = S + OFF + B; t + N }
         }
         let iws = Iws::new(RunnerRules::default().num);
         let registry = Registry::new(&iws);
-        let check = |src: &str| check_script(&iws, &registry, &def, 0, src);
+        let no_fns = BTreeMap::new();
+        let check = |src: &str| check_script(&iws, &registry, &def, 0, src, &no_fns);
         assert!(check("fn step() { play_sound(\"boom\"); play_sound(\"engine:a1/jump\"); play_music(\"engine:a1/jump\"); }").is_empty());
         let i = check("fn step() { play_sound(\"engine:a1/gone\"); play_music(\"nope\"); }");
         assert_eq!(i.len(), 2, "{i:#?}");

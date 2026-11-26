@@ -1,13 +1,14 @@
-//! Trace setup actions, behind the `trace-setup` feature (docs/plans/sim-core.md 9.2, 9.4, 10.4).
+//! Trace setup actions, behind the `trace-setup` feature (docs/architecture/traces.md,
+//! docs/architecture/cli.md, docs/architecture/sim/determinism.md).
 //!
 //! A fixed vocabulary that replaces the recorder's `--gml` assignments, `--x` and `--y`.
 //! Applying one sets `World::setup_applied`, which is hashed, so a run that used setup can never
-//! match a clean verification. The server refuses to start when this feature is on. WP0
-//! declares; WP8a owns.
+//! match a clean verification. The server refuses to start when this feature is on.
 //!
-//! Setup only assigns: it runs no event, creates no instance and reads no file. A value a
-//! setter rejects (non-finite, N15) or a field setup cannot write is a [`SimError`], and the
-//! caller halts the run there.
+//! Setup assigns, and [`SetupAction::Destroy`] destroys instances (running their Destroy event,
+//! like GML `instance_destroy`); it creates no instance and reads no file. A value a setter
+//! rejects (non-finite, N15) or a field setup cannot write is a [`SimError`], and the caller
+//! halts the run there.
 
 use std::sync::Arc;
 
@@ -21,9 +22,9 @@ use crate::probe::{
 use crate::room;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
-use crate::script::ScriptRuntime;
+use crate::script::{PreparedScripts, ScriptRuntime};
 use crate::sim::{Sim, SimOptions};
-use crate::world::{Ctx, InstId, Instance, Value, World};
+use crate::world::{Ctx, Flow, InstId, Instance, Value, World};
 
 /// One setup action.
 #[derive(Clone, PartialEq, Debug)]
@@ -59,6 +60,15 @@ pub enum SetupAction {
         /// The value.
         value: Value,
     },
+    /// Destroy every active instance of `target` whose position is inside `rect`, a recorder
+    /// `--gml` `with(obj){if(x<520 && y<260){instance_destroy()}}` (#640).
+    Destroy {
+        /// Which instances (a kind, or a class for a GM parent and its children).
+        target: crate::collide::Target,
+        /// `[left, top, right, bottom]`: `left <= x < right` and `top <= y < bottom`. A bound
+        /// may be infinite.
+        rect: [Real; 4],
+    },
 }
 
 impl Sim {
@@ -72,32 +82,83 @@ impl Sim {
     /// (`tjump`, `djump`, `onPlatform`) take `num::gm_bool` of the value; `curJumps` takes a whole
     /// number 0 to 255. `SetSave` on a missing slot first creates one with every field zero
     /// (facing 1, room 0).
+    ///
+    /// `Destroy` runs GML `instance_destroy` on each instance it picks, in id order, so their
+    /// Destroy events run now; the world transaction then removes them (at once under
+    /// `standard`, at the end-of-tick sweep under `gm8`, #1174). A Destroy event that halts the
+    /// sim or changes the room is an error.
     pub fn apply_setup(&mut self, s: &SetupAction) -> Result<(), SimError> {
         self.world.setup_applied = true;
+        if let SetupAction::Destroy { target, rect } = s {
+            return self.destroy_in_rect(*target, *rect);
+        }
         apply(&self.def, &self.rules, &mut self.world, s)
+    }
+
+    /// [`SetupAction::Destroy`].
+    fn destroy_in_rect(&mut self, target: crate::collide::Target, rect: [Real; 4]) -> Result<(), SimError> {
+        let [left, top, right, bottom] = rect.map(Real::get);
+        let ids: Vec<InstId> = self
+            .world
+            .iter_visible()
+            .filter(|i| {
+                let (x, y) = (i.m.x().get(), i.m.y().get());
+                target.matches(&self.def, i) && left <= x && x < right && top <= y && y < bottom
+            })
+            .map(|i| i.id)
+            .collect();
+        let mut ctx = Ctx {
+            def: &self.def,
+            rules: &self.rules,
+            w: &mut self.world,
+            scripts: &self.scripts,
+            dll_mode: self.options.dll_mode,
+        };
+        for id in ids {
+            match ctx.destroy(id) {
+                Flow::Continue => {}
+                Flow::AbortTick => {
+                    return Err(SimError::unsupported(
+                        "setup destroy: a Destroy event changed the room",
+                    ));
+                }
+                Flow::Halt => {
+                    return Err(match &ctx.w.status {
+                        crate::world::SimStatus::Halted(e) => e.clone(),
+                        _ => SimError::invariant("setup destroy: halted without an error"),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Like [`Sim::new`], but applies `pre_entry` to the world after the rules, the script host
     /// and the empty world exist and before `room::start_game` creates the boot instances and
     /// enters the first room: the recorder's `--gml` code that ran before its `--room` jump
-    /// (plan 9.2). Only globals and the save slot exist at that point, so a `SetField` here fails
-    /// with "no instance".
+    /// (docs/architecture/traces.md). Only globals and the save slot exist at that point, so a
+    /// `SetField` here fails with "no instance".
     ///
     /// The steps are the ones `Sim::new` documents (rules from the game's runner and engine_rev,
-    /// `ScriptRuntime::new`, `World::new` in the start room with the seed, a `Ctx` carrying
-    /// `options.dll_mode`, `room::start_game`); a run built here and one built by `Sim::new` with
-    /// no setup must stay identical apart from `setup_applied`.
+    /// the prepared script artifact (`ScriptRuntime::new_run`), `World::new` in the start room
+    /// with the seed, a `Ctx` carrying `options.dll_mode`, `room::start_game`); a run built here
+    /// and one built by `Sim::new` with no setup must stay identical apart from `setup_applied`.
     pub fn new_with_setup(
         def: Arc<GameDef>,
         options: SimOptions,
         pre_entry: &[SetupAction],
     ) -> Result<Sim, SimError> {
         let rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        let scripts = ScriptRuntime::new(&def, &rules)?;
+        // The same prepared-script path as `Sim::new` (#1093): the artifact is built once here and
+        // the run builds only its own engine, so a trace setup does not deep-clone the definition.
+        let prepared = PreparedScripts::new(&def, &rules)?;
+        let scripts = ScriptRuntime::new_run(Arc::clone(&def), &rules, &prepared)?;
         let first_room = match &options.start {
             room::StartPoint::NewGame { .. } => def.new_game_room,
             room::StartPoint::Room { room, .. } => *room,
-            room::StartPoint::FromSave(slot) => slot.room,
+            // The checkpoint's stable room name, resolved before the world exists so it is in
+            // the saved room from the start (as `room::start_game` enters it).
+            room::StartPoint::FromSave(checkpoint) => room::checkpoint_slot(&def, checkpoint)?.room,
         };
         let mut world = World::new(first_room, options.seed);
         world.next_id = World::first_runtime_id(&def);
@@ -146,11 +207,15 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
             set_field(inst, field, value, rules)
         }
         SetupAction::SetGlobal { var, value } => {
-            w.globals.insert(*var, value.clone());
+            // A global gets its own value: an array is copied (GML 8 rule).
+            w.globals.insert(*var, value.assigned());
             Ok(())
         }
         SetupAction::SetEngine { var, value } => set_engine(rules, w, *var, value),
         SetupAction::SetSave { field, value } => set_save(def, w, *field, value),
+        SetupAction::Destroy { .. } => Err(SimError::unsupported(
+            "setup destroy before room entry: there are no instances yet",
+        )),
     }
 }
 
@@ -309,7 +374,8 @@ fn set_field(
             {
                 return Err(SimError::non_finite("custom variable"));
             }
-            inst.vars.insert(*v, value.clone());
+            // A variable gets its own value: an array is copied (GML 8 rule).
+            inst.vars.insert(*v, value.assigned());
             Ok(())
         }
         FieldRef::Kid(f) => {
@@ -365,6 +431,11 @@ fn set_save(def: &GameDef, w: &mut World, field: SaveField, value: &Value) -> Re
         SaveField::Bosses => slot.bosses = int_as::<u16>(value, "save.bosses")?,
         SaveField::Items => slot.items = int_as::<u16>(value, "save.items")?,
         SaveField::Clear => slot.clear = int(value, "save.clear")? != 0,
+        // The save object's stable key names the placed instance that wrote the slot (#1153);
+        // setup cannot invent one.
+        SaveField::Point => {
+            return Err(SimError::unsupported("setup cannot write `save.point`"));
+        }
     }
     Ok(())
 }
@@ -375,6 +446,8 @@ fn empty_slot() -> SaveSlot {
         room: RoomId(0),
         x: Real::ZERO,
         y: Real::ZERO,
+        precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,
@@ -417,6 +490,52 @@ mod tests {
             scripts: ScriptRuntime::default(),
             rows_done: false,
         }
+    }
+
+    /// The trace path builds the same run as `Sim::new` when it has no setup actions: the
+    /// prepared script artifact and the shared `GameDef` change nothing a run can observe (#1093).
+    #[test]
+    fn new_with_setup_matches_new_without_setup_actions() {
+        let mut b = GameDefBuilder::new("setup-path");
+        b.kind(KindDef::new("block", Builtin::Block));
+        let room = b.room(RoomDef::new("room_1", 800, 608));
+        b.start_room(room);
+        let mut def = b.build().expect("def");
+        def.scripts.push(crate::def::ScriptDef {
+            name: "scripts/s.rhai".into(),
+            source: "fn helper(n) { n + 1.0 }\n".into(),
+        });
+        let def = Arc::new(def);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 3,
+            dll_mode: DllMode::Stub,
+            mode: crate::stripped::PlayMode::Original,
+            map: None,
+        };
+        let plain = Sim::new_or_halted(Arc::clone(&def), options.clone()).expect("plain run");
+        let setup = Sim::new_with_setup(Arc::clone(&def), options.clone(), &[]).expect("setup run");
+        assert_eq!(
+            crate::hash::state_hash(plain.world()),
+            crate::hash::state_hash(setup.world()),
+            "the setup path starts the same run"
+        );
+        assert!(!setup.world().setup_applied);
+
+        let acted = Sim::new_with_setup(
+            Arc::clone(&def),
+            options,
+            &[SetupAction::SetGlobal {
+                var: VarId(0),
+                value: Value::Real(Real::ONE),
+            }],
+        )
+        .expect("setup run with an action");
+        assert!(acted.world().setup_applied, "the action marks the run");
+        assert_eq!(
+            acted.world().globals.get(&VarId(0)),
+            Some(&Value::Real(Real::ONE))
+        );
     }
 
     #[test]
@@ -575,6 +694,42 @@ mod tests {
             s.apply_setup(&set_x(3, 1.0)),
             Err(SimError::Unsupported { .. })
         ));
+    }
+
+    #[test]
+    fn destroy_takes_the_instances_inside_the_rectangle() {
+        let mut s = sim();
+        let mut ids = Vec::new();
+        for (x, y) in [(100.0, 100.0), (519.0, 259.9), (520.0, 100.0), (100.0, 260.0)] {
+            let id = s.world.alloc_id().expect("id");
+            s.world
+                .insert(Instance::new(
+                    id,
+                    crate::def::KindId(0),
+                    0,
+                    Real::new(x),
+                    Real::new(y),
+                ))
+                .expect("insert");
+            ids.push(id);
+        }
+        // `with(block){if(x<520 && y<260){instance_destroy()}}`
+        let destroy = SetupAction::Destroy {
+            target: crate::collide::Target::Kind(crate::def::KindId(0)),
+            rect: [
+                Real::new(f64::NEG_INFINITY),
+                Real::new(f64::NEG_INFINITY),
+                Real::new(520.0),
+                Real::new(260.0),
+            ],
+        };
+        s.apply_setup(&destroy).expect("destroy");
+        let alive: Vec<bool> = ids.iter().map(|id| s.world.exists(*id)).collect();
+        assert_eq!(alive, [false, false, true, true]);
+        assert!(s.world.setup_applied);
+        // Before room entry there is nothing to destroy: an error, not a silent no-op.
+        let rules = s.rules.clone();
+        assert!(apply(&s.def, &rules, &mut s.world, &destroy).is_err());
     }
 
     #[test]

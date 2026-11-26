@@ -19,28 +19,64 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 | Property | Type | Access | Description |
 |---|---|---|---|
+| `curJumps` | float | read, write | The air-jump counter, 0 to 255; a non-integer or out-of-range write is an error. |
 | `depth` | float | read, write | Draw depth; a lower value draws in front. |
 | `direction` | float | read, write | Movement direction in degrees; setting it updates `hspeed` and `vspeed`. |
+| `djump` | bool | read, write | The double-jump flag. |
+| `facing` | float | read only | Facing, -1 or 1 (read only; write `image_xscale`). |
+| `flipped` | bool | read only | The kid is the flipped variant (read only; part of the kind). |
 | `friction` | float | read, write | Speed removed each tick. |
+| `frozen` | bool | read, write | Input is blocked for the kid. |
+| `frozen2` | bool | read, write | The movement action is skipped. |
 | `gravity` | float | read, write | Gravity added each tick. |
 | `gravity_direction` | float | read, write | Direction of `gravity` in degrees. |
+| `group` | ? | read only | The instance's room-file group as a string, or `()` when the room file gives none. |
 | `hspeed` | float | read, write | Horizontal speed; setting it updates `speed` and `direction`. |
 | `id` | float | read only | The instance id (never reused). |
 | `image_alpha` | float | read, write | Sprite opacity, 0 to 1. |
 | `image_angle` | float | read, write | Sprite rotation in degrees. |
 | `image_index` | float | read, write | Current animation frame. |
 | `image_speed` | float | read, write | Animation frames per tick. |
-| `image_xscale` | float | read, write | Horizontal scale of the sprite. |
+| `image_xscale` | float | read, write | Horizontal scale of the sprite; on the kid it is the facing, -1 or 1. |
 | `image_yscale` | float | read, write | Vertical scale of the sprite. |
+| `jump` | float | read only | The ground jump speed (read only; arrays are #997). |
+| `jump2` | float | read only | The first air jump speed (read only). |
+| `jump3` | float | read only | The second air jump speed (read only). |
 | `kind` | string | read only | The package name of the instance's kind (`@boss`). |
+| `ladder` | bool | read, write | The kid is on a ladder. |
+| `ladderjump` | bool | read only | The kid left a ladder by jumping this Step. |
+| `ladderud` | bool | read only | The kid moved on a ladder this Step. |
+| `maxFallSpeed` | float | read, write | The fall-speed clamp (`maxFallSpeed`, A4). |
+| `maxSpeed` | float | read, write | The run speed (`maxSpeed`). |
+| `maxVspeed` | float | read, write | The vertical speed clamp (`maxVspeed`). |
+| `muteki` | bool | read, write | Kills are ignored while set. |
+| `name` | ? | read only | The instance's room-file name as a string, or `()` when the room file gives none. |
+| `onPlatform` | bool | read, write | The kid is on a platform. |
+| `onVineL` | bool | read only | A left vine is within reach (family C). |
+| `onVineR` | bool | read only | A right vine is within reach (family C). |
+| `on_slope_last` | bool | read only | The kid was on a slope last Step. |
+| `path_endaction` | float | read, write | What the path does at its end: 0 stop, 1 restart, 2 continue, 3 reverse (GM `path_endaction`). |
+| `path_index` | float | read only | The path the instance follows, or -1 when it follows none. |
+| `path_orientation` | float | read, write | Path orientation in degrees; the advance turns the path about its first point before the relative anchor and scale apply (M8 default). |
+| `path_position` | float | read, write | Position along the path, 0 to 1 (GM `path_position`); setting it moves the point the next automatic-motion tick places. |
+| `path_positionprevious` | float | read only | `path_position` at the start of the last path step. |
+| `path_scale` | float | read, write | Scale of a relative path's points about its first point (GM `path_scale`); 1 is unscaled. Scale on an absolute path is OPEN (M8). |
+| `path_speed` | float | read, write | Path speed in pixels per tick (GM `path_speed`). |
+| `path_x` | float | read only | The path point's x at the current position, before scale, orientation and the relative anchor; 0 when there is no path. |
+| `path_y` | float | read only | The path point's y at the current position, before scale, orientation and the relative anchor; 0 when there is no path. |
+| `scale` | float | read, write | The layer scale (`scale`, machinary; 1 elsewhere). |
 | `solid` | bool | read, write | Whether the instance blocks movement. |
 | `speed` | float | read, write | Speed along `direction`; setting it updates `hspeed` and `vspeed`. |
+| `tempHspeed` | float | read, write | The ice carry-over speed (`tempHspeed`). |
+| `tjump` | bool | read, write | The third-jump flag. |
 | `visible` | bool | read, write | Whether the instance is drawn. |
 | `vspeed` | float | read, write | Vertical speed; setting it updates `speed` and `direction`. |
+| `walk_h` | float | read only | The last `walk` direction, -1, 0 or 1. |
 | `x` | float | read, write | Horizontal position. |
 | `xprevious` | float | read only | `x` at the start of the tick. |
 | `xstart` | float | read only | `x` where the instance was created. |
 | `y` | float | read, write | Vertical position. |
+| `yflag` | float | read only | The gravity side, -1 or 1 (read only; flip through the gravity knob). |
 | `yprevious` | float | read only | `y` at the start of the tick. |
 | `ystart` | float | read only | `y` where the instance was created. |
 
@@ -79,6 +115,7 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `arctan2(?, ?) -> float` (can fail) (cost: 1): Angle in radians of the point (`x`, `y`) (software libm).
 - `ceil(?) -> float` (can fail) (cost: 1): Smallest integer not below `x`.
 - `choose(array) -> ?` (can fail) (cost: 1): One element of the array, picked by the run's one RNG; an empty array is an error.
+- `chr(?) -> string` (can fail) (cost: 1): `chr(code)`: the character with code 0 to 255 (a one-character string).
 - `clamp(?, ?, ?) -> float` (can fail) (cost: 1): `x` limited to the range `lo` to `hi`.
 - `collision_line(?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
 - `collision_line(?, ?, ?, ?, ?, bool, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
@@ -107,8 +144,12 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `gm_lt(?, ?) -> bool` (can fail) (cost: 1): GML `a < b` on reals, with the run's epsilon.
 - `gm_ne(?, ?) -> bool` (can fail) (cost: 1): GML `a != b` on reals, with the run's epsilon.
 - `gm_repeat(?) -> int` (can fail) (cost: 1): The iteration count GML's `repeat` gives for a real (rounded); a bad count is an error.
-- `index$get$(Instance, string) -> ?` (can fail) (cost: 1): Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.
-- `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1): Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.
+- `index$get$(Globals, string) -> ?` (can fail) (cost: 1 + 1 per stored array element copied): Reads a package variable of an instance (`i.hp`; an unknown name is an error), a global (`global.difficulty`) or an element of a stored array (`this.pattern[3]`). An unset variable, global or element follows the run's script init policy (0 under `gm8` with uninitialized reads as 0, else a script error). An array index is a whole number from 0 below 10,000; a fractional or negative one is a script error (OPEN in the GM8 spec). Reading a variable that holds an array copies it.
+- `index$get$(Instance, string) -> ?` (can fail) (cost: 1 + 1 per stored array element copied): Reads a package variable of an instance (`i.hp`; an unknown name is an error), a global (`global.difficulty`) or an element of a stored array (`this.pattern[3]`). An unset variable, global or element follows the run's script init policy (0 under `gm8` with uninitialized reads as 0, else a script error). An array index is a whole number from 0 below 10,000; a fractional or negative one is a script error (OPEN in the GM8 spec). Reading a variable that holds an array copies it.
+- `index$get$(VarArray, ?) -> ?` (can fail) (cost: 1 + 1 per stored array element copied): Reads a package variable of an instance (`i.hp`; an unknown name is an error), a global (`global.difficulty`) or an element of a stored array (`this.pattern[3]`). An unset variable, global or element follows the run's script init policy (0 under `gm8` with uninitialized reads as 0, else a script error). An array index is a whole number from 0 below 10,000; a fractional or negative one is a script error (OPEN in the GM8 spec). Reading a variable that holds an array copies it.
+- `index$set$(Globals, string, ?) -> ()` (can fail) (cost: 1 + 1 per stored array element copied): Writes a package variable of an instance (`i.hp = 5`; the name must be declared in the package), a global (`global.flags = [0.0, 0.0]`, created on first write) or an element of a stored array (`this.pattern[3] = 9.0`; past the end grows the array, the skipped elements unset; at most 10,000). `gm8` stores a bool as 1.0/0.0 and a bare write to a variable holding an array writes element 0 (contract `script/global-array-bare-write`); `standard` refuses a bool until the typed value model stores one and replaces the value.
+- `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1 + 1 per stored array element copied): Writes a package variable of an instance (`i.hp = 5`; the name must be declared in the package), a global (`global.flags = [0.0, 0.0]`, created on first write) or an element of a stored array (`this.pattern[3] = 9.0`; past the end grows the array, the skipped elements unset; at most 10,000). `gm8` stores a bool as 1.0/0.0 and a bare write to a variable holding an array writes element 0 (contract `script/global-array-bare-write`); `standard` refuses a bool until the typed value model stores one and replaces the value.
+- `index$set$(VarArray, ?, ?) -> ()` (can fail) (cost: 1 + 1 per stored array element copied): Writes a package variable of an instance (`i.hp = 5`; the name must be declared in the package), a global (`global.flags = [0.0, 0.0]`, created on first write) or an element of a stored array (`this.pattern[3] = 9.0`; past the end grows the array, the skipped elements unset; at most 10,000). `gm8` stores a bool as 1.0/0.0 and a bare write to a variable holding an array writes element 0 (contract `script/global-array-bare-write`); `standard` refuses a bool until the typed value model stores one and replaces the value.
 - `instance_create(string, ?, ?) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: "down"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
 - `instance_create(string, ?, ?, map) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: "down"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
 - `instance_place(Instance, ?, ?, ?) -> ?` (can fail) (cost: 1): `instance_place(i, x, y, target)`: GML `instance_place`. The instance `place_meeting` would meet, the first in event order (rank, then id) when several do, or `()`. Changes nothing.
@@ -117,6 +158,7 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `irandom_range(?, ?) -> float` (can fail) (cost: 1): An integer between `a` and `b` inclusive, from the run's one RNG.
 - `kid() -> ?` (can fail) (cost: 1): The kid's instance, or `()` when there is none.
 - `kill_kid() -> ()` (can fail) (cost: 1): Kills the kid as a script death.
+- `len(VarArray) -> int` (cost: 1): `a.len()` or `len(a)`: the number of elements of an array, a stored one included (an INT).
 - `lengthdir_x(?, ?) -> float` (can fail) (cost: 1): Horizontal part of a vector of length `len` toward `dir` degrees.
 - `lengthdir_y(?, ?) -> float` (can fail) (cost: 1): Vertical part of a vector of length `len` toward `dir` degrees (up is negative, as GML).
 - `lerp(?, ?, ?) -> float` (can fail) (cost: 1): Linear interpolation from `a` to `b` by `t`.
@@ -128,13 +170,18 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
 - `move_bounce_all(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).
 - `move_bounce_solid(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.
+- `ord(?) -> float` (can fail) (cost: 1): `ord(s)`: the character code of the first character of `s`, or 0 when it is empty.
+- `path_end(Instance) -> ()` (can fail) (cost: 1): `i.path_end()`: stops following the path (the instance keeps its position); `path_index` reads -1 afterwards.
+- `path_start(Instance, string, ?, string, ?) -> ()` (can fail) (cost: 1): `i.path_start(path, speed, endaction, absolute)`: starts following a package path, replacing any running one. `path` is the path id; `endaction` is `"stop"`, `"restart"`, `"continue"` or `"reverse"`; `absolute` places the instance at the path's own points, else the path is relative to the instance's current position. The run advances in automatic motion from the next tick. A non-finite speed is an error.
 - `place_free(Instance, ?, ?) -> bool` (can fail) (cost: 1): `place_free(i, x, y)`: GML `place_free`. Whether `i`'s collision mask placed at (`x`, `y`) meets no solid instance. Changes nothing.
 - `place_meeting(Instance, ?, ?, ?) -> bool` (can fail) (cost: 1): `place_meeting(i, x, y, target)`: GML `place_meeting`. Whether `i`'s collision mask placed at (`x`, `y`) overlaps an instance of `target` other than `i`. The target is a role (`"block"`, `"killer"`), `"all"`, a kind (with the kinds derived from it) or an instance; a role wins over a kind of the same name. Destroyed and deactivated instances and empty masks are never met. Changes nothing.
 - `play_music(string) -> ()` (can fail) (cost: 1): Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.
 - `play_sound(string) -> ()` (can fail) (cost: 1): Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.
 - `point_distance(?, ?, ?, ?) -> float` (can fail) (cost: 1): Distance between (`x1`, `y1`) and (`x2`, `y2`).
+- `pop(VarArray) -> ?` (can fail) (cost: 1): `a.pop()`: removes and returns the last element of a stored array, or `()` when it is empty. `this.pattern.pop()` writes the shorter array back through the variable; a local copy must be assigned back.
 - `pow(?, ?) -> float` (can fail) (cost: 1): `x` to the power `y` (software libm). There is no `**`.
+- `push(VarArray, ?) -> ()` (can fail) (cost: 1): `a.push(v)`: appends `v` to a stored array, at most 10,000 elements (a script error past that). `this.pattern.push(v)` writes the grown array back through the variable, like an index assignment; a local copy (`let a = this.pattern`) must be assigned back.
 - `radtodeg(?) -> float` (can fail) (cost: 1): Radians to degrees.
 - `random(?) -> float` (can fail) (cost: 1): A float from 0 up to `x`, from the run's one RNG.
 - `random_range(?, ?) -> float` (can fail) (cost: 1): A float between `a` and `b`, from the run's one RNG.
@@ -144,7 +191,28 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `room_restart() -> ()` (can fail) (cost: 1): Requests the current room again (Room End, then the room rebuilt from its file) once the current script returns.
 - `room_tick() -> float` (cost: 1): Ticks since the current room started.
 - `round(?) -> float` (can fail) (cost: 1): GML `round`: the nearest integer under the run's rounding rule.
+- `script_execute(string) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
+- `script_execute(string, ?, ?, ?, ?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `script_execute("name", args...)`: calls the package script function `name` with up to 8 arguments, `this` bound to the calling instance and the caller's step budget and world. The name must be a literal; the loader checks it and the argument count, and a dynamic or unknown name is an error.
 - `set_alarm(Instance, ?, ?) -> ()` (can fail) (cost: 1): `i.set_alarm(n, steps)` sets alarm `n` (0 to 11) to `steps` ticks, rounded as GM does; -1 means not running; a non-finite value or another `n` is an error.
+- `set_view_angle(?, ?) -> ()` (can fail) (cost: 1): `set_view_angle(i, degrees)`: sets the view's rotation.
+- `set_view_enabled(?, ?) -> ()` (can fail) (cost: 1): `set_view_enabled(i, on)`: turns the view on or off for the room.
+- `set_view_hborder(?, ?) -> ()` (can fail) (cost: 1): `set_view_hborder(i, border)`: sets the follow's horizontal dead-zone half-size.
+- `set_view_hspeed(?, ?) -> ()` (can fail) (cost: 1): `set_view_hspeed(i, speed)`: sets the follow's horizontal speed (negative snaps).
+- `set_view_hview(?, ?) -> ()` (can fail) (cost: 1): `set_view_hview(i, h)`: sets the view's height.
+- `set_view_object(?, ?) -> ()` (can fail) (cost: 1): `set_view_object(i, kind)`: makes the view follow a kind (its first matching instance, as a room's `follow` does), or `()` to follow nothing.
+- `set_view_vborder(?, ?) -> ()` (can fail) (cost: 1): `set_view_vborder(i, border)`: sets the follow's vertical dead-zone half-size.
+- `set_view_visible(?, ?) -> ()` (can fail) (cost: 1): `set_view_visible(i, on)`: shows or hides the view.
+- `set_view_vspeed(?, ?) -> ()` (can fail) (cost: 1): `set_view_vspeed(i, speed)`: sets the follow's vertical speed (negative snaps).
+- `set_view_wview(?, ?) -> ()` (can fail) (cost: 1): `set_view_wview(i, w)`: sets the view's width.
+- `set_view_xview(?, ?) -> ()` (can fail) (cost: 1): `set_view_xview(i, x)`: moves the view's left edge.
+- `set_view_yview(?, ?) -> ()` (can fail) (cost: 1): `set_view_yview(i, y)`: moves the view's top edge.
 - `shake(?, ?) -> ()` (can fail) (cost: 1): Shakes the screen for `ticks` ticks with `strength` pixels (a client effect; the sim reads nothing back).
 - `sign(?) -> float` (can fail) (cost: 1): -1, 0 or 1 by the sign of `x`.
 - `sign(float) -> float` (cost: 1): -1, 0 or 1 by the sign of `x`.
@@ -153,7 +221,36 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `sqr(?) -> float` (can fail) (cost: 1): `x` squared.
 - `sqrt(?) -> float` (can fail) (cost: 1): Square root.
 - `stop_music() -> ()` (can fail) (cost: 1): Stops the music track that is playing, if any.
+- `string(?) -> string` (can fail) (cost: 1): `string(x)`: a real as GM8 writes it (an integer with no decimals, anything else with exactly two, rounded ties-to-even), a bool as 1/0, or a string unchanged.
+- `string_char_at(?, ?) -> string` (can fail) (cost: 1): `string_char_at(s, index)`: the character at 1-based `index`, or "" outside the string.
+- `string_copy(?, ?, ?) -> string` (can fail) (cost: 1): `string_copy(s, index, count)`: up to `count` characters of `s` from 1-based `index` (a shorter tail when it runs past the end).
+- `string_count(?, ?) -> float` (can fail) (cost: 1): `string_count(substr, s)`: how many times `substr` occurs in `s`, without overlap.
+- `string_delete(?, ?, ?) -> string` (can fail) (cost: 1): `string_delete(s, index, count)`: `s` without `count` characters from 1-based `index`.
+- `string_digits(?) -> string` (can fail) (cost: 1): `string_digits(s)`: only the ASCII digits of `s`.
+- `string_format(?, ?, ?) -> string` (can fail) (cost: 1): `string_format(x, total, decimals)`: `x` padded on the left to `total` characters with `decimals` places (0 to 64, total 0 to 1024); a number wider than `total` is not cut.
+- `string_insert(?, ?, ?) -> string` (can fail) (cost: 1): `string_insert(substr, s, index)`: `substr` put before 1-based `index` of `s`; an index past the end appends.
+- `string_length(?) -> float` (can fail) (cost: 1): `string_length(s)`: the number of characters (an INT as a FLOAT).
+- `string_letters(?) -> string` (can fail) (cost: 1): `string_letters(s)`: only the ASCII letters of `s`.
+- `string_lettersdigits(?) -> string` (can fail) (cost: 1): `string_lettersdigits(s)`: only the ASCII letters and digits of `s`.
+- `string_lower(?) -> string` (can fail) (cost: 1): `string_lower(s)`: `s` in lower case.
+- `string_pos(?, ?) -> float` (can fail) (cost: 1): `string_pos(substr, s)`: the 1-based character position of the first `substr` in `s`, or 0 when it is not there.
+- `string_replace(?, ?, ?) -> string` (can fail) (cost: 1): `string_replace(s, substr, new)`: replaces the first `substr` in `s`.
+- `string_replace_all(?, ?, ?) -> string` (can fail) (cost: 1): `string_replace_all(s, substr, new)`: replaces every `substr` in `s`.
+- `string_upper(?) -> string` (can fail) (cost: 1): `string_upper(s)`: `s` in upper case.
 - `tan(?) -> float` (can fail) (cost: 1): Tangent of an angle in radians (software libm).
 - `tick() -> float` (cost: 1): The run's tick counter.
 - `to_float(int) -> float` (cost: 1): An integer as a float.
 - `to_int(?) -> int` (can fail) (cost: 1): A float truncated toward zero as an integer; a non-finite or huge value is an error.
+- `view_angle(?) -> float` (can fail) (cost: 1): `view_angle(i)`: the view's rotation in degrees.
+- `view_current() -> float` (cost: 1): `view_current()`: the view being drawn. There is no draw slot yet, so it is 0.
+- `view_enabled(?) -> bool` (can fail) (cost: 1): `view_enabled(i)`: whether the view is on for the room.
+- `view_hborder(?) -> float` (can fail) (cost: 1): `view_hborder(i)`: the follow's horizontal dead-zone half-size.
+- `view_hspeed(?) -> float` (can fail) (cost: 1): `view_hspeed(i)`: the most the follow moves horizontally a tick (negative snaps).
+- `view_hview(?) -> float` (can fail) (cost: 1): `view_hview(i)`: the view's height.
+- `view_object(?) -> ?` (can fail) (cost: 1): `view_object(i)`: the kind the view follows, or `()` when it follows none.
+- `view_vborder(?) -> float` (can fail) (cost: 1): `view_vborder(i)`: the follow's vertical dead-zone half-size.
+- `view_visible(?) -> bool` (can fail) (cost: 1): `view_visible(i)`: whether the view is drawn.
+- `view_vspeed(?) -> float` (can fail) (cost: 1): `view_vspeed(i)`: the most the follow moves vertically a tick (negative snaps).
+- `view_wview(?) -> float` (can fail) (cost: 1): `view_wview(i)`: the view's width.
+- `view_xview(?) -> float` (can fail) (cost: 1): `view_xview(i)`: the view's left edge in the room.
+- `view_yview(?) -> float` (can fail) (cost: 1): `view_yview(i)`: the view's top edge in the room.

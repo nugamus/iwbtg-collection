@@ -2,6 +2,8 @@
 
 The leaderboard, accounts and game downloads run on the maintainer's home server. Chosen for few moving parts, strong defaults and easy operation by agents. Versions were checked on 2026-10-23; check them again when Phase 8 starts.
 
+Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json`, `GET /files/<sha256>[.<ext>]` and the signed `GET /removals.json` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, all three answer 404 (#807, #808). Accounts and submissions are served (`/auth/*`, `/submissions`), the review queue runs on its own admin listener ([Admin access](#admin-access)), and a verified, non-quarantined replay downloads at `GET /replays/{run_id}` (#200). The verify worker is #163.
+
 ## Components
 
 | Part | Choice | Why |
@@ -13,23 +15,179 @@ The leaderboard, accounts and game downloads run on the maintainer's home server
 | Internet exposure | Cloudflare Tunnel (`cloudflared`) | No router port forwards, home IP hidden, DDoS protection in front, TLS handled by Cloudflare. |
 | Admin access | Tailscale (not Funnel) for SSH and admin pages | No open ports. |
 | Host | Debian 13, Docker Compose with two services: `server`, `cloudflared` | One `compose.yaml` in git describes production. |
-| Game downloads | Content-addressed files `/files/<sha256>.<ext>` served with Range support, plus `/catalog.json` | Resumable downloads, end-to-end hash check, caches never go stale. |
+| Game downloads | Content-addressed files `/files/<sha256>[.<ext>]` with a long immutable cache and single-range resume, plus `/catalog.json` with a short one | Resumable downloads, end-to-end hash check, caches never go stale. |
 | Backups | restic to remote storage (Backblaze B2 or a Hetzner Storage Box) | Encrypted, deduplicated, retention built in. Replaces the earlier "push backups to a Git server" idea: Git would keep password hashes and emails forever, unencrypted, and could never forget a deleted account. |
-| Logs and monitoring | `tracing` JSON logs to stdout; `/healthz` pinged to healthchecks.io every 5 minutes | Alerts arrive even when the house loses power or internet. |
+| Logs and monitoring | `tracing` JSON logs to stdout; the check's healthchecks.io URL pinged every 5 minutes (`HEALTHCHECKS_URL`) | Alerts arrive even when the house loses power or internet. |
 | Dependency updates | Dependabot PRs for cargo and compose, `cargo audit` in CI | Updates arrive as reviewable PRs, never silently. |
+
+## Schema
+
+One SQLite file, opened once at startup by `crates/server/src/db.rs`. `IWBTG_DB` (or `--db`) names it; the folder is created if missing. Every connection sets `journal_mode = wal`, `foreign_keys = on`, `busy_timeout = 5000` and `synchronous = normal`. WAL is a property of the file, so a crash or a second process cannot leave it half-switched.
+
+Migrations live in `migrations/` at the workspace root (not in the crate), are compiled into the binary with `sqlx::migrate!`, and run before the listener binds. A failed migration is a startup error: the server logs it and exits 1 rather than serve a half-migrated file. sqlx records what ran in `_sqlx_migrations`; the startup log line `database ready (migrations applied)` carries the count. The list is append-only: sqlx stores a checksum per migration, so editing one that already ran also stops startup (version mismatch) instead of letting the file and the binary disagree.
+
+| Table | Keys and indexes | Holds |
+|---|---|---|
+| `accounts` | `username_canonical` unique; `email` unique where not null | Username as typed plus its canonical form, lowercased email and whether it is verified, `deleted_at` for a soft delete. |
+| `identities` | `(provider, subject)` unique; index on `account_id` | One row per sign-in method (Google, Discord, ...); a new provider is a new value, no schema change. |
+| `password_credentials` | `account_id` primary key | Argon2id PHC string. OIDC-only accounts have no row. |
+| `sessions` | `token_hash` unique; indexes on `account_id` and `expires_at` | Opaque session ID, SHA-256 of the bearer token, expiry. |
+| `runs` | `(package_id, map_id, mods, gameplay_hash, ticks, submitted_at)`; indexes on `replay_sha256`, `(account_id, ticks)` and `(account_id, package_id, map_id, mods, gameplay_hash, rng_seed)` | The replay BLOB (at most 1 MiB), its SHA-256 for exact-copy detection, the board identity, the header's `rng_seed` (eight raw bytes, for the reuse flag), and the verified tick count (`NULL` until the verifier has reproduced it). |
+| `run_flags` | primary key `(run_id, kind)`; index on `(kind, run_id)` | Review flags per run: `exact_copy` or `seed_reuse`, with `detail` naming the earlier run that explains it (#164). |
+| `run_reviews` | primary key `run_id`; index on `(state, opened_at)` | The moderator's decision for a run: `pending`, `cleared`, `video_requested` or `quarantined`, with the note, the reviewer and the timestamps (#58). |
+| `admin_sessions` | `token_hash` unique; index on `expires_at` | The eight-hour TOTP unlock of the admin listener; only the SHA-256 of the cookie token is stored (#58). |
+| `verify_jobs` | index on `(state, id)` and `run_id` | Queue state per submitted run: `queued`, `running`, `done` or `failed`, with attempts, timings and the verifier's error. |
+| `password_resets` | `account_id` primary key | SHA-256 of the active six-digit reset code, its expiry and attempt count; one code per account, replaced by a new request (#160). |
+
+Timestamps are UTC ISO-8601 text and hashes are raw 32-byte BLOBs. Boards sort on `ticks` with ties to the earlier `submitted_at`, keyed on the replay header's `(package_id, map_id, mods, gameplay_hash)` ([versioning](architecture/versioning.md#what-a-board-keys-on)); `gameplay_hash` therefore covers `engine_rev`, and no product columns beyond the replay header are stored.
+
+Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline data is committed once the first such query lands (#162). Until then the only SQL in `crates/server` is the PRAGMA and schema probes in the tests, which use runtime `query_scalar`, so the build needs no live database and no `DATABASE_URL`.
+
+## Submissions
+
+`POST /submissions` stores a replay (#162; part of #56):
+
+- The body is the replay file itself (`application/octet-stream`), capped at 1 MiB by a per-route body limit, so an oversized request is `413` before decoding.
+- A session is required (`__Host-iwbtg_session` cookie or `Authorization: Bearer`); without one the answer is `401 sign in required`.
+- The server decodes the canonical bytes through `iwbtg_sim::replay`; anything that is not a canonical replay is `400`. It stores the exact bytes, their SHA-256, and the board key from the header (`package_id`, `map_id`, `mods`, `gameplay_hash`), leaves `ticks` NULL until verification, and queues a `verify_jobs` row.
+- The answer is `202 {run_id, replay_sha256}`. Submissions are rate limited per address and per account (Security rule 1).
+- Every accepted run records review flags in `run_flags` (#164). `exact_copy` names the earliest run with the same replay bytes, for any account. `seed_reuse` names the earliest run by the same account on the same board (`package_id`, `map_id`, `mods`, `gameplay_hash`) with the same seed. A flag never rejects a run: it is stored, queued and answered like any other. Seed reuse is deliberately same-player and same-board, because board-wide reuse flags fire on honest runs at scale (#790, which still owns the seed source); the seed is kept as the header's eight raw bytes, so the comparison is exact.
+- Reproducing the run and the tick bound are #163; nothing the client claims in the trailer is trusted or stored as a time here. The verification checks are the shared `iwbtg-verify` crate (#1565), the same code `iwbtg replay verify` runs, not a server copy.
+
+### Replay downloads
+
+`GET /replays/{run_id}` serves the exact stored replay (#200). Only a publicly visible run is served: `status = 'verified'`, a verified tick count, and no `run_reviews` row in `quarantined`. Pending, rejected, quarantined and unknown runs all answer one uniform `404`, so the route cannot enumerate hidden runs. The body is `application/octet-stream` with `Content-Disposition: attachment; filename="<run_id>.iwbr"`, so a client can re-verify it offline with `iwbtg replay verify` ([replay file](architecture/replay.md#replay-file-iwbr)). It is cached `public, max-age=60`: the bytes for a run never change, but visibility does and a quarantine must take effect. The board-row link and the client's watch flow are #57 and #42.
+
+## Game downloads
+
+`crates/server/src/catalog.rs` serves a folder chosen at startup with `--catalog-dir` (`IWBTG_CATALOG_DIR`), so the binary never needs the catalog baked in (#807). Unset, `/catalog.json` and `/files/...` answer 404 and the rest of the server runs normally. The folder layout is:
+
+```text
+<catalog-dir>/
+  catalog.json
+  files/<sha256>[.<ext>]
+```
+
+- `/catalog.json` is read per request and sent `Cache-Control: public, max-age=60`: it changes when a game is published, so caches pick a new one up within a minute.
+- `/files/...` is sent `Cache-Control: public, max-age=31536000, immutable`, because the file name is the hash: those bytes can never change under that URL.
+- A file name is accepted only as 64 lowercase hex characters plus an optional alphanumeric extension (at most 16). Everything else — `..`, encoded or literal separators, a non-hash name — is 404 before the filesystem is touched, and a missing catalog or file is also 404. There is no directory listing.
+- `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
+- Every file response carries `Accept-Ranges: bytes`. A single `Range: bytes=...` (`start-end`, `start-` or `-suffix`) gets `206` with the sliced body and `Content-Range`; the long cache header stays on both `200` and `206`. A valid range past the end is `416` with `Content-Range: bytes */<len>`; a malformed, other-unit or multi-range header is ignored and answered with the full `200`, never a multipart body (#1397).
+- Responses stream from disk with an explicit `Content-Length`; a package is never held in memory whole, so a 512 MB package costs its socket buffers rather than its size (#1506). A range seeks to its first byte and streams only the slice.
+
+`iwbtg pkg publish <package> --catalog-dir <folder>` writes this layout (#806). The catalog is one JSON object with a `files` array; each entry carries the package-owned fields that exist today:
+
+```json
+{
+  "files": [
+    {
+      "id": "rely_the_needle",
+      "title": "Rely the Needle",
+      "version": "0.1.0",
+      "format": 1,
+      "url": "/files/<content_hash>.iwbz",
+      "filename": "<content_hash>.iwbz",
+      "size": 123456,
+      "content_hash": "<sha256 hex>",
+      "gameplay_hash": "<blake3 hex>",
+      "creators": [{ "name": "…", "role": "author" }],
+      "source": { "url": "https://…", "permission": "granted" },
+      "performance": { "class": "light", "peak_script_units": 1234, "tick_budget": 1000000, "peak_instances": 25 }
+    }
+  ]
+}
+```
+
+`url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent.
+
+`performance` is present when the package has stored clear replays (`tests/replays/*.iwbr`): the class and peaks from `iwbtg profile --summary` ([CLI](architecture/cli.md), [0001](decisions/0001-script-language.md#step-budget)). A package with no stored replay has no `performance` field (not measured) rather than a guessed class. `ms per tick` is printed by the profile command but not stored, because it is specific to the machine and target that ran it. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the full performance display — is #805; `pkg publish` emits what the package measures today.
+
+### Removal list
+
+Takedowns and moderation publish `<catalog-dir>/removals.json`; it is served at `GET /removals.json` (#808). The file is already signed and the server holds no key, so compromising the host cannot mint removals: a client verifies `signature` with the public key it ships and deletes the listed packages on start (#68).
+
+```json
+{
+  "version": 1,
+  "key_id": "2026-11",
+  "generated_at": "2026-11-24T12:00:00Z",
+  "removals": [
+    { "package_id": "iwbtg.example.game", "reason": "takedown", "at": "2026-11-20T00:00:00Z" }
+  ],
+  "signature": "128 lowercase hex characters (a 64-byte Ed25519 signature)"
+}
+```
+
+The signature covers this exact UTF-8 text, one line per entry in sorted order:
+
+```text
+iwbtg-removals-v1
+<key_id>
+<generated_at>
+<package_id>\t<reason>\t<at>
+```
+
+`package_id` is 1-64 characters of letters, digits, `.`, `_` and `-`; `reason` is 1-32 of lower-case letters, digits and `-`; `key_id` is 1-32 of letters, digits, `.`, `_` and `-`; the timestamps are 1-64 printable ASCII characters without spaces (UTC ISO-8601). Entries are sorted by `package_id` and unique. Unknown JSON fields are rejected, so nothing unsigned rides along. The response body is the file's own bytes, never a re-serialization, so the signature a publisher computed stays valid. `crates/removal` implements the format and pins the canonical text, and both this server and `iwbtg removals sign` use it, so producer and validator cannot drift (#1537).
+
+It is sent `Cache-Control: public, max-age=60`, like the catalog. A missing catalog folder or file is `404`, which a client reads as "no removals". Any file that fails the checks is `503` with a logged reason, never `404`: a broken publish must not look like an empty list and leave a taken-down game installed. A file is at most 1 MiB and 4,096 entries.
+
+## Logs and monitoring
+
+The binary writes `tracing` JSON lines to stdout (`tracing_subscriber::fmt().json()`): one object per event with `timestamp`, `level`, `fields` and `target`. Startup lines — database ready, serving catalog, listening — are events like any other, so a collector parses them without a regex.
+
+Set `HEALTHCHECKS_URL` (`--healthchecks-url`) to the healthchecks.io check's ping URL. The server GETs it once at startup and then every 5 minutes (`crates/server/src/health.rs`, #155); with the variable unset nothing is spawned. The URL is never logged, because anyone holding it can silence the check. The client uses the OS trust store (`native-tls`), so the runtime image needs `ca-certificates` (which pulls `libssl3` on Debian) rather than a bundled CA list.
+
+A failed ping — DNS, connect, a 10-second timeout, or a non-2xx status — is logged at `WARN` and the loop continues after its period, so monitoring can never take the server down. healthchecks.io alerts on the absence of pings, which covers what the server cannot report about itself: power loss, a crashed container or a dead uplink.
 
 ## Security rules
 
 These are requirements, not suggestions.
 
-1. **Rate limiting** keys on the `CF-Connecting-IP` header with a custom extractor. Never use tower_governor's `SmartIpKeyExtractor` (spoofable through `X-Forwarded-For`) or `PeerIpKeyExtractor` (sees only cloudflared). Test that a forged `X-Forwarded-For` does not change the key. Limits apply per IP and per account on login, register, password reset, token and submit endpoints.
+1. **Rate limiting** keys on the `CF-Connecting-IP` header with a custom extractor. Never use tower_governor's `SmartIpKeyExtractor` (spoofable through `X-Forwarded-For`) or `PeerIpKeyExtractor` (sees only cloudflared). Test that a forged `X-Forwarded-For` does not change the key. Limits apply per IP and per account on login, register, password reset, token and submit endpoints. Implemented in `crates/server/src/rate_limit.rs` (#161): an in-memory fixed window keyed only on `CF-Connecting-IP` (the peer address from `ConnectInfo` when the header is absent, `local` otherwise). Login is 10 attempts per 5 minutes per address and per account, registration 5 per hour per address, and an exhausted window answers `429` with `Retry-After`. This caps the request rate; the Argon2 permit semaphore (#1505) caps the work in flight, and both are required.
 2. **Verification child processes** start with `env_clear()` (no secrets), a memory and CPU limit (`rlimit`), a wall-clock timeout, `kill_on_drop`, and at most 2 at a time. Replays longer than the game's maximum tick count are rejected before simulating.
 3. **Secrets are split.** `cloudflared.env` holds only the tunnel token. `server.env` holds only app secrets (OAuth, SMTP). Backup credentials live in a root-only file read by the host backup timer, never mounted into a container. The B2 key is limited to one bucket without delete rights (or object lock on).
 4. **Containers** publish no ports, run as non-root, `read_only: true` with `tmpfs: [/tmp]`, `cap_drop: [ALL]`, `no-new-privileges`, memory/CPU/PID limits, `restart: unless-stopped`. The database lives in a bind mount (`/srv/iwbtg/data`) writable by the container user.
 5. **Network isolation.** The server sits on its own VLAN or guest network, or a host firewall blocks it from reaching the home LAN. The research archive of original games never lives on this machine.
-6. **Admin pages** (review queue, takedowns) are reachable only over Tailscale, and admin accounts require a second factor.
+6. **Admin pages** (review queue, takedowns) are reachable only over Tailscale, and admin accounts require a second factor. The review queue implements its half in `crates/server/src/admin.rs` (#58): a separate `--admin-bind` listener plus a TOTP step on top of the password session ([Admin access](#admin-access)). The tailnet binding itself is deployment, and the takedown page and per-account enrollment are #1585.
 7. **Host hardening.** SSH key-only, root login off, unattended security upgrades on. Docker engine updates are applied by hand or through an explicitly added apt origin.
 8. **Same site for the web client.** The WASM build is served from the same registrable domain as the API (for example `play.<domain>` and `api.<domain>`), so session cookies work.
+
+## Deployment
+
+Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, `ca-certificates` (the healthchecks.io ping uses ureq with native-tls and verifies against the OS trust store; OAuth and SMTP will too) and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount. The server's 512 MiB limit is sized from its four Argon2 slots (4 × 19 MiB = 76 MiB, #1505) plus the runtime baseline and per-request buffers; raising `HASH_PERMITS` means raising it.
+
+Admin access is a second listener on the tailnet, not a published port: compose still publishes nothing, and the operator starts the admin address only on the tailnet interface (a Tailscale sidecar, or a host port bound to the tailnet address). The listener stays off unless `IWBTG_ADMIN_BIND` is set; see [Admin access](#admin-access). The end-to-end tailnet path is not verified by this repository (#1585).
+
+### Host layout
+
+Only `/srv/iwbtg` is created by hand. Secrets stay outside the checkout and are never mounted into the server container (rule 3):
+
+| Path | Holds | Owner and mode |
+|---|---|---|
+| `/srv/iwbtg/cloudflared.env` | `TUNNEL_TOKEN` only | `root:root`, `600` |
+| `/srv/iwbtg/server.env` | app secrets (OAuth, SMTP); optional until they exist | `root:root`, `600` |
+| named volume `iwbtg-data` | the SQLite file and its WAL siblings, at `/srv/iwbtg/data` | uid/gid `10001` |
+
+Rule 4 names `/srv/iwbtg/data` as the writable database path. Compose backs it with the named volume `iwbtg-data` rather than a host bind mount: Docker seeds a fresh volume with the image directory's ownership, so the non-root server (uid/gid `10001`) can write without a `chown` on the host. A bind mount at the same path also works; create it and `chown 10001:10001` it first.
+
+### Cloudflare Tunnel
+
+Create the tunnel in the Cloudflare dashboard (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared), copy its token into `/srv/iwbtg/cloudflared.env`, and add a public hostname whose service is `http://server:8080`; the compose network resolves `server`. Ingress rules live in the dashboard, so `cloudflared` needs only its token and there is no second config file in git. Neither service publishes a host port (rule 4), so the tunnel is the only way in.
+
+### Install, start and update
+
+```sh
+sudo install -d -m 700 /srv/iwbtg
+sudo install -m 600 deploy/cloudflared.env.example /srv/iwbtg/cloudflared.env
+sudoedit /srv/iwbtg/cloudflared.env            # paste the tunnel token
+
+docker compose config                          # validates the file, touches nothing
+docker compose up -d --build
+docker compose ps                              # server healthy, cloudflared up
+curl -fsS https://<public-hostname>/healthz    # -> ok
+```
+
+Create the token file before the first `up`: `cloudflared` exits without it and restarts until it exists. `docker compose logs -f server` follows the JSON logs. Updates are `git pull && docker compose build && docker compose up -d`; migrations run at startup and a failed one exits 1 instead of serving (Schema). The host restic timer reads the volume through a throwaway container (`docker run --rm -v iwbtg-data:/data:ro ...`), so backup credentials never enter a container (rule 3).
 
 ## Accounts and sign-in
 
@@ -41,12 +199,36 @@ Design:
 - Sessions are opaque random tokens stored hashed, with expiry; a new session ID at every sign-in. Web uses an `HttpOnly; Secure; SameSite=Lax` cookie (`__Host-` prefix where possible); the native client sends `Authorization: Bearer`.
 - Auth pages are server-rendered HTML forms with CSRF protection, visible `:focus-visible` styles, and correct `autocomplete` values.
 - Passwords: Argon2id at OWASP parameters (m=19456 KiB, t=2, p=1). Minimum 15 characters, or 8 plus a breached-password check. Password reset and registration answer identically whether or not an account exists.
+- At most four password hashes run at once (`HASH_PERMITS` in `crates/server/src/auth.rs`, #1505). A request waits up to two seconds for a slot and then gets `429` with `Retry-After`. This bounds the endpoints' memory independently of rate limiting, which caps the request rate but not the work in flight.
 - Usernames: 3 to 15 characters of letters, digits, spaces, `_ - [ ]`, trimmed, no doubled spaces. A canonical form (lowercase, spaces as `_`) is unique, so "Foo Bar" and "foo_bar" cannot both exist.
 - Email: unique after lowercasing. A Google identity links to an existing account only when both emails are verified; otherwise the user links it from settings.
 - Google and Discord use OpenID Connect (`openidconnect` crate) with PKCE, state and nonce. Discord publishes OIDC discovery; confirm it returns an `id_token` before relying on it.
 - The native game client never asks for a password. It opens the system browser to our sign-in page and receives a code on a loopback redirect (`http://127.0.0.1:<port>`, PKCE, no client secret in the exe), then stores a rotating refresh token in the OS keyring. Reused refresh tokens revoke the whole token family. A device-code fallback covers machines where loopback fails.
 - Email verification needs SMTP. Until SMTP exists, leaderboard submissions are gated by the review queue instead of email verification.
 - Accounts can be deleted and exported. A privacy page exists before accounts go public.
+
+### Password endpoints
+
+`crates/server/src/auth.rs` serves the first two steps (#156):
+
+- `POST /auth/register` takes `{username, email?, password}` and answers `201 {id, username}`. The username is stored as typed plus its canonical form; the email is optional, lowercased and unique when present. A duplicate username and a duplicate email get the same `409` message, so registration does not say which one exists.
+- `POST /auth/login` takes `{login, password}`, where `login` is a username (any casing) or an email, and answers `200 {id, username}`. An unknown account and a wrong password get the same `401`; the unknown path still runs an Argon2id hash, so the timing does not tell them apart either.
+- Only the Argon2id PHC string (m=19456 KiB, t=2, p=1) is stored, never the password. Hashing runs on a blocking worker. Passwords must be 15 characters until a breached-password list exists (the documented 8 + breach branch).
+- Sign-in creates a session (#157): 32 random bytes are the opaque token, only its SHA-256 is stored in `sessions`, and the row expires after 30 days. The web receives it in a `__Host-iwbtg_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`), so script cannot read it and a cross-site form cannot send it. Each sign-in inserts a new row; the JSON login sets the cookie too. The native bearer flow is #159.
+- The web forms are `GET /login` and `GET /register` (server-rendered HTML with `autocomplete` values and visible `:focus-visible` outlines), posting to the same paths. Each page sets a `__Host-iwbtg_csrf` cookie and embeds the same random token in a hidden field; a POST whose two halves disagree is `403` before any credential check (double submit). A form error re-renders the form with a fresh token; a successful sign-in shows the account.
+- Password reset (#160): `POST /auth/reset/request {email}` always answers `204`, whether or not the address has an account. Both branches generate and hash a code and wait a 10 ms response floor, and the message is sent from a background task, so text and timing agree. A registered address receives a six-digit code that expires after 15 minutes and dies after five wrong guesses; `password_resets` stores only its SHA-256, one row per account. `POST /auth/reset/confirm {email, code, password}` sets the new password through the same Argon2id path (and hashing permit) and revokes every session; a missing account, an expired code and a wrong code all get the same `400 invalid or expired code`. Both steps are rate limited like sign-in (#161).
+- Reset email goes through `SMTP_URL` and `MAIL_FROM` (`lettre`, native-tls, OS trust store, #160). With either unset the answer is unchanged and a `WARN` says no message was sent; the actual provider choice is #110.
+- Session lookup for protected endpoints arrives with the first consumer (#162).
+
+## Admin access
+
+The review queue runs on its own listener (`crates/server/src/admin.rs`, #58). The public listener never mounts these routes; the binary serves them only when `IWBTG_ADMIN_BIND` is set, and the operator binds that address to the tailnet (security rule 6). `IWBTG_ADMIN_ACCOUNTS` lists the account ids allowed in, and `IWBTG_ADMIN_TOTP_SECRET` is the base32 TOTP secret (SHA-256, six digits, thirty seconds) shared with the authenticator app. A configured but incomplete admin listener is a startup error, never a silent skip.
+
+- A `__Host-` cookie is host-scoped, so the admin listener serves its own `/login`: the same form as the public site, setting the session cookie for the admin host. The queue then asks for the TOTP code and sets `__Host-iwbtg_admin` for eight hours; only the SHA-256 of that token is stored, in `admin_sessions`.
+- `GET /` shows the queue: every run with a `run_flags` row (whatever its kind, so a new flag needs no query change) plus each board's leading verified run. The flags produced today are `exact_copy` and `seed_reuse` (#164); verifier and offline-seed kinds arrive with their producers (#163, #790). A run with no flag shows as "top run".
+- Each row takes `clear`, `request_video` or `quarantine` plus a note; the decision lands in `run_reviews` with the reviewer's account and a timestamp. A decision changes no tick count, board key or verification result: boards (#57) will honour a quarantine. A ban is deliberately not part of this issue (#1586).
+- Generate a secret with `iwbtg-server --admin-new-secret`, which prints the secret and its `otpauth://` URL; put it in the authenticator app and in `server.env`, never in git.
+- The verified Tailscale binding (a sidecar or a host port on the tailnet address) and per-account 2FA enrollment are #1585, as is the takedown page.
 
 ## Risks
 

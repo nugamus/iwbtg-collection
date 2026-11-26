@@ -1,4 +1,4 @@
-//! Built-in `sign` (mechanics `builtin.sign`; docs/plans/sim-core.md 6.1;
+//! Built-in `sign` (mechanics `builtin.sign`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/sign.md). Tier 3.
 //!
 //! Raises a client text box. `mode`:
@@ -31,11 +31,13 @@ const SPECS: &[ParamSpec] = &[
         name: "text",
         ty: ParamType::Text,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
 ];
 

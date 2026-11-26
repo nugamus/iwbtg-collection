@@ -5,7 +5,7 @@
 use crate::load_physics::LEGACY;
 use iwbtg_format::load::{LoadMode, LoadReport, load_report};
 use iwbtg_format::{PackageFiles, Severity};
-use iwbtg_sim::def::{GameDef, ParamValue, SoundKind};
+use iwbtg_sim::def::{GameDef, ParamValue, SoundId, SoundKind};
 use iwbtg_sim::num::Real;
 
 pub(crate) const STRICT: LoadMode = LoadMode::Strict;
@@ -144,6 +144,218 @@ pub(crate) fn load_ok(files: &PackageFiles, mode: LoadMode) -> (GameDef, LoadRep
     let r = load_report(files, mode);
     assert!(r.ok(), "load failed:\n{}", render(&r));
     (r.def.clone().unwrap(), r)
+}
+
+// ---- mask aliases (#1015) ---------------------------------------------------------------------
+
+/// A precise 2 x 2 sprite sidecar with an optional `mask` alias.
+fn precise_sidecar(mask: Option<&str>) -> String {
+    format!(
+        "#:schema ../sprite.schema.json\nframes = 1\nframe_size = [2, 2]\norigin = [0, 0]\ncollision = \"precise\"\n{}",
+        mask.map_or_else(String::new, |m| format!("mask = \"{m}\"\n"))
+    )
+}
+
+/// The index of `key` in `def.sprites`; the order is the `sprite_pngs` order (`load_objects.rs`).
+fn alias_sprite_index(files: &PackageFiles, key: &str) -> usize {
+    iwbtg_format::sprites::sprite_pngs(files)
+        .iter()
+        .position(|(k, _)| k == key)
+        .unwrap_or_else(|| panic!("no sprite `{key}`"))
+}
+
+/// A package with `referrer -> middle -> terminal`; the three arts differ so a premature copy
+/// would be visible.
+fn chain_package(terminal: &str, middle: &str, referrer: &str) -> PackageFiles {
+    package("", |f| {
+        put(f, &format!("sprites/{terminal}.toml"), &precise_sidecar(None));
+        f.push((format!("sprites/{terminal}.png"), png(&["#.", ".#"])));
+        put(
+            f,
+            &format!("sprites/{middle}.toml"),
+            &precise_sidecar(Some(terminal)),
+        );
+        f.push((format!("sprites/{middle}.png"), png(&["##", "##"])));
+        put(
+            f,
+            &format!("sprites/{referrer}.toml"),
+            &precise_sidecar(Some(middle)),
+        );
+        f.push((format!("sprites/{referrer}.png"), png(&["..", ".."])));
+    })
+}
+
+/// Both alias nodes must end at the terminal's own masks, whatever the key order.
+fn assert_chain(terminal: &str, middle: &str, referrer: &str) {
+    let files = chain_package(terminal, middle, referrer);
+    let (def, _) = load_ok(&files, STRICT);
+    let t = alias_sprite_index(&files, terminal);
+    let m = alias_sprite_index(&files, middle);
+    let r = alias_sprite_index(&files, referrer);
+    assert_eq!(
+        def.sprites[m].masks, def.sprites[t].masks,
+        "{middle} must take {terminal}'s masks"
+    );
+    assert_eq!(
+        def.sprites[r].masks, def.sprites[t].masks,
+        "{referrer} must take {terminal}'s masks"
+    );
+}
+
+#[test]
+fn a_mask_chain_resolves_to_its_terminal_in_either_key_order() {
+    // Referrer first in key order: the old single pass copied the middle's own masks.
+    assert_chain("a", "b", "c");
+    // Referrer last: renaming keys without changing the graph does not change the topology.
+    assert_chain("z", "y", "x");
+}
+
+#[test]
+fn a_mask_alias_to_a_missing_sprite_is_an_error() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("nope")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.starts_with("sprites/a.toml:") && e.contains("mask sprite `nope` does not exist")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_self_mask_alias_is_an_error() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("a")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.starts_with("sprites/a.toml:") && e.contains("uses itself as its mask")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_alias_cycle_is_an_error_at_each_sprite() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("b")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+        put(f, "sprites/b.toml", &precise_sidecar(Some("a")));
+        f.push(("sprites/b.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(!r.ok());
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/a.toml:") && m.contains("a -> b -> a is a cycle")),
+        "{}",
+        render(&r)
+    );
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/b.toml:") && m.contains("b -> a -> b is a cycle")),
+        "{}",
+        render(&r)
+    );
+}
+
+/// A precise 2 x 2 sidecar with `frames` frames, optional separate masks and an optional alias.
+fn frames_sidecar(frames: u32, separate: bool, mask: Option<&str>) -> String {
+    format!(
+        "#:schema ../sprite.schema.json\nframes = {frames}\nframe_size = [2, 2]\norigin = [0, 0]\ncollision = \"precise\"\nseparate_masks = {separate}\n{}",
+        mask.map_or_else(String::new, |m| format!("mask = \"{m}\"\n"))
+    )
+}
+
+/// A horizontal strip of `frames` 2 x 2 frames.
+fn strip(frames: u32) -> Vec<u8> {
+    let row = "#.".repeat(usize::try_from(frames).unwrap());
+    png(&[row.as_str(), row.as_str()])
+}
+
+#[test]
+fn a_mask_alias_with_too_few_per_frame_masks_is_an_error() {
+    // `t` has 2 separate masks; `a` has 3 frames and aliases it.
+    let files = package("", |f| {
+        put(f, "sprites/t.toml", &frames_sidecar(2, true, None));
+        f.push(("sprites/t.png".into(), strip(2)));
+        put(f, "sprites/a.toml", &frames_sidecar(3, true, Some("t")));
+        f.push(("sprites/a.png".into(), strip(3)));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(!r.ok());
+    assert!(
+        e.iter().any(|m| m.starts_with("sprites/a.toml:")
+            && m.contains("`a`")
+            && m.contains("`t`")
+            && m.contains("3 frame")
+            && m.contains("2 separate mask")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_chain_checks_the_terminal_coverage_for_each_sprite() {
+    // `r -> m -> t`: `t` has 2 separate masks, `m` has 2 frames (valid), `r` has 3 (invalid).
+    let files = package("", |f| {
+        put(f, "sprites/t.toml", &frames_sidecar(2, true, None));
+        f.push(("sprites/t.png".into(), strip(2)));
+        put(f, "sprites/m.toml", &frames_sidecar(2, true, Some("t")));
+        f.push(("sprites/m.png".into(), strip(2)));
+        put(f, "sprites/r.toml", &frames_sidecar(3, true, Some("m")));
+        f.push(("sprites/r.png".into(), strip(3)));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/r.toml:") && m.contains("`r`") && m.contains("`t`")),
+        "{}",
+        render(&r)
+    );
+    assert!(
+        !e.iter().any(|m| m.starts_with("sprites/m.toml:")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_alias_with_enough_frames_loads() {
+    // Equal and larger coverage, and a shared target, all cover the sprite.
+    for (target_frames, alias_frames, separate) in [(2, 2, true), (3, 2, true), (1, 3, false)] {
+        let files = package("", |f| {
+            put(
+                f,
+                "sprites/t.toml",
+                &frames_sidecar(target_frames, separate, None),
+            );
+            f.push(("sprites/t.png".into(), strip(target_frames)));
+            put(
+                f,
+                "sprites/a.toml",
+                &frames_sidecar(alias_frames, separate, Some("t")),
+            );
+            f.push(("sprites/a.png".into(), strip(alias_frames)));
+        });
+        let (def, _) = load_ok(&files, STRICT);
+        let t = alias_sprite_index(&files, "t");
+        let a = alias_sprite_index(&files, "a");
+        assert_eq!(
+            def.sprites[a].masks, def.sprites[t].masks,
+            "target {target_frames}, alias {alias_frames}, separate {separate}"
+        );
+    }
 }
 
 // ---- tricks -----------------------------------------------------------------------------------
@@ -416,6 +628,52 @@ fn sounds_and_music_get_kinds_lengths_and_ids() {
             .any(|w| w.contains("CR9") && w.contains("death") && !w.contains("jump")),
         "{}",
         render(&r)
+    );
+}
+
+/// #1173: a sound with no sidecar loads with length 0, and the sim plays it until stopped.
+#[test]
+fn a_sound_without_a_sidecar_plays_until_stopped() {
+    use iwbtg_sim::output::OutputEvent;
+    use iwbtg_sim::rules::RunnerRules;
+    use iwbtg_sim::script::ScriptRuntime;
+    use iwbtg_sim::sound::{self, DllMode, SoundOutput, SoundTarget};
+    use iwbtg_sim::world::{Ctx, World};
+
+    let files = package("", |f| put(f, "sounds/death.ogg", "ogg"));
+    let (def, _) = load_ok(&files, STRICT);
+    let id = SoundId(def.sounds.iter().position(|s| s.name == "death").unwrap() as u32);
+    let rules = RunnerRules::default();
+    let scripts = ScriptRuntime::default();
+    let mut w = World::new(def.start_room, 1);
+    let mut ctx = Ctx {
+        def: &def,
+        rules: &rules,
+        w: &mut w,
+        scripts: &scripts,
+        dll_mode: DllMode::Model,
+    };
+    sound::play(&mut ctx, id, false).unwrap();
+    for _ in 0..1000 {
+        sound::tick(&mut ctx);
+        ctx.w.tick += 1;
+    }
+    assert!(sound::is_playing(ctx.w, &def, id, &rules.sound));
+    sound::stop(&mut ctx, id);
+    assert!(!sound::is_playing(ctx.w, &def, id, &rules.sound));
+    let play: Vec<_> = w
+        .output
+        .iter()
+        .filter(|e| matches!(e, OutputEvent::Sound(SoundOutput::Play { .. })))
+        .collect();
+    assert_eq!(
+        play,
+        [&OutputEvent::Sound(SoundOutput::Play {
+            target: SoundTarget::Builtin(id),
+            looping: false,
+            length_ticks: 0,
+            tick: 0,
+        })]
     );
 }
 

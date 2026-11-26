@@ -15,7 +15,7 @@ use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::tokens;
 
 /// The card preview's flag.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct CardArgs {
     /// Show the player card alone (a dev view until game select and results have it).
     #[arg(long, value_enum, hide = true, value_name = "VARIANT")]
@@ -92,14 +92,18 @@ pub fn run(
         None => ((fit.x * 2.0) as u32, (fit.y * 2.0) as u32).into(),
     };
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "IWBTG Collection: player card".to_string(),
-            resolution,
-            ..default()
-        }),
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(crate::logging::log_plugin())
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "IWBTG Collection: player card".to_string(),
+                    resolution,
+                    ..default()
+                }),
+                ..default()
+            }),
+    )
     .add_plugins((crate::render_fix::plugin, UiKitPlugin))
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(Backdrop {

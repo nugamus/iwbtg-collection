@@ -2,14 +2,12 @@
 //!
 //! A package is read into [`PackageFiles`] (path to bytes), so the client, the server and WASM
 //! share one code path. [`check()`] validates it and returns readable [`Diagnostic`]s with file,
-//! line and column. [`load_game`] turns it into the `GameDef` the sim runs
-//! (docs/plans/sim-core.md 8): WP7a owns `load`, `sprites`, `masks`, `rooms`, `objects`,
-//! `order`, `vars` and `tracemap`; WP7b owns `physics`, `params`, `timelines`, `paths` and
-//! `sounds`.
+//! line and column. [`load_game`] turns it into the `GameDef` the sim runs (docs/format/v0.md).
 #![forbid(unsafe_code)]
 
 pub mod art;
 pub mod check;
+pub mod compat;
 pub mod diag;
 pub mod engine_pack;
 pub mod files;
@@ -18,11 +16,14 @@ pub mod ids;
 pub mod iwbz;
 pub mod key_art;
 pub mod manifest;
+pub mod migrate;
 pub mod number;
+/// The `iwbtg pkg` commands (#1120): the binary in `crates/tools` registers them.
+pub mod pkg_cmd;
 #[cfg(feature = "schema")]
 pub mod schema;
 
-// Loader (docs/plans/sim-core.md 8.1).
+// Loader (docs/format/v0.md).
 pub mod load;
 pub mod masks;
 pub mod objects;
@@ -43,6 +44,6 @@ pub mod vars;
 
 pub use check::check;
 pub use diag::{Diagnostic, Severity, has_errors};
-pub use files::{LoadError, PackageFiles};
+pub use files::{LoadError, PackageFiles, content_hash_asset, content_hash_file};
 pub use load::{LoadMode, load_game};
 pub use manifest::{FORMAT_VERSION, Manifest};

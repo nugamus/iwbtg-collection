@@ -1,17 +1,17 @@
 # Manifest: `game.toml`
 
-Part of [format v0](v0.md).
+Part of [format v0](v0.md); format 1 changes are in [v1](v1.md).
 
 ```toml
-#:schema ../../client/docs/format/schema/v0/game.schema.json
-format = 0                       # format major version (integer)
+#:schema ../../client/docs/format/schema/v1/game.schema.json
+format = 1                       # format major version (integer)
 id = "rely_the_needle"
 title = "I Wanna Rely The Needle"
 version = "1.0.0"                # version of our port (semver)
 source_version = "4.2"           # version of the original we ported
 engine_pack = "yuuutu"           # engine pack in games/_engines/, optional
-engine_rev = 1                   # built-in behavior revision this package was verified against
-runner = "gm80"                  # gm80 | gm81: original runner, selects event-order differences
+ruleset = "gm8@0"                # ruleset and built-in revision (decision 0005); format 0 wrote engine_rev = 0
+runner = "gm80"                  # gm80 | gm81 | gms: the original's runner, provenance (GMS keeps the GM8 defaults until research#179)
 physics = "physics.toml"
 start_room = "title"
 tick_rate = 50                   # default room speed; rooms may override
@@ -21,6 +21,17 @@ object_order = [                 # event and collision order; every kind used mu
   "save", "warp", "platform", "trigger", "@boss1",
 ]
 room_order = ["title", "room_1", "room_2"]   # optional; GM room order for room_goto_next/previous
+
+[compat]                         # decision 0005; required from format 1
+profile = "gm8/a1@1"             # the package's family bundle; format 0 may leave it out (inferred from the physics preset)
+
+[[compat.deviation]]             # one declared deviation from the ruleset's closed catalogue
+id = "save.position"
+value = "xy_base100_bytes"
+why = "the original stores the position in bytes"
+impact = "F1"
+evidence = "trace:rely/room-1"
+issue = 1234
 
 [engine]                         # optional; engine settings
 new_game_room = "room_1"         # where a new game starts; default start_room (with a warning)
@@ -130,8 +141,9 @@ Field rules:
 | `version` | yes | Semver of our port. For humans. |
 | `source_version` | no | Version of the original. |
 | `engine_pack` | no | Engine pack id ([engine packs](engine.md)); the pack must be bundled. |
-| `engine_rev` | yes | Built-in behavior revision ([architecture](../architecture/replay.md#versions)). |
-| `runner` | yes | `gm80` or `gm81`. **OPEN:** which differences it switches, from the CLONE_SPEC. |
+| `ruleset` | format 1: yes | `<name>@<rev>`: the ruleset and its built-in behavior revision ([architecture](../architecture/replay.md#versions), [below](#ruleset-and-compatibility-profile)). Format 0 may leave it out. |
+| `engine_rev` | format 0: yes | The format-0 spelling of the built-in revision. Format 1 refuses it: the revision is in `ruleset` ([v1](v1.md)). |
+| `runner` | yes | `gm80`, `gm81` or `gms` ([the runner field](#the-runner-field)). Records the original's runner for provenance: all three use the same simulation rules (research#15), and GMS keeps the GM8 defaults until research#179. A difference found later becomes a `RunnerRules` field. |
 | `physics` | yes | Path to the physics profile. |
 | `start_room` | yes | First room. |
 | `tick_rate` | no | Default room speed, 50 if absent. |
@@ -152,6 +164,22 @@ Field rules:
 | `[key_art]` | no | `image` (the game's key art) and `maps` (per-map overrides, map id to path). See [Key art](#key-art). |
 | `[controls]` | no | A label for each generic extra action the game uses: `extra1` to `extra4`, one line of 1 to 24 characters ("Teleport", "Nudge left"). The client shows a game's labels where the player binds keys and in the HUD's input display, and shows only the extra actions a game labels. Every extra action the game reads (its physics `events.keys`, its scripts) should have one. Labels are cosmetic: they are not in the gameplay hash. |
 | `[[third_party]]` | yes, one per file that is not the creator's own work or ours | `path`, `what`, `owner`, `license`, `status`. Commercial music, Kayin's sprites and engine assets all go here. |
+
+## The runner field
+
+`runner` records the original engine for provenance. It accepts `gm80`, `gm81` and `gms`. All three use the same simulation rules, and GMS keeps the GM8 defaults until research#179 settles its rule values; a difference found later becomes a `RunnerRules` field, never a branch in built-ins.
+
+Format 0 predates the `gms` value, so the frozen `docs/format/schema/v0/game.schema.json` deliberately stays without it: #982 added `gms` to `RunnerSchema` and `docs/format/schema/v1/` only. A format-0 package with `runner = "gms"` loads, but an editor pointed at the v0 schema will not complete it. Do not unfreeze v0 to add the value; [v1](v1.md) records the same decision.
+
+## Ruleset and compatibility profile
+
+Decision [0005](../decisions/0005-standard-mechanics.md) splits a package's behavior into a **ruleset** (the engine's semantic contract), an engine-defined **compatibility profile** (a data bundle inside that ruleset plus declared deviations) and `physics.toml` (per-game tuning and event lists). Both formats read the first two as declarations only; they cannot change a run until the profile layer can apply a value (#1160).
+
+- **`ruleset = "<name>@<rev>"`.** Required in format 1, where it replaces `engine_rev` ([v1](v1.md)). In format 0 it is optional: absent means `gm8` at the package's `engine_rev`, and a written revision must equal `engine_rev`, so `ruleset = "gm8@0"` is the explicit spelling of the absent field. The only ruleset this build implements is `gm8`; `standard@1` is not implemented yet.
+- **`[compat] profile = "<ruleset>/<family>@<n>"`** (`gm8/a1@1`). Required in format 1. In format 0, absent means the bundle of the physics preset's family: `a1` to `a5`, `b` or `c`. The known bundles are revision 1. A different family, an unknown name or another revision is an error. A profile is data: it cannot add code or supply a [runner-rule](../architecture/sim.md) value.
+- **`[[compat.deviation]]`** declares one difference the package keeps from the ruleset. Every entry has `id`, `value`, `why`, `impact` (`F1`, `F2` or `F3`), `evidence` and `issue`; a missing or empty provenance field is an error. The ids form a **closed catalogue** in `crates/format/src/compat.rs`: `save.position`, `jump.cancel`, `jump.air`, `jump.water_air`, `fall_cap.rule`, `flip.model`, `platform.take`, `ice.model`, `input.walk`, `input.vine_keys`, `vine.model`, `gravity.reapply`, `slope.mirror_contact` and `slope.downhill`. Each selects an existing enum value and no other field. An unknown id, a value of the wrong type, or a value outside the entry's set is an error.
+- **A declaration resolves to what the package already does** (both formats, until #1160's profile layer). The declared profile must name the physics preset's family, and each deviation must name the value the game's physics profile already resolves to (and no room profile may resolve it differently). Otherwise the loader errors with what the package resolves to. Because of that, `ruleset` and `[compat]` are removed before the `gameplay_hash` is computed: writing the explicit fields keeps the hash of the package without them. **The normalization stops there:** a declaration that changes behavior is a format-1 path and must enter `gameplay_hash` (user decision 2). Format 0 cannot hash one because it rejects it. Format 1 hashes `ruleset` and `[compat]` as written (they are no longer removed), so a later behavior-changing profile or deviation is a new board.
+- `iwbtg pkg check` prints the resolved values (`ruleset: gm8@0`, `profile: gm8/a1@1`, `deviation: save.position=xy_base100_bytes`).
 
 ## Timing triggers
 
@@ -174,7 +202,7 @@ A package holds every map of its game: each built-in difficulty, each category (
 - The loader resolves each map's triggers like `[timing]`'s (the vocabulary, and `enter_room` rooms must exist) and returns every map's chain (`LoadReport::maps`). It warns when an `enter_room` room cannot be reached ([Validation](validation.md) step 7).
 - `name`, `difficulty` and `category` are left out of the `gameplay_hash`, so renaming a map keeps its board; the timing keys count.
 - `stripped_start` is the map's ranked start point (`{ room, globals }`, [Stripped mode](#stripped-mode)): how the map selects the original's difficulty or version once the menus are cut. Keys it leaves out come from `[stripped].start`; `globals` merge by name, the map's value winning. A Play original run picks the difficulty in the game's own menu, as the original does.
-- **Running a map** (#505). A run plays one map (`SimOptions::map`; the loader puts every map's chain and merged ranked start in `GameDef::maps`). Its splits and ranked time follow that map's chain, in both play modes; a ranked (stripped) run also starts at the map's `stripped_start`. Play original still starts in the game's own menu. A run with no map given plays the first map (`main` without `[[maps]]`); a map id the package does not have stops the run before its first tick. The replay header records the map id (replay format 5), and `iwbtg replay run --map` picks it for an `.inputs` file.
+- **Running a map** (#505). A run plays one map (`SimOptions::map`; the loader puts every map's chain and merged ranked start in `GameDef::maps`, leaves `GameDef::timing` at its default so the chain is never duplicated after load, and every reader goes through `GameDef::map_timing`; a definition built by hand with no maps uses `timing` as the fallback). Its splits and ranked time follow that map's chain, in both play modes; a ranked (stripped) run also starts at the map's `stripped_start`. Play original still starts in the game's own menu. A run with no map given plays the first map (`main` without `[[maps]]`); a map id the package does not have stops the run before its first tick. The replay header records the map id (replay format 5), and `iwbtg replay run --map` picks it for an `.inputs` file.
 
 ## Stripped mode
 
@@ -198,7 +226,7 @@ Ranked (stripped) mode plays the game without its frame: no title screen, menus,
 Key art is the picture behind every screen of the background system (game select, loading, gameplay, pause, results; [product](../product.md)) and on the game's panel in the game select list. It never changes the sim, so `[key_art]` and the image files are outside the `gameplay_hash`.
 
 - `image` and each `maps` value are paths inside the package to a PNG (the usual place is `art/`). They follow the image rules in [Assets](assets.md): at most 4096 px on a side.
-- Recommended: **1920 x 1080 (16:9)**, the size the M4 mockups are drawn at (`docs/design/mockups/m4/`). The client scales it to cover the window, crops what does not fit, blurs it with the player's blur slider and dims it, so keep the subject near the centre and avoid small text. A picture that is not 16:9 (within 1%) or smaller than 1280 x 720 gets a warning.
+- Recommended: **1920 x 1080 (16:9)**, the size the phase 6 mockups are drawn at (`docs/design/mockups/m4/`). The client scales it to cover the window, crops what does not fit, blurs it with the player's blur slider and dims it, so keep the subject near the centre and avoid small text. A picture that is not 16:9 (within 1%) or smaller than 1280 x 720 gets a warning.
 - `maps` keys are map ids. A map with an entry shows that picture; every other map and the game itself show `image`. The loader rejects a key that is not a map id of the package (`main` when there is no `[[maps]]`).
 - **Fallback** when there is no key art for the game or map: the background of the first ranked room. That room is the `[timing].start` room when the start trigger is `enter_room`, else `[engine].new_game_room`, else `start_room`. Its first background layer behind the instances (the `background` key, or the first `backgrounds` entry without `foreground`; image `backgrounds/<id>.png`) is used if it has one, else its `background_color`, else the client's own default backdrop. `iwbtg_format::key_art::resolve` gives the client this choice.
 - `iwbtg pkg check` checks each path (inside the package, not under `tests/`, ends in `.png`, present), decodes the image, and checks its size.

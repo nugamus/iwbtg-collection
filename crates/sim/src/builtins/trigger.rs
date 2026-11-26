@@ -1,6 +1,5 @@
-//! Built-in `trigger` (mechanics `trigger`; docs/plans/sim-core.md 6.1; docs/format/builtins/
-//! trigger.md): five models, state in `MechGlobals` or in the trigger instances. Tier 2. WP0
-//! creates the file; WP6b owns it.
+//! Built-in `trigger` (mechanics `trigger`; docs/architecture/sim/builtins.md; docs/format/builtins/
+//! trigger.md): five models, state in `MechGlobals` or in the trigger instances. Tier 2.
 //!
 //! A touch by either kid (the collision event) does, per `model`:
 //!
@@ -52,51 +51,67 @@ const SPECS: &[ParamSpec] = &[
         name: "trg",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "model",
         ty: ParamType::Enum(MODELS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "need_key",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "group",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "array",
         ty: ParamType::Enum(ARRAYS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "reset",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "one_shot_destroy",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "sets_frame",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "size",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

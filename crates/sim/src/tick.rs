@@ -1,15 +1,14 @@
-//! The tick pipeline (docs/plans/sim-core.md 2.1, 2.2).
+//! The tick pipeline (docs/architecture/sim/tick.md).
 //!
-//! One function per row of the table in plan 2.1 (`events::run_phase_with`). Phase placement
+//! One function per row of the table in docs/architecture/sim/tick.md (`events::run_phase_with`). Phase placement
 //! that the spec marks Inferred or UNKNOWN is a `TickRules` field, never an `if` in built-ins.
-//! WP0 declared; WP1 owns.
 //!
 //! CLONE_SPEC tick loop, Confirmed (recorder) order (traces/rely-the-needle-4-2/t-evo-1.csv):
 //! `xprevious`/`yprevious` at tick start, Begin Step, timeline moments, Alarm, Keyboard, Step,
 //! motion, End of Path, Outside Room, Intersect Boundary, Collision, End Step, Draw, then the
 //! animation update with Animation End; then the destroy sweep and the room change.
 //!
-//! [`Hooks`] holds the calls into modules other WPs own, so the pipeline runs with test
+//! [`Hooks`] holds the calls into the other modules, so the pipeline runs with test
 //! stand-ins (the `Probe` built-in) before they merge; [`Hooks::ENGINE`] is the real set.
 
 use crate::collide::{bbox, overlap, resolve};
@@ -20,7 +19,9 @@ use crate::input::InputFrame;
 use crate::motion::{self, MotionEvents};
 use crate::num::Real;
 use crate::room::{self, RoomRequest};
-use crate::rules::tick::{AnimSlot, BoundarySlot, DirectLatch, PrevCapture, TickRules};
+use crate::rules::tick::{
+    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, PrevCapture, TickRules, TimelineSlot, TimingRules,
+};
 use crate::sound;
 use crate::stripped;
 use crate::timing::{self, Split};
@@ -33,14 +34,14 @@ pub type EventRun<'r> = &'r mut dyn FnMut(&mut Ctx) -> Flow;
 /// The pipeline's calls into other WPs' modules, as plain function pointers.
 #[derive(Clone, Copy, Debug)]
 pub struct Hooks {
-    /// `xprevious = x; yprevious = y` (WP2 `Motion::capture_previous`).
+    /// `xprevious = x; yprevious = y` (`Motion::capture_previous`).
     pub capture_previous: fn(&mut Ctx, InstId) -> Result<(), SimError>,
-    /// Automatic motion of one instance (WP2 `motion::apply_auto_motion`).
+    /// Automatic motion of one instance (`motion::apply_auto_motion`).
     pub auto_motion: fn(&mut Ctx, InstId) -> Result<MotionEvents, SimError>,
-    /// The instance's box at its position, room space, inclusive (WP3 `bbox::instance_box`);
+    /// The instance's box at its position, room space, inclusive (`bbox::instance_box`);
     /// `None` without a mask.
     pub bbox: fn(&Ctx, InstId) -> Result<Option<IRect>, SimError>,
-    /// Whether two instances overlap at their positions (WP3 `overlap::overlaps`).
+    /// Whether two instances overlap at their positions (`overlap::overlaps`).
     pub overlaps: fn(&Ctx, InstId, InstId) -> Result<bool, SimError>,
     /// True when `overlaps` is the engine's test (or answers like it): two instances overlap
     /// only when their collision boxes (`bbox::instance_box`) intersect. The collision phase
@@ -48,15 +49,15 @@ pub struct Hooks {
     /// instance, for stand-in overlap tests and as the reference the differential test compares
     /// against.
     pub broadphase: bool,
-    /// The solid put-back around one collision event (WP3 `resolve::solid_resolve`).
+    /// The solid put-back around one collision event (`resolve::solid_resolve`).
     pub solid_resolve: fn(&mut Ctx, InstId, InstId, EventRun) -> Result<Flow, SimError>,
-    /// View follow, once per tick before the Draw slot (WP4b `view::follow_update`, R19).
+    /// View follow, once per tick before the Draw slot (`view::follow_update`, R19).
     pub view_follow: fn(&mut Ctx) -> Result<(), SimError>,
-    /// The room change sequence (WP4a `room::perform_change`).
+    /// The room change sequence (`room::perform_change`).
     pub room_change: fn(&mut Ctx, RoomRequest) -> Result<(), SimError>,
-    /// Sound expiry, once per tick at row 16 (WP10 `sound::tick`).
+    /// Sound expiry, once per tick at row 16 (`sound::tick`).
     pub sound_tick: fn(&mut Ctx),
-    /// Timing triggers at row 16 (WP8b `timing::evaluate`).
+    /// Timing triggers at row 16 (`timing::evaluate`).
     pub timing: fn(&mut World, &GameDef) -> Result<Vec<Split>, SimError>,
 }
 
@@ -130,6 +131,10 @@ pub fn run_tick(ctx: &mut Ctx, input: InputFrame) -> Result<Vec<Split>, SimError
 /// 2-13 is skipped and the tick goes on at row 14. Row 15 resets `room_tick` to 0 after a room
 /// change; otherwise row 16 counts it up.
 pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<Vec<Split>, SimError> {
+    debug_assert!(
+        ctx.rules.tick.timing.all_ticks(),
+        "the sim advances timed systems in ticks only (TimingRules)"
+    );
     if run_rows(ctx, input, hooks).is_none() {
         return Ok(Vec::new());
     }
@@ -191,34 +196,7 @@ pub fn finish_tick(ctx: &mut Ctx, hooks: &Hooks) -> Result<Vec<Split>, SimError>
 /// `None` when the sim halted.
 fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
     let rules = &ctx.rules.tick;
-    let (prev, anim, boundary) = (rules.prev_capture, rules.anim_slot, rules.boundary_slot);
-    let mut plan: Vec<Phase> = Vec::with_capacity(14);
-    if prev == PrevCapture::TickStart {
-        plan.push(Phase::CapturePrevious);
-    }
-    plan.extend([
-        Phase::BeginStep,
-        Phase::Timelines,
-        Phase::Alarms,
-        Phase::Keyboard,
-        Phase::Mouse,
-        Phase::Step,
-        Phase::Motion,
-    ]);
-    if anim == AnimSlot::AfterMotion {
-        plan.push(Phase::Animation);
-    }
-    if boundary == BoundarySlot::AfterMotion {
-        plan.push(Phase::Boundary);
-    }
-    plan.push(Phase::Collision);
-    if boundary == BoundarySlot::AfterCollision {
-        plan.push(Phase::Boundary);
-    }
-    plan.extend([Phase::EndStep, Phase::Draw]);
-    if anim == AnimSlot::AfterDraw {
-        plan.push(Phase::Animation);
-    }
+    let plan = phase_plan(rules.prev_capture, rules.boundary_slot, &rules.timing);
     for phase in plan {
         if phase == Phase::Draw
             && let Err(e) = (hooks.view_follow)(ctx)
@@ -241,6 +219,45 @@ fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
     Some(())
 }
 
+/// R30: the one phase plan for rows 1-13 (decision 0005, "One scheduler").
+///
+/// Every timed system advances exactly once per tick. `TimingRules` decides where the timeline
+/// and animation phases sit and declares their unit; paths advance inside [`Phase::Motion`] and
+/// alarms have their own phase. The non-timer phases keep their recorded slots (`prev_capture`,
+/// `boundary_slot`).
+fn phase_plan(prev: PrevCapture, boundary: BoundarySlot, timing: &TimingRules) -> Vec<Phase> {
+    let mut plan: Vec<Phase> = Vec::with_capacity(14);
+    if prev == PrevCapture::TickStart {
+        plan.push(Phase::CapturePrevious);
+    }
+    plan.push(Phase::BeginStep);
+    if timing.timeline_slot == TimelineSlot::AfterBeginStep {
+        plan.push(Phase::Timelines);
+    }
+    plan.extend([
+        Phase::Alarms,
+        Phase::Keyboard,
+        Phase::Mouse,
+        Phase::Step,
+        Phase::Motion,
+    ]);
+    if timing.anim_slot == AnimSlot::AfterMotion {
+        plan.push(Phase::Animation);
+    }
+    if boundary == BoundarySlot::AfterMotion {
+        plan.push(Phase::Boundary);
+    }
+    plan.push(Phase::Collision);
+    if boundary == BoundarySlot::AfterCollision {
+        plan.push(Phase::Boundary);
+    }
+    plan.extend([Phase::EndStep, Phase::Draw]);
+    if timing.anim_slot == AnimSlot::AfterDraw {
+        plan.push(Phase::Animation);
+    }
+    plan
+}
+
 /// Row 11b: the particle update, once per tick after End Step and before Draw (CLONE_SPEC
 /// numbers, Confirmed (recorder), "Particle draw rules" 1; N10). Only with
 /// `NumRules::particles_draw_rng` (on in engine_rev 0). A tick that a room request ended at an earlier row skips it
@@ -252,6 +269,20 @@ fn particle_update(ctx: &mut Ctx) -> Result<(), SimError> {
     }
     let w = &mut *ctx.w;
     w.particles.update(&mut w.rng)
+}
+
+/// One second on the run's clock, in ticks (R30, decision 0005).
+///
+/// Under [`ClockPolicy::Fixed`] (`standard`) it is the package's
+/// [`GameDef::tick_rate`](crate::def::GameDef::tick_rate). Under the legacy [`ClockPolicy::RoomSpeed`]
+/// (`gm8`, the default for every current package) it is `World::room_speed`: the room file's
+/// speed on entry and the tick rate after the world's Room Start (R14). The play timer and
+/// `time_limit` re-arm with this value; no other sim system needs a second.
+pub fn second_ticks(def: &GameDef, rules: &TickRules, w: &World) -> Real {
+    match rules.timing.clock {
+        ClockPolicy::Fixed => Real::new(f64::from(def.tick_rate)),
+        ClockPolicy::RoomSpeed => w.room_speed,
+    }
 }
 
 /// GML `fps` (R28, Design): the game's tick rate, never a measured frame rate; 0 during the

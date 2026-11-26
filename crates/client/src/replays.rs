@@ -75,9 +75,11 @@ struct Recording {
     inputs: Vec<InputFrame>,
     splits: Vec<(u16, u64)>,
     checkpoints: Vec<(u64, [u8; 16])>,
-    /// Ticks recorded since the last write.
+    /// Ticks recorded since the last successful data write.
     unsaved: bool,
-    /// Written at least once (so it is in the index).
+    /// The replay's bytes have been written at least once.
+    stored: bool,
+    /// The index write has succeeded (so it is in the index).
     listed: bool,
     /// A ranked run's clear: nothing more is recorded.
     closed: bool,
@@ -101,6 +103,10 @@ pub struct Recorder {
     prune: bool,
     /// The run's pauses so far (`pause::Menu::pauses`), for the trailer.
     pauses: Vec<(u64, u64)>,
+    /// Replays whose bytes are stored but whose index write has not succeeded yet, oldest first.
+    /// Kept across [`Recorder::finish`] (a finished run is no longer `current`) and retried at
+    /// every later write, so a transient index failure does not orphan the replay (#1012).
+    unlisted: Vec<String>,
 }
 
 impl Recorder {
@@ -115,6 +121,7 @@ impl Recorder {
             skip: false,
             prune: cfg!(all(target_arch = "wasm32", target_os = "unknown")),
             pauses: Vec::new(),
+            unlisted: Vec::new(),
         }
     }
 
@@ -192,12 +199,12 @@ impl Recorder {
     /// replayed.
     fn begin(&mut self, sim: &Sim) -> Option<Recording> {
         let options = sim.options();
+        let def = sim.def();
         let start_mode = match &options.start {
             StartPoint::NewGame { .. } => StartMode::NewGame,
-            StartPoint::FromSave(slot) => StartMode::FromSave(postcard::to_stdvec(slot).ok()?),
+            StartPoint::FromSave(checkpoint) => StartMode::FromSave(checkpoint.encode().ok()?),
             _ => return None,
         };
-        let def = sim.def();
         let header = Header {
             magic: MAGIC,
             replay_format: REPLAY_FORMAT,
@@ -220,6 +227,7 @@ impl Recorder {
             splits: Vec::new(),
             checkpoints: Vec::new(),
             unsaved: false,
+            stored: false,
             listed: false,
             closed: false,
             ended: false,
@@ -242,61 +250,117 @@ impl Recorder {
         }
     }
 
-    /// Writes the replay when it has unsaved ticks, lists it in the index the first time and
-    /// prints one line with the final hash (`iwbtg replay verify` prints the same).
+    /// Writes the replay when it has unsaved ticks, then lists every stored replay that is not
+    /// in the index yet and prints one line per data write with the final hash (`iwbtg replay
+    /// verify` prints the same).
+    ///
+    /// The two writes are independent (#1012): a failed data write leaves `unsaved` set, and a
+    /// failed index write leaves the name in `unlisted`, so a later flush retries it even when
+    /// the data is clean or the run has already finished.
     fn write(&mut self, sim: &Sim) {
-        let (Some(store), Some(rec)) = (&self.store, self.current.as_mut()) else {
+        let Some(store) = self.store.clone() else {
             return;
         };
-        if !rec.unsaved || rec.inputs.is_empty() {
-            return;
-        }
-        let final_hash = sim.state_hash();
-        let replay = Replay {
-            header: rec.header.clone(),
-            inputs: rec.inputs.clone(),
-            trailer: Trailer {
-                total_ticks: rec.inputs.len() as u64,
-                splits: rec.splits.clone(),
-                ranked_ticks: sim.ranked_ticks(),
-                // A pause the menu counted after the last recorded tick (none can: the menu
-                // counts only while the sim runs, and the sim ticks after it) is dropped rather
-                // than making the file invalid.
-                pauses: self
-                    .pauses
-                    .iter()
-                    .copied()
-                    .filter(|p| p.0 <= rec.inputs.len() as u64)
-                    .collect(),
-                checkpoints: rec.checkpoints.clone(),
-                final_hash,
-            },
-        };
-        let bytes = match replay.encode() {
-            Ok(b) => b,
-            Err(e) => {
-                storage::warn(&format!("replay not saved: {e}"));
-                return;
+        let mut printed = None;
+        if let Some(rec) = self.current.as_mut() {
+            if rec.unsaved && !rec.inputs.is_empty() {
+                let final_hash = sim.state_hash();
+                let replay = Replay {
+                    header: rec.header.clone(),
+                    inputs: rec.inputs.clone(),
+                    trailer: Trailer {
+                        total_ticks: rec.inputs.len() as u64,
+                        splits: rec.splits.clone(),
+                        ranked_ticks: sim.ranked_ticks(),
+                        // A pause the menu counted after the last recorded tick (none can: the
+                        // menu counts only while the sim runs, and the sim ticks after it) is
+                        // dropped rather than making the file invalid.
+                        pauses: self
+                            .pauses
+                            .iter()
+                            .copied()
+                            .filter(|p| p.0 <= rec.inputs.len() as u64)
+                            .collect(),
+                        checkpoints: rec.checkpoints.clone(),
+                        final_hash,
+                    },
+                };
+                match replay.encode() {
+                    Ok(bytes) => {
+                        let written = match store.write(&rec.name, &bytes) {
+                            Ok(()) => Ok(()),
+                            Err(e) => {
+                                // On the web a full quota is the common cause: make room by
+                                // removing eligible older replays, then retry once per removal.
+                                if self.prune {
+                                    recover_quota(&store, &rec.name, &bytes)
+                                        .map_err(|q| format!("{e}; {q}"))
+                                } else {
+                                    Err(e)
+                                }
+                            }
+                        };
+                        match written {
+                            Ok(()) => {
+                                rec.unsaved = false;
+                                rec.stored = true;
+                                printed = Some((
+                                    rec.name.clone(),
+                                    rec.inputs.len(),
+                                    bytes.len(),
+                                    final_hash,
+                                ));
+                            }
+                            Err(e) => storage::warn(&format!("replay not saved: {e}")),
+                        }
+                    }
+                    Err(e) => storage::warn(&format!("replay not saved: {e}")),
+                }
             }
-        };
-        if let Err(e) = store.write(&rec.name, &bytes) {
-            storage::warn(&format!("replay not saved: {e}"));
-            return;
-        }
-        rec.unsaved = false;
-        eprintln!(
-            "replay: {} ({} ticks, {} bytes) hash {}",
-            store.describe(&rec.name),
-            rec.inputs.len(),
-            bytes.len(),
-            hex(&final_hash)
-        );
-        if !rec.listed {
-            rec.listed = true;
-            if let Err(e) = list(store, &rec.name, self.prune.then_some(WEB_KEEP)) {
-                storage::warn(&format!("replay index {e}"));
+            if rec.stored && !rec.listed && !self.unlisted.contains(&rec.name) {
+                self.unlisted.push(rec.name.clone());
             }
         }
+        if let Some((name, ticks, bytes, hash)) = printed {
+            eprintln!(
+                "replay: {} ({} ticks, {} bytes) hash {}",
+                store.describe(&name),
+                ticks,
+                bytes,
+                hex(&hash)
+            );
+        }
+        self.flush_index();
+    }
+
+    /// Retries the index update of every stored replay that is not listed yet. [`list`] drops an
+    /// existing copy of the name before appending it, so a retry never lists a name twice.
+    fn flush_index(&mut self) {
+        if self.unlisted.is_empty() {
+            return;
+        }
+        let Some(store) = self.store.clone() else {
+            self.unlisted.clear();
+            return;
+        };
+        let keep = self.prune.then_some(WEB_KEEP);
+        let mut failed = Vec::new();
+        for name in std::mem::take(&mut self.unlisted) {
+            match list(&store, &name, keep) {
+                Ok(()) => {
+                    if let Some(rec) = self.current.as_mut()
+                        && rec.name == name
+                    {
+                        rec.listed = true;
+                    }
+                }
+                Err(e) => {
+                    storage::warn(&format!("replay index {e}"));
+                    failed.push(name);
+                }
+            }
+        }
+        self.unlisted = failed;
     }
 }
 
@@ -350,6 +414,69 @@ fn to_remove<'a>(
     free.chain(ranked).take(excess).copied().collect()
 }
 
+/// Makes room for `bytes` under `name` by removing older replays no board protects, retrying the
+/// write after each removal. The eviction order is fixed by [`evictable`], so the pass is bounded
+/// by the index: each candidate is removed at most once.
+///
+/// A PB's replay and the replay being written are never removed. When `stats.toml` cannot be
+/// read nothing is removed (#607).
+fn recover_quota(store: &Store, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let text = store.read_text(INDEX)?.unwrap_or_default();
+    let names: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+    let Some((pbs, top)) = crate::stats::board_replays(store) else {
+        return Err("the stats boards cannot be read, so no replay can be safely removed".into());
+    };
+    let mut gone: Vec<&str> = Vec::new();
+    let mut failed = None;
+    for candidate in evictable(&names, name, &pbs, &top) {
+        if let Err(e) = store.remove(candidate) {
+            failed = Some(e);
+            continue;
+        }
+        gone.push(candidate);
+        if store.write(name, bytes).is_ok() {
+            let kept: Vec<&str> = names
+                .iter()
+                .copied()
+                .filter(|n| !gone.contains(n))
+                .collect();
+            let mut index = kept.join("\n");
+            if !index.is_empty() {
+                index.push('\n');
+            }
+            if let Err(e) = store.write_text(INDEX, &index) {
+                // The replay is saved; a later flush retries the index (#1012).
+                storage::warn(&format!("replay index {e}"));
+            }
+            return Ok(());
+        }
+    }
+    Err(match failed {
+        Some(e) => format!("removing the replays that may be removed did not make room ({e})"),
+        None => "no replay can be safely removed".into(),
+    })
+}
+
+/// The replays quota recovery may remove, in removal order: the oldest replays no board points
+/// at, then the oldest of the boards' top runs that are not a PB. The PB replays and `current`
+/// (the replay being written) never appear.
+fn evictable<'a>(
+    names: &[&'a str],
+    current: &str,
+    pbs: &BTreeSet<String>,
+    top: &BTreeSet<String>,
+) -> Vec<&'a str> {
+    let free = names
+        .iter()
+        .copied()
+        .filter(|n| *n != current && !pbs.contains(*n) && !top.contains(*n));
+    let ranked = names
+        .iter()
+        .copied()
+        .filter(|n| *n != current && top.contains(*n) && !pbs.contains(*n));
+    free.chain(ranked).collect()
+}
+
 /// Lowercase hex.
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -361,6 +488,23 @@ pub struct ReplaysPlugin {
     pub keep: bool,
 }
 
+/// The replays' place in the module list (main.rs): their plugin. A `--screenshot` check records none.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ReplaysPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for ReplaysPlugin {
     fn build(&self, app: &mut App) {
         let keep = self.keep;
@@ -368,7 +512,17 @@ impl Plugin for ReplaysPlugin {
         crate::shell::run_resource(app, move |w| {
             let store = if keep { Store::data() } else { None };
             let hash = w.resource::<crate::shell::LoadedPackage>().pkg.gameplay_hash;
-            Recorder::new(store, hash, crate::mods::RunMods::of(w))
+            let mods = crate::mods::RunMods::of(w);
+            let mut recorder = Recorder::new(store, hash, mods);
+            // Practice and Save states runs are never recorded: a restored state breaks an
+            // input-only replay (`docs/architecture/replay.md`).
+            let practice = w
+                .get_resource::<crate::practice::Practice>()
+                .is_some_and(|p| p.0);
+            if practice || mods.contains(iwbtg_sim::mods::Mod::SaveStates) {
+                recorder.skip = true;
+            }
+            recorder
         });
         app
             // Bevy's own exit on the last window closing runs in `Last` too; the app stops after
@@ -405,8 +559,17 @@ pub(crate) fn reset(world: &mut World) {
     if let Some(menu) = world.get_resource::<Menu>() {
         recorder.set_pauses(&menu.pauses);
     }
-    recorder.finish(&world.non_send::<Game>().sim);
+    recorder.finish(live_sim(world));
     world.insert_resource(recorder);
+}
+
+/// The run's own sim. While the replay viewer shows, `Game` holds the replayed sim instead
+/// (#42), so the live one comes from the viewer.
+fn live_sim(world: &World) -> &Sim {
+    match world.get_non_send::<crate::viewer::ViewerSim>() {
+        Some(viewing) => viewing.live_sim(),
+        None => &world.non_send::<Game>().sim,
+    }
 }
 
 /// Closing the window ends the run: its replay is written while the sim is still there.
@@ -415,12 +578,16 @@ fn finish_on_exit(
     game: NonSend<Game>,
     menu: Option<Res<Menu>>,
     mut recorder: ResMut<Recorder>,
+    viewing: Option<NonSend<crate::viewer::ViewerSim>>,
 ) {
     if exit.read().next().is_some() {
         if let Some(menu) = menu {
             recorder.set_pauses(&menu.pauses);
         }
-        recorder.finish(&game.sim);
+        let sim = viewing
+            .as_deref()
+            .map_or(&game.sim, crate::viewer::ViewerSim::live_sim);
+        recorder.finish(sim);
     }
 }
 
@@ -573,6 +740,50 @@ mod tests {
         assert!(store.read(&names[2]).unwrap().is_some());
     }
 
+    /// #1012: a replay whose bytes are stored while the index write fails is listed at a later
+    /// flush even though its data is clean, and retrying does not list the name twice.
+    #[test]
+    fn a_failed_index_write_is_retried_without_duplicates() {
+        let pkg = demo();
+        let store = temp("index-retry");
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 1,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+
+        // A directory in the index's place makes both its read and its write fail; the replay
+        // files themselves still go through.
+        let index_path = std::path::PathBuf::from(store.describe(INDEX));
+        std::fs::create_dir_all(&index_path).unwrap();
+
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let name = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        assert!(store.read(&name).unwrap().is_some(), "the replay bytes are stored");
+        assert!(store.read_text(INDEX).is_err(), "the index operation failed");
+
+        // Storage recovers: the next flush retries the index although the run has finished and
+        // its data is clean.
+        std::fs::remove_dir(&index_path).unwrap();
+        rec.finish(&sim);
+        assert_eq!(store.read_text(INDEX).unwrap().unwrap(), format!("{name}\n"));
+
+        // A later run lists itself after the retried name, exactly once.
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let second = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        assert_eq!(
+            store.read_text(INDEX).unwrap().unwrap(),
+            format!("{name}\n{second}\n")
+        );
+    }
+
     /// The issue's check (#607): 60 runs on the web, the first is the PB and the second the
     /// board's #2: both replays stay, the oldest of the others go.
     #[test]
@@ -656,6 +867,133 @@ mod tests {
         assert_eq!(to_remove(&names, 4, &pbs, &top), Vec::<&str>::new());
     }
 
+    /// Quota recovery never offers a PB or the replay being written: free replays go first, then
+    /// the other top runs.
+    #[test]
+    fn quota_eviction_order_skips_pbs_and_the_current_replay() {
+        let set = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<BTreeSet<String>>();
+        let names = ["a", "b", "c", "d", "e"];
+        let pbs = set(&["a"]);
+        let top = set(&["b", "d"]);
+        assert_eq!(evictable(&names, "e", &pbs, &top), vec!["c", "b", "d"]);
+        assert_eq!(evictable(&names, "d", &pbs, &top), vec!["c", "e", "b"]);
+    }
+
+    /// The bytes under a test root, matching `storage.rs`'s quota accounting.
+    fn usage(dir: &std::path::Path) -> u64 {
+        std::fs::read_dir(dir)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .map(|entry| {
+                        let path = entry.path();
+                        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                            usage(&path)
+                        } else {
+                            entry.metadata().map(|m| m.len()).unwrap_or(0)
+                        }
+                    })
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Three finished runs in a fresh test root, for the quota tests.
+    fn three_runs(root: &std::path::Path, pkg: &crate::package::Package) -> (Store, Vec<String>) {
+        let _ = std::fs::remove_dir_all(root);
+        let store = Store::at(root.to_path_buf());
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 1,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut names = Vec::new();
+        for _ in 0..3 {
+            let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+            play(&mut sim, &mut rec, 100);
+            names.push(rec.current_name().unwrap().to_owned());
+            rec.finish(&sim);
+        }
+        (store, names)
+    }
+
+    /// #1013: a full quota removes the oldest replay no board protects and then the write
+    /// succeeds; the evicted name leaves the index and the new replay is listed once.
+    #[test]
+    fn quota_recovery_evicts_the_oldest_unprotected_replay() {
+        let pkg = demo();
+        let root = std::env::temp_dir().join(format!(
+            "iwbtg-replays-test-{}-quota",
+            std::process::id()
+        ));
+        let (store, names) = three_runs(&root, &pkg);
+        assert_eq!(store.read_text(INDEX).unwrap().unwrap().lines().count(), 3);
+
+        // 64 spare bytes: room for the three runs but not for a fourth (each is larger).
+        let full = Store::at_with_quota(root.clone(), usage(&root) as usize + 64);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 2,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(full.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let new = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+
+        assert!(full.read(&new).unwrap().is_some(), "the new replay is stored");
+        assert_eq!(full.read(&names[0]).unwrap(), None, "the oldest is evicted");
+        assert!(full.read(&names[1]).unwrap().is_some());
+        assert!(full.read(&names[2]).unwrap().is_some());
+        assert_eq!(
+            full.read_text(INDEX).unwrap().unwrap(),
+            format!("{}\n{}\n{new}\n", names[1], names[2])
+        );
+    }
+
+    /// #1013: with `stats.toml` unreadable no replay may be removed (#607), so a full quota
+    /// stores nothing and leaves every old replay and the index alone.
+    #[test]
+    fn quota_recovery_without_safe_evictions_keeps_every_replay() {
+        let pkg = demo();
+        let root = std::env::temp_dir().join(format!(
+            "iwbtg-replays-test-{}-quota-none",
+            std::process::id()
+        ));
+        let (store, names) = three_runs(&root, &pkg);
+        store.write_text(crate::stats::FILE, "not = [toml").unwrap();
+        let before = store.read_text(INDEX).unwrap().unwrap();
+
+        let full = Store::at_with_quota(root.clone(), usage(&root) as usize + 64);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 2,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(full.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let new = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+
+        assert_eq!(full.read(&new).unwrap(), None, "nothing was stored");
+        for name in &names {
+            assert!(full.read(name).unwrap().is_some(), "{name} stays");
+        }
+        assert_eq!(full.read_text(INDEX).unwrap().unwrap(), before);
+    }
+
     /// A run that resumes the save file records the slot, so it can be replayed.
     #[test]
     fn a_run_from_a_save_keeps_the_slot() {
@@ -665,6 +1003,8 @@ mod tests {
             room: pkg.def.start_room,
             x: iwbtg_sim::num::Real::new(96.0),
             y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            point: None,
             flipped: false,
             facing: 1,
             difficulty: 0,
@@ -674,8 +1014,9 @@ mod tests {
             items: 0,
             clear: false,
         };
+        let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(&pkg.def, &slot).unwrap();
         let options = SimOptions {
-            start: StartPoint::FromSave(slot.clone()),
+            start: StartPoint::FromSave(checkpoint.clone()),
             seed: 0,
             dll_mode: DllMode::Model,
             mode: PlayMode::Original,
@@ -689,7 +1030,7 @@ mod tests {
         let replay = Replay::decode(&store.read(&name).unwrap().unwrap()).unwrap();
         assert_eq!(
             replay.header.start_mode,
-            StartMode::FromSave(postcard::to_stdvec(&slot).unwrap())
+            StartMode::FromSave(checkpoint.encode().unwrap())
         );
     }
 }

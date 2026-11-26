@@ -1,5 +1,5 @@
-//! Built-in `secret_item` (mechanics `secret_item`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/secret_item.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `secret_item` (mechanics `secret_item`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/secret_item.md). Tier 2.
 //!
 //! A kid touch sets `global.item[item_index]` and destroys it (KAE secretItem, WAN, LR, RBF
 //! secretitem1). Create removes it when the item is already taken. The sound (KAE plays one, RBF
@@ -17,16 +17,19 @@ const SPECS: &[ParamSpec] = &[
         name: "item_index",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "sprite",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

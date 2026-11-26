@@ -1,5 +1,5 @@
 //! Kid actions specific to family B (kid/B.md: the `cur_jumps` jump, the polling Alarm 0 cut;
-//! docs/plans/sim-core.md 5.3). WP5b owns it. `slope_b`, `set_view_angle` and the yflag flip are
+//! docs/architecture/sim/kid.md). `slope_b`, `set_view_angle` and the yflag flip are
 //! later sub-issues of #14.
 
 use serde::Deserialize;

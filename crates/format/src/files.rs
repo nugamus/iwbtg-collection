@@ -6,8 +6,19 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
 /// Folder inside a package that is never shipped or hashed (docs/format/v0.md, Package layout).
 pub const TESTS_DIR: &str = "tests/";
+
+/// Prefix that separates the content hash from every other hash (docs/format/versioning.md).
+const CONTENT_HASH_DOMAIN: &[u8] = b"iwbtg-content-hash v0\0";
+
+/// The package path [`content_hash_asset`] hashes an asset under. Assets key on their bytes
+/// alone, so the path is fixed and never comes from a caller. It has no extension, so no line-end
+/// normalization applies. It is part of every asset-index key (`iwbtg assets index`,
+/// docs/content.md), so it must not change within a format version.
+const ASSET_HASH_PATH: &str = "asset";
 
 /// Package folders whose files have a fixed role (docs/format/v0.md, Package layout). A file in
 /// one of them is never the physics profile.
@@ -133,23 +144,10 @@ impl PackageFiles {
     /// Windows line ends hashes like one with Unix line ends; every other file (PNG, Ogg) is
     /// hashed as it is.
     pub fn content_hash(&self) -> [u8; 32] {
-        use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
-        h.update(b"iwbtg-content-hash v0\0");
+        h.update(CONTENT_HASH_DOMAIN);
         for (path, bytes) in self.iter().filter(|(p, _)| !p.starts_with(TESTS_DIR)) {
-            let text = ["toml", "rhai", "md", "txt", "json"].iter().any(|e| {
-                path.rsplit_once('.')
-                    .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case(e))
-            });
-            let bytes: std::borrow::Cow<[u8]> = if text {
-                lf_normalized(bytes).into()
-            } else {
-                bytes.into()
-            };
-            h.update((path.len() as u64).to_le_bytes());
-            h.update(path.as_bytes());
-            h.update((bytes.len() as u64).to_le_bytes());
-            h.update(&*bytes);
+            hash_file(&mut h, path, bytes);
         }
         h.finalize().into()
     }
@@ -162,6 +160,48 @@ impl PackageFiles {
         load_into(&mut files, dir.as_ref(), "")?;
         Ok(files)
     }
+}
+
+/// The content hash of one file: [`PackageFiles::content_hash`] for a package holding only
+/// `path` with `bytes`. Same domain separation, same length-prefixed path-then-bytes framing, and
+/// the same extension-based line-end rule, so a caller that has one file does not build a
+/// throwaway package.
+pub fn content_hash_file(path: &str, bytes: &[u8]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(CONTENT_HASH_DOMAIN);
+    hash_file(&mut h, path, bytes);
+    h.finalize().into()
+}
+
+/// The content hash of one asset's bytes, using the format's fixed asset path. `iwbtg assets
+/// index` keys assets on their content alone, so it needs no package path (docs/content.md).
+/// Equal bytes always hash equally; the fixed path has no extension, so line ends are hashed as
+/// they are. This is byte-identical to a one-file package at that path, which keeps existing
+/// index keys stable (#1051).
+pub fn content_hash_asset(bytes: &[u8]) -> [u8; 32] {
+    content_hash_file(ASSET_HASH_PATH, bytes)
+}
+
+/// True when `path`'s extension marks a text file whose CRLF line ends are normalized.
+fn is_text_path(path: &str) -> bool {
+    ["toml", "rhai", "md", "txt", "json"].iter().any(|e| {
+        path.rsplit_once('.')
+            .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case(e))
+    })
+}
+
+/// Adds one file's contribution to a package content hash: the path and the bytes, each as an
+/// 8-byte little-endian length and then the bytes. Text files are LF-normalized first.
+fn hash_file(h: &mut Sha256, path: &str, bytes: &[u8]) {
+    let bytes: std::borrow::Cow<[u8]> = if is_text_path(path) {
+        lf_normalized(bytes).into()
+    } else {
+        bytes.into()
+    };
+    h.update((path.len() as u64).to_le_bytes());
+    h.update(path.as_bytes());
+    h.update((bytes.len() as u64).to_le_bytes());
+    h.update(&*bytes);
 }
 
 /// `bytes` with every CR LF pair (0x0D 0x0A) turned into a single LF.
@@ -317,5 +357,77 @@ mod tests {
         let files = PackageFiles::load_dir(dir).expect("fixture loads");
         assert!(files.contains("game.toml"));
         assert!(files.contains("rooms/title.toml"));
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn content_hash_file_is_a_one_file_package_hash() {
+        for (path, bytes) in [
+            ("rooms/a.toml", b"a\r\nb".as_slice()),
+            ("sprites/kid.png", b"same".as_slice()),
+        ] {
+            let mut one = PackageFiles::new();
+            one.insert(path, bytes.to_vec()).expect("valid path");
+            assert_eq!(
+                content_hash_file(path, bytes),
+                one.content_hash(),
+                "the helper must share the package framing and line-end rule for {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn content_hash_file_pins_the_per_file_frame() {
+        // SHA-256 of `iwbtg-content-hash v0\0`, then len+path and len+bytes, each length 8-byte
+        // little-endian. `a\r\nb` is text by extension, so it is hashed as `a\nb`.
+        assert_eq!(
+            hex(&content_hash_file("rooms/a.toml", b"a\r\nb")),
+            "537744c2b0748f4dfab28486433c518a6ed2fcfd31370ebd382d159f14718493"
+        );
+        // A binary extension keeps the CRLF bytes as they are.
+        assert_eq!(
+            hex(&content_hash_file("sprites/kid.png", b"same")),
+            "6bda90641b460513b4309d0a072ab8dd4fd729b1624dd29469c6ef2f9c2326cf"
+        );
+    }
+
+    #[test]
+    fn content_hash_asset_pins_bytes_only_hashing() {
+        assert_eq!(
+            hex(&content_hash_asset(b"same")),
+            "7f83fa02761f71e6de4eb227049fd7b0942fba888219a80d66f97946715f2a44"
+        );
+        assert_eq!(content_hash_asset(b"same"), content_hash_asset(b"same"));
+        assert_ne!(content_hash_asset(b"same"), content_hash_asset(b"other"));
+        // The fixed asset path has no extension, so CRLF is hashed as it is.
+        assert_ne!(content_hash_asset(b"a\r\nb"), content_hash_asset(b"a\nb"));
+    }
+
+    #[test]
+    fn content_hash_asset_keeps_existing_package_hashes() {
+        // `assets index` used to hash each asset as a one-file package at path `asset`. The
+        // helper must give byte-identical keys, so no existing index moves (#1051).
+        let legacy = |bytes: &[u8]| {
+            let mut one = PackageFiles::new();
+            one.insert("asset", bytes.to_vec())
+                .expect("`asset` is a valid path");
+            one.content_hash()
+        };
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/valid/full");
+        let files = PackageFiles::load_dir(dir).expect("fixture loads");
+        let mut assets = 0;
+        for (path, bytes) in files.iter() {
+            let is_asset = path
+                .rsplit_once('.')
+                .is_some_and(|(_, ext)| ["png", "ogg"].iter().any(|a| ext.eq_ignore_ascii_case(a)));
+            if is_asset {
+                assert_eq!(content_hash_asset(bytes), legacy(bytes), "{path}");
+                assets += 1;
+            }
+        }
+        assert!(assets > 0, "the fixture package has assets to hash");
     }
 }

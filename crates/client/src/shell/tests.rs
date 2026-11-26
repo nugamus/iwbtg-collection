@@ -1,6 +1,8 @@
 //! The shell without a window: runs open and close and leave nothing behind.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use bevy::audio::AudioSource;
@@ -9,6 +11,7 @@ use bevy::state::app::StatesPlugin;
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::FileDragAndDrop;
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::stripped::PlayMode;
 
 use super::*;
 use crate::view::{Game, GameCamera, Textures};
@@ -57,6 +60,7 @@ fn app_on(skip_loading: bool, first: Option<&str>) -> App {
             ShellPlugin {
                 library,
                 trace_mode: false,
+                menu: false,
             },
             crate::bindings::BindingsPlugin(crate::bindings::Bindings::default()),
             crate::art::ArtPlugin,
@@ -101,10 +105,39 @@ fn counts(app: &mut App) -> (usize, usize, usize) {
     (entities, images, sounds)
 }
 
+/// Waits until the select screen's preview worker has delivered everything it asked for, so an
+/// asset count is not compared across a preview arriving (#1593).
+fn settle_previews(app: &mut App) {
+    app.update();
+    for _ in 0..2000 {
+        app.update();
+        let Some(lib) = app.world().get_resource::<select::library::Library>() else {
+            return;
+        };
+        if !lib.busy() {
+            app.update();
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("the select screen's previews never settled");
+}
+
 fn frames(app: &mut App, n: usize) {
     for _ in 0..n {
         app.update();
     }
+}
+
+/// Updates until the staged start's worker has delivered and `poll_start` took it.
+fn wait_for_stage(app: &mut App) {
+    for _ in 0..2000 {
+        if !app.world().contains_resource::<PendingStart>() {
+            return;
+        }
+        app.update();
+    }
+    panic!("the staged start never finished");
 }
 
 /// Plays `pkg` for two seconds and checks it is running, then leaves it.
@@ -139,6 +172,7 @@ fn two_runs_leave_nothing_behind() {
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+    settle_previews(&mut app);
     let before = counts(&mut app);
     play_and_leave(&mut app, "tests/fixtures/audio.pkg");
     assert_eq!(counts(&mut app), before, "after A: (entities, images, sounds)");
@@ -157,6 +191,7 @@ fn two_runs_leave_nothing_behind() {
 fn a_run_holds_images_and_sounds() {
     let mut app = app();
     frames(&mut app, 3);
+    settle_previews(&mut app);
     let before = counts(&mut app);
     start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
     frames(&mut app, 100);
@@ -194,6 +229,35 @@ fn package_id(app: &App) -> String {
 
 fn tick(app: &App) -> u64 {
     app.world().non_send::<Game>().sim.world().tick
+}
+
+/// Results' Back/Escape closes a finished run rather than resuming it (#1553): game select
+/// with a list, the client's exit without one.
+#[test]
+fn results_back_leaves_the_finished_run() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 3);
+    crate::results::preview_next(app.world_mut(), crate::results::Scenario::Pb);
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Results);
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "the finished run goes back to game select"
+    );
+
+    // Without --select the client plays one package: the finished run closes the client.
+    let mut app = app_on(true, Some("tests/fixtures/clear.pkg"));
+    frames(&mut app, 3);
+    crate::results::preview_next(app.world_mut(), crate::results::Scenario::Pb);
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Results);
+    press(&mut app, KeyCode::Escape);
+    assert_eq!(app.should_exit(), Some(AppExit::Success), "it does not resume");
 }
 
 /// A package dropped during a run replaces it in the same app (#841): the old run closes, the new
@@ -251,14 +315,16 @@ fn map_id(app: &App) -> String {
     app.world().non_send::<Game>().sim.map_id().to_owned()
 }
 
-/// Starting a map by id plays that map (#880); no id is the first map.
+/// Starting a map by id plays that map (#880); no id is the first map. The select screen stages
+/// the start, so the run opens a few frames later.
 #[test]
 fn start_map_plays_the_picked_map() {
     let mut app = app();
     frames(&mut app, 3);
     let pkg = demo("tests/fixtures/maps.pkg");
-    start_map(app.world_mut(), &pkg, Some("hard")).unwrap();
-    frames(&mut app, 3);
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Original, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 2);
     assert_eq!(map_id(&app), "hard");
     leave(app.world_mut());
     frames(&mut app, 3);
@@ -267,18 +333,422 @@ fn start_map_plays_the_picked_map() {
     assert_eq!(map_id(&app), "medium", "no id: the first map");
 }
 
-/// A map the package does not have is an error and nothing changes.
+/// A save state is the world: `Sim::snapshot` and `Sim::restore` round-trip the state hash and
+/// the tick, and `F5`/`F6` in a practice run save and load it (#39).
 #[test]
-fn start_map_refuses_an_unknown_map() {
+fn a_save_state_restores_the_world_and_f5_f6_use_it() {
     let mut app = app();
     frames(&mut app, 3);
-    let err = start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope")).unwrap_err();
-    assert!(err.to_string().contains("nope"), "{err}");
+    app.world_mut()
+        .insert_resource(crate::practice::Practice(true));
+    start(app.world_mut(), &demo("tests/fixtures/maps.pkg")).unwrap();
+    frames(&mut app, 20);
+    // The press's frame ticks before the key system saves, so read the state after it.
+    press(&mut app, crate::practice::SAVE_STATE_KEY);
+    let saved_tick = tick(&app);
+    let saved_hash = {
+        let game = app.world().non_send::<Game>();
+        iwbtg_sim::hash::state_hash(game.sim.world())
+    };
+    frames(&mut app, 20);
+    assert!(tick(&app) > saved_tick, "the run went on");
+
+    press(&mut app, crate::practice::LOAD_STATE_KEY);
+    assert_eq!(tick(&app), saved_tick, "F6 restored the tick");
+    let game = app.world().non_send::<Game>();
+    assert_eq!(
+        iwbtg_sim::hash::state_hash(game.sim.world()),
+        saved_hash,
+        "and the whole state"
+    );
+    }
+
+/// A finished run's clear does not follow the player into the next run: starting again from
+/// game select begins in `Playing` with no results page and no remembered clear (#1551).
+#[test]
+fn a_new_run_from_select_does_not_open_the_old_results() {
+    use crate::stats::{
+        Board, Cleared, DeathLog, MapStats, Recorded, Run, Stats, board_key, map_key,
+    };
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 5);
+    let map = map_key("demo_clear", "main");
+    let board = board_key(false, "NM");
+    let run = Run {
+        ticks: 3000,
+        deaths: 0,
+        splits: vec![1500, 3000],
+        segment_deaths: vec![0, 0],
+        finished_at: 0,
+        replay: None,
+        death_log: DeathLog::default(),
+    };
+    {
+        let mut stats = app.world_mut().resource_mut::<Stats>();
+        let mut map_stats = MapStats {
+            game: "demo_clear".to_owned(),
+            tick_rate: 50,
+            clears: 1,
+            ..Default::default()
+        };
+        map_stats.boards.insert(
+            board.clone(),
+            Board {
+                clears: 1,
+                runs: vec![run.clone()],
+                ..Default::default()
+            },
+        );
+        stats.book.maps.insert(map.clone(), map_stats);
+        stats.last = Some(Recorded {
+            pb_before: None,
+            pb_splits_before: Vec::new(),
+            is_pb: false,
+            gold: vec![false, false],
+            place: Some(1),
+            sum_of_best_before: None,
+            sum_of_best: None,
+        });
+        stats.cleared = Some(Cleared {
+            map,
+            board,
+            run,
+        });
+    }
     frames(&mut app, 2);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Results,
+        "the recorded clear opens the page"
+    );
+
+    // Leave for game select, as the results' quit does, and start the same package again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
     assert_eq!(
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+    assert!(
+        app.world().resource::<Stats>().cleared.is_none(),
+        "leaving the run forgets its clear"
+    );
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/clear.pkg"),
+        None,
+        PlayMode::Original,
+        None,
+    );
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Playing,
+        "the new run does not open the old results"
+    );
+
+    // And a different package after leaving again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/audio.pkg"),
+        None,
+        PlayMode::Original,
+        None,
+    );
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(screen(&app), RunScreen::Playing);
+}
+
+/// The select screen's two buttons choose the play mode (#43): Ranked is stripped and starts at
+/// the ranked start, Play original is the game as ported.
+#[test]
+fn start_map_plays_the_chosen_mode() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let pkg = demo("tests/fixtures/maps.pkg");
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Stripped, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 2);
+    {
+        let sim = &app.world().non_send::<Game>().sim;
+        assert_eq!(sim.options().mode, PlayMode::Stripped);
+        assert_eq!(
+            sim.def().room(sim.world().room).map(|r| r.name.as_str()),
+            Some("goal"),
+            "the ranked start room"
+        );
+    }
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Original, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 2);
+    let sim = &app.world().non_send::<Game>().sim;
+    assert_eq!(sim.options().mode, PlayMode::Original);
+    assert_eq!(
+        sim.def().room(sim.world().room).map(|r| r.name.as_str()),
+        Some("stage"),
+        "Play original's new game room"
+    );
+}
+
+/// A map the package does not have is reported by the staged start and nothing changes.
+#[test]
+fn start_map_refuses_an_unknown_map() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/maps.pkg"),
+        Some("nope"),
+        PlayMode::Original,
+        None,
+    );
+    wait_for_stage(&mut app);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    assert!(
+        !app.world().resource::<Messages<StartFailed>>().is_empty(),
+        "the failure is reported"
+    );
+}
+
+/// A staged start keeps the run on screen playing until its package is ready, then swaps in the
+/// same run `shell::start` would build, atomically (one camera, the new sim from its first tick).
+#[test]
+fn a_staged_start_keeps_the_run_until_it_is_ready() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
+    frames(&mut app, 20);
+    assert_eq!(package_id(&app), "demo_audio");
+    let ticked = tick(&app);
+
+    // The work `start_map`'s worker does, delivered on a channel the test controls.
+    let path = demo("tests/fixtures/clear.pkg");
+    let staged = stage(&path, false).unwrap();
+    let (tx, rx) = mpsc::channel();
+    app.world_mut().insert_resource(PendingStart {
+        generation: 1,
+        path: path.clone(),
+        map: None,
+        mode: PlayMode::Original,
+        start: None,
+        rx: Mutex::new(rx),
+    });
+    frames(&mut app, 10);
+    assert_eq!(package_id(&app), "demo_audio", "the old run is untouched");
+    assert!(tick(&app) > ticked, "the old run keeps playing while staged");
+
+    tx.send((1, Ok(staged))).unwrap();
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Run
+    );
+    assert_eq!(package_id(&app), "demo_clear");
+    assert!(tick(&app) <= 8, "the new run starts from its first tick");
+    assert!(app.world().get_resource::<PendingStart>().is_none());
+    let world = app.world_mut();
+    let cameras = world.query_filtered::<(), With<GameCamera>>().iter(world).count();
+    assert_eq!(cameras, 1, "the old run's camera is gone, the new one is there");
+    assert!(world.contains_resource::<Textures>());
+}
+
+/// A staged start whose start room halts in its first tick is not a failure: it opens the run on
+/// the script error screen, as the synchronous start does (#946).
+#[test]
+fn a_staged_start_that_halts_opens_the_error_screen() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/start_error.pkg"),
+        None,
+        PlayMode::Original,
+        None,
+    );
+    wait_for_stage(&mut app);
+    frames(&mut app, 3);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Run
+    );
+    assert_eq!(run_screen(app.world()), Some(RunScreen::Error));
+    assert!(app.world().resource::<Messages<StartFailed>>().is_empty());
+}
+
+/// A staged start that does not start reports why and leaves the run on screen playing.
+#[test]
+fn a_failed_staged_start_keeps_the_run_playing() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
+    frames(&mut app, 20);
+    let ticked = tick(&app);
+
+    let path = demo("tests/fixtures/maps.pkg");
+    let (tx, rx) = mpsc::channel();
+    app.world_mut().insert_resource(PendingStart {
+        generation: 1,
+        path: path.clone(),
+        map: Some("nope".to_owned()),
+        mode: PlayMode::Original,
+        start: None,
+        rx: Mutex::new(rx),
+    });
+    tx.send((1, Ok(stage(&path, false).unwrap()))).unwrap();
+    frames(&mut app, 1);
+    assert_eq!(package_id(&app), "demo_audio", "the run is untouched");
+    assert!(tick(&app) > ticked, "it keeps playing");
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Run
+    );
+    assert!(!app.world().resource::<Messages<StartFailed>>().is_empty());
+}
+
+/// Copies a package folder tree.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// Writes a solid `size`×`size` RGBA PNG.
+fn write_png(path: &Path, size: u32) {
+    let file = std::fs::File::create(path).unwrap();
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size, size);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer
+        .write_image_data(&vec![0x80; (size * size * 4) as usize])
+        .unwrap();
+}
+
+/// Startup phases on reproducible synthetic content (#1023): a copy of `audio.pkg` with 400 extra
+/// 256×256 sprites. Not a check; run it by hand and compare runs on the same machine:
+///
+/// `cargo test -p iwbtg-client --locked shell::tests::startup_phases -- --ignored --nocapture`
+#[test]
+#[ignore = "a measurement, not a check (#1023)"]
+fn startup_phases() {
+    use std::time::Instant;
+    const SPRITES: u32 = 400;
+    const SIZE: u32 = 256;
+    let dir = std::env::temp_dir().join(format!("iwbtg-startup-{}-{SPRITES}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(&demo("tests/fixtures/audio.pkg"), &dir);
+    for i in 0..SPRITES {
+        std::fs::write(
+            dir.join(format!("sprites/synthetic{i}.toml")),
+            format!(
+                "frames = 1\nframe_size = [{SIZE}, {SIZE}]\norigin = [0, 0]\n\
+                 collision = \"rect\"\nbbox = [0, 0, {}, {}]\n",
+                SIZE - 1,
+                SIZE - 1
+            ),
+        )
+        .unwrap();
+        write_png(&dir.join(format!("sprites/synthetic{i}.png")), SIZE);
+    }
+    let started = Instant::now();
+    let pkg = crate::package::open(&dir, false).unwrap();
+    let open = started.elapsed();
+    let started = Instant::now();
+    let sprites = crate::package::sprite_images(&pkg.files);
+    let decode = started.elapsed();
+    let bytes: usize = sprites.iter().flatten().map(|s| s.rgba.len()).sum();
+    let started = Instant::now();
+    let prepared = iwbtg_sim::sim::Sim::prepare(&pkg.def).unwrap();
+    let scripts = started.elapsed();
+    // The first room: build the sim and run its start-room Create, as `view::new_run` does.
+    let options = iwbtg_sim::sim::SimOptions {
+        start: crate::savefile::start_point(&pkg.def),
+        seed: 0,
+        dll_mode: iwbtg_sim::sound::DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
+        map: None,
+    };
+    let started = Instant::now();
+    let sim = iwbtg_sim::sim::Sim::new_or_halted_prepared(
+        std::sync::Arc::clone(&pkg.def),
+        options,
+        &prepared,
+    )
+    .unwrap();
+    let first_room = started.elapsed();
+    assert_eq!(sim.world().tick, 0);
+    eprintln!(
+        "startup phases ({SPRITES} x {SIZE}px sprites): open {open:?}, sprite decode {decode:?} \
+         ({} MiB RGBA), script prepare {scripts:?}, first room {first_room:?}",
+        bytes / (1 << 20)
+    );
+    std::fs::remove_dir_all(&dir).ok();
+
+    // The same phases on the real showcase package, for a non-synthetic point of comparison.
+    let showcase = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+    let started = Instant::now();
+    let pkg = crate::package::open(&showcase, false).unwrap();
+    let open = started.elapsed();
+    let started = Instant::now();
+    let sprites = crate::package::sprite_images(&pkg.files);
+    let decode = started.elapsed();
+    let started = Instant::now();
+    let _prepared = iwbtg_sim::sim::Sim::prepare(&pkg.def).unwrap();
+    let scripts = started.elapsed();
+    eprintln!(
+        "startup phases (showcase.pkg): open {open:?}, sprite decode {decode:?} ({} sprites), \
+         script prepare {scripts:?}",
+        sprites.iter().flatten().count()
+    );
+}
+
+/// A newer staged start replaces an older one; a stale result never commits.
+#[test]
+fn a_newer_staged_start_wins() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let old = demo("tests/fixtures/clear.pkg");
+    let new = demo("tests/fixtures/maps.pkg");
+    let old_staged = stage(&old, false).unwrap();
+    let new_staged = stage(&new, false).unwrap();
+    let (tx, rx) = mpsc::channel();
+    app.world_mut().insert_resource(PendingStart {
+        generation: 2,
+        path: new.clone(),
+        map: None,
+        mode: PlayMode::Original,
+        start: None,
+        rx: Mutex::new(rx),
+    });
+    // The result of generation 1 is stale and must be ignored.
+    tx.send((1, Ok(old_staged))).unwrap();
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "a stale result commits nothing"
+    );
+    tx.send((2, Ok(new_staged))).unwrap();
+    frames(&mut app, 2);
+    assert_eq!(package_id(&app), "demo_maps");
 }
 
 fn screen(app: &App) -> RunScreen {
@@ -348,12 +818,18 @@ fn a_run_walks_loading_playing_paused_playing_results() {
     let at = tick(&app);
     frames(&mut app, 10);
     assert_eq!(tick(&app), at, "no tick on the results");
-    press(&mut app, crate::pause::PAUSE_KEY);
-    frames(&mut app, 1);
-    assert_eq!(screen(&app), RunScreen::Playing, "Escape goes back to the game");
-    assert!(game_shows(&mut app));
-
-    // A run that replaces this one opens on the card again.
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "Escape leaves the finished run for game select"
+    );
+    assert!(
+        app.world().get_resource::<State<RunScreen>>().is_none(),
+        "no run, no run screen"
+    );
+    // Back on the list, a new run opens on the card again.
     start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
     frames(&mut app, 2);
     assert_eq!(screen(&app), RunScreen::Loading);
@@ -582,4 +1058,45 @@ fn a_first_tick_script_error_opens_the_error_screen_from_the_command_line() {
     press(&mut app, KeyCode::Escape);
     frames(&mut app, 1);
     assert_eq!(app.should_exit(), Some(AppExit::Success));
+}
+
+/// A click or an Enter on a button of game select reaches every global `Activate` and
+/// `PointerClick` observer, the run screens' too. Their resources exist only in a run, so they
+/// must skip on the select screen instead of failing validation and panicking (#1467).
+#[test]
+fn activating_a_button_on_the_select_screen_does_not_panic() {
+    use bevy::camera::NormalizedRenderTarget;
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{Pointer, PointerClick};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    use bevy::window::WindowRef;
+
+    let mut app = app();
+    frames(&mut app, 3);
+    let entity = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .trigger(bevy::ui_widgets::Activate { entity });
+    app.world_mut().trigger(PointerClick {
+        entity,
+        pointer: Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::Window(
+                    WindowRef::Entity(Entity::PLACEHOLDER)
+                        .normalize(None)
+                        .unwrap_or_else(|| unreachable!()),
+                ),
+                position: Vec2::ZERO,
+            },
+        ),
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        duration: Duration::ZERO,
+        count: 1,
+    });
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
 }

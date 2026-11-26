@@ -1,10 +1,10 @@
 # Porting, assets, engines and creation
 
-How games get into the collection: porting, the shared asset library, engines, the package file and the level editor. The user decided these on 2026-11-02. Player-facing play and ranking are in [product](product.md). The file-level spec is [format v0](format/v0.md), and the items in [Format changes needed](#format-changes-needed) must reach it before format 1.
+How games get into the collection: porting, the shared asset library, engines, the package file and the level editor. The user decided these on 2026-11-02. Player-facing play and ranking are in [product](product.md). The file-level spec is [format v0](format/v0.md) with the [format 1](format/v1.md) changes; the [Format changes needed](#format-changes-needed) list is closed for format 1.
 
 ## Porting
 
-- **Fidelity.** Quirks that players rely on are never fixed. Bugs that nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a trace shows that positions do not change. Every fix is logged in `docs/games/<game-id>.md`.
+- **Fidelity is feel.** What players rely on is the feel: position, death, timing, RNG on a played path, input response, respawn control, and the feedback that teaches those. Those are never changed silently. Bugs nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a feel contract and, where positions could move, a trace show the player-observable result is unchanged. Incidental engine implementation — boot rooms, temp files, internal ids, probe-only values — is ours to redesign, because no player can observe it. Every kept quirk, fix and deliberate deviation gets a feel-impact tier (F1/F2/F3, [fidelity tiers](plans/fidelity-tiers.md)) and a feel contract, and is logged in `docs/games/<game-id>.md`, which carries the deviation log's four sections ([games](games/README.md#deviation-log)).
 - **Which version.** We port the best version of a game. When a game is submitted, its creator (or the porter) picks the version. Keeping the same version is preferred, so records stay historical. If a better version turns up, it replaces the old one, and the old board is frozen as a viewable legacy board.
 - **Other runners.** GameMaker 8 comes first and GameMaker Studio later, each with its own CLONE_SPEC and runner rules.
 - **Odd sizes.** A game keeps its native resolution and room speed. It is integer-scaled, and the letterbox adapts.
@@ -34,11 +34,11 @@ If a physics bug is found in a Ranked port, the bug is fixed and the server re-r
 
 Each port keeps:
 
-- **`docs/games/<game-id>.md`:** open questions, fixes made and known differences from the original.
+- **`docs/games/<game-id>.md`:** open questions, fixes made and known differences from the original. Its deviation log uses four sections ([games](games/README.md#deviation-log)); the Known differences section is what the game page shows.
 - **Trace reports:** stored in the package's `tests/` folder.
 - **A changelog per version:** shown on the game page.
 
-**OPEN:** the user wants the porting pipeline to be efficient and well made, not slow. A deeper design pass on the pipeline is needed: converter automation, which steps agents own, and where humans are needed.
+**Pipeline.** The step-by-step pipeline from download to Beta, with what the converter automates, what an agent does, where a human records or playtests, and a time target per step, is [porting](porting.md).
 
 ### Language
 
@@ -51,6 +51,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 ## Assets
 
 - **Storage.** Each package keeps its own assets in its own folder, so a takedown removes exactly that folder. A global index, keyed by content hash, lists every asset across all packages. It powers the editor's library and finds duplicates. When a game is taken down, assets with the same hash in other games stay, because games really do share assets.
+- **Index file.** The index is `<games dir>/assets-index.toml`, written by `iwbtg assets index <games dir>` ([cli](architecture/cli.md)). It is readable TOML, one entry per distinct content keyed by the content hash: the size, every `(game, path)` the asset appears in, and `tags = []` for the AI tags the porting checklist fills later (#104). Equal content is one entry, so a duplicate prints as `also in <game>`. Rerunning the command keeps the tags already in the file. Origin credit (below) needs each game's release date, which the package does not carry yet (#1050); until then the index lists every place and the command prints the first game in folder order.
 - **Origin credit.** When the same asset appears in several games, the game with the earliest release date is credited as its origin and the others are listed as "also in". People can correct this.
 - **Reuse.** Creators of new games may use any asset from any ported game, and credit is added automatically. This follows fangame culture. Original creators can lock their game's assets so they cannot be reused (per-game opt-out).
 - **Takedowns.** A takedown removes only that game. Assets reused in other games stay.
@@ -60,7 +61,8 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 ## Engines
 
-- **Engine packs.** Each pack matches a real fangame engine (for example YoYoYo, Seph or Kayin classic). A pack bundles the physics profile, kid sprites and sounds, default built-ins and menus. Creators pick a pack when starting a new game.
+- **Standard ruleset and compatibility profiles.** New games use the standard ruleset. A port selects a named ruleset (`gm8@N`) and a `[compat]` profile that preserves the feel it must keep; the profile is an engine-defined bundle (a frozen policy set plus a physics preset) and declares every deviation. It cannot add code or supply runner-rule values; a new value is a ruleset change. Decided in [0005](decisions/0005-standard-mechanics.md).
+- **Engine packs.** Each pack reproduces the feel of a real fangame engine (for example YoYoYo, Seph or Kayin classic), not its implementation. A pack bundles the tuned physics profile, kid sprites and sounds, default built-ins and menus, and a feel contract for what a player must be able to feel. Creators pick a pack when starting a new game; a new game otherwise uses the standard ruleset.
 - **Custom engines.** Creators may change physics or build their own engine. Any game whose physics differ from its pack's original is marked **custom physics** on its game page. A custom engine can be published as a pack for others to use, with credit.
 - **Medleys.** Each room may name its own physics profile. First check how the original medley actually does it. If it mixes several engines, mark it custom physics.
 - **Upgrades: automatic when provably safe.** Decided by Claude on the user's request, 2026-11-02. The sim keeps every engine revision's behavior, selected by the package's `engine_rev`, so an old revision never stops working. When a new revision ships, the server tests each game on it:
@@ -105,7 +107,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
   - Creators and history (release date, version, port notes).
   - The trick list.
   - Previews of each stage.
-  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences).
+  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences). The known differences are generated from the deviation log.
 - **Music preview.** The porter picks the track and start point with the picker tool.
 - **Creators.** Original creators can claim their game with a verified account. Once claimed, they can edit the page text, set the asset-reuse opt-out, approve versions and request takedown.
 
@@ -122,13 +124,14 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 ## Format changes needed
 
-Changes [format v0](format/v0.md) needs before format 1:
+Changes [format v0](format/v0.md) needed before format 1. **Closed for format 1 (#795):** each item is done or deferred with its reason ([v1](format/v1.md#what-format-1-does-not-contain)). A deferred item is additive and joins format 1 before the format freeze point, or format 2 after it (#1395).
 
 - **Maps.** Versions and categories inside one package, each with its own timing triggers. Done: `[[maps]]` ([v0](format/game.md#maps)); a map starts the original's difficulty through `stripped_start`.
 - **Stripped mode.** Done: `[stripped]` ([v0](format/game.md#stripped-mode)) with the ranked start point, the cut list and cutscene and dialogue regions. The sim side is #34, #43 and #561.
 - **Physics per room,** for medleys. Done: room key `physics` and `physics/<id>.toml` ([v0](format/physics.md#room-profiles), #33).
-- **Language packs.** Text that can be translated is kept apart from the rest.
+- **Language packs.** Text that can be translated is kept apart from the rest. Deferred (#45): new optional files, outside `gameplay_hash`; the extraction pipeline decides their shape.
 - **Unusual controls.** Fields for the control hints. Done: `[controls]` labels for `extra1` to `extra4` ([v0](format/game.md), #33).
-- **Creator locks.** Flags for asset reuse and skins.
-- **Script library references** (`lib:<name>@<version>`).
+- **Creator locks.** Flags for asset reuse and skins. Deferred (#796): cosmetic flags for the asset library and the skin system, which do not exist yet.
+- **Script library references** (`lib:<name>@<version>`). Deferred (#797): needs the shared script library first; a new reference form is additive.
+- **Ruleset and profile.** Done in format 1: `ruleset = "gm8@<rev>"` replaces `engine_rev` and `[compat] profile` is required ([v1](format/v1.md), 0005 decision 3). The `standard` new-game shape without `runner`, `object_order` and `room_order` waits for the `standard` ruleset (#1149, #1153).
 - **The `.iwbz` container.** Done: [iwbz.md](format/iwbz.md) (#36); the OS file association comes with the release installers (#647).

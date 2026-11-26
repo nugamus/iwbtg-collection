@@ -6,6 +6,9 @@
 fn create() {
     this.hp = 3.0;
     this.phase = 0.0;
+    // The read-only room-file name and group: strings, or `()` when the room file gives none.
+    // `&` evaluates both operands (this controller is unnamed, so the body does not run).
+    if (this.name == ()) & (this.group == ()) { this.phase = 0.0; }
     this.set_alarm(0, 10);
     this.set_alarm(1, 25.6);
 }
@@ -33,6 +36,67 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Cross-script calls (#1533): a literal target in this package.
+    if t == 7.0 {
+        this.phase = this.phase + script_execute("api_helper", 1.0);
+    }
+    // Strings (#1532): every GML string function, folded into `phase`.
+    if t == 6.0 {
+        let a = string(12.5) + string_format(1.25, 6, 2) + string_char_at("abc", 2);
+        let b = string_copy("abcdef", 2, 2) + string_delete("abcdef", 2, 1) + string_insert("x", "ab", 2);
+        let c = string_replace("axa", "a", "b") + string_replace_all("axa", "a", "b");
+        let d = string_upper("ab") + string_lower("AB") + string_digits("a1b2") + string_letters("a1b2") + string_lettersdigits("a1-");
+        let e = chr(65) + string("x");
+        let n = string_length(a + b + c + d + e) + string_pos("a", "abc") + string_count("a", "aa") + ord("A");
+        this.phase = this.phase + n;
+    }
+    // Views (#1531): read and write every view function on view 0.
+    if t == 3.0 {
+        set_view_xview(0, view_xview(0));
+        set_view_yview(0, view_yview(0));
+        set_view_wview(0, view_wview(0));
+        set_view_hview(0, view_hview(0));
+        set_view_angle(0, view_angle(0));
+        set_view_enabled(0, view_enabled(0));
+        set_view_visible(0, view_visible(0));
+        set_view_hborder(0, view_hborder(0));
+        set_view_vborder(0, view_vborder(0));
+        set_view_hspeed(0, view_hspeed(0));
+        set_view_vspeed(0, view_vspeed(0));
+        set_view_object(0, "api");
+        let followed = view_object(0);
+        this.phase = this.phase + view_current();
+    }
+    // Paths (#1530): start once, read and write every property, then end it.
+    if t == 1.0 {
+        this.path_start("api_line", 4.0, "stop", false);
+    }
+    if t == 2.0 {
+        this.path_position = this.path_position;
+        this.path_speed = this.path_speed;
+        this.path_endaction = this.path_endaction;
+        this.path_orientation = this.path_orientation;
+        this.path_scale = this.path_scale;
+        this.phase = this.phase + this.path_index + this.path_positionprevious + this.path_x + this.path_y;
+    }
+    if t == 20.0 {
+        this.path_end();
+    }
+    if t == 21.0 {
+        this.phase = this.phase + this.path_index;
+    }
+    // Stored arrays (#1383): iterate and push/pop once, on the variable and on a local copy.
+    if t == 1.0 {
+        this.arr = [1.0, 2.0];
+        this.arr.push(3.0);
+        this.arr.pop();
+        let b = this.arr;
+        b.push(4.0);
+        b.pop();
+        let sum = 0.0;
+        for v in this.arr { sum += v; }
+        this.phase = this.phase + sum;
+    }
     if course {
         if t == 100.0 && tick() < 200.0 { room_restart(); }
         if t == 250.0 && gm_gt(tick(), 1200.0) { kill_kid(); }
@@ -88,7 +152,30 @@ fn alarm(n) {
                 emit("api_tick");
             }
             this.x = clamp(k.x, 100.0, 700.0);
+            // The kid field API (decision 0004): every getter reads, and every writable field
+            // writes its current value back so the corpus covers the registration without
+            // changing the run.
+            k.djump = k.djump;
+            k.tjump = k.tjump;
+            k.onPlatform = k.onPlatform;
+            k.ladder = k.ladder;
+            k.frozen = k.frozen;
+            k.frozen2 = k.frozen2;
+            k.muteki = k.muteki;
+            k.curJumps = k.curJumps;
+            k.tempHspeed = k.tempHspeed;
+            k.maxSpeed = k.maxSpeed;
+            k.maxVspeed = k.maxVspeed;
+            k.maxFallSpeed = k.maxFallSpeed;
+            k.scale = k.scale;
+            // The read-only kid fields.
+            let flags = k.ladderud || k.ladderjump || k.flipped || k.on_slope_last || k.onVineL || k.onVineR;
+            let nums = k.yflag + k.facing + k.walk_h + k.jump + k.jump2 + k.jump3;
+            if flags && gm_lt(nums, -1e9) { emit("kid_fields"); }
         }
         this.set_alarm(1, 30.0 + this.get_alarm(0) * 0.0);
     }
 }
+
+/// A target for `script_execute` (#1533).
+fn api_helper(x) { x + 1.0 }

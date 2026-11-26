@@ -7,9 +7,11 @@
 //!
 //! - Create: without a `music` param the music playing now is the one to fade (`sound::current_music`).
 //! - Create: `now_vol` = `start_volume` (10000 = full, the original's SuperSound scale, hundredths
-//!   of a dB); an alarm of 1 tick for the sound. Under [`DllMode::Stub`] the start is 0 instead:
-//!   the stubbed SuperSound handle check fails and the death code uses 0 (kaenbyou
-//!   audio-supersound-deathfade-a: `start_vol` = `now_vol` = 0 throughout), so the fade never moves.
+//!   of a dB); an alarm of 1 tick for the sound. When the run's named model does not provide
+//!   the SuperSound adapter (`event`, `gmfmod`, `stub`, or a recorder `--stub-dlls` run) the
+//!   start is 0 instead: the stubbed SuperSound handle check fails and the death code uses 0
+//!   (kaenbyou audio-supersound-deathfade-a: `start_vol` = `now_vol` = 0 throughout), so the fade
+//!   never moves.
 //! - Step, while music is not muted (`MechGlobals::music_muted`): the music volume is set from
 //!   `now_vol` (sent before the decrement: the first Step sends full volume), then `now_vol`
 //!   drops by 100 while it is at least 2000. Below that it stays (the original would pause a
@@ -30,7 +32,7 @@ use crate::def::{KindDef, ParamValue, Params, SoundId};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::num::{self, Real};
-use crate::sound::{self, DllMode};
+use crate::sound;
 use crate::world::{Ctx, Flow, InstId, KindState};
 
 const SPECS: &[ParamSpec] = &[
@@ -38,16 +40,19 @@ const SPECS: &[ParamSpec] = &[
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "music",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "start_volume",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 
@@ -134,7 +139,10 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             } else {
                 s.music
             };
-            let stub = ctx.dll_mode == DllMode::Stub;
+            // The original reads the start through the SuperSound volume getter, so the fade only
+            // uses `start_volume` when this run models that adapter; an absent or stubbed
+            // SuperSound answers 0 (deathfade-a).
+            let stub = !ctx.sound_model().models_supersound();
             if let Some(BuiltinState::DeathSound(st)) = state_mut(ctx, me) {
                 st.music = current;
                 // The stubbed DLL answers 0, so the start volume is 0 (deathfade-a).

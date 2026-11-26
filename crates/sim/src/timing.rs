@@ -1,6 +1,6 @@
-//! Timing triggers and splits (docs/plans/sim-core.md 2.1 row 16, 9.4).
+//! Timing triggers and splits (docs/architecture/sim/tick.md row 16; docs/architecture/cli.md).
 //!
-//! Timing counts ticks, never rendered frames. Evaluated at tick row 16 (WP8b).
+//! Timing counts ticks, never rendered frames. Evaluated at tick row 16.
 //!
 //! The triggers form one ordered chain: `start`, then each stage in order, then `end`. A trigger
 //! fires at most once. Nothing fires before `start`. A stage is looked at only after the stage
@@ -72,6 +72,11 @@ pub struct TimingState {
     pub run_end_raised: bool,
     /// The `start` trigger fired.
     pub started: bool,
+    /// A stripped run's timer has started: set by the first tick whose frame has any action
+    /// (`stripped::begin_tick`, docs/product.md, Two ways to play each game). Play original
+    /// counts from its start trigger and leaves this false.
+    #[serde(default)]
+    pub timer_started: bool,
     /// How many stage triggers fired; the next one to look at.
     pub stages_done: u16,
     /// The `end` trigger fired.
@@ -91,7 +96,7 @@ pub struct TimingState {
     pub dialogue_waits: Vec<u32>,
 }
 
-/// Raises the `run_end` trigger for this tick's row 16. The `game_clear` built-in (WP6b) calls
+/// Raises the `run_end` trigger for this tick's row 16. The `game_clear` built-in calls
 /// this; nothing else needs to know how timing works.
 pub fn raise_run_end(w: &mut World) {
     w.timing.run_end_raised = true;

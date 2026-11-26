@@ -1,5 +1,5 @@
-//! Built-in `block` (mechanics `block`; docs/plans/sim-core.md 6.1; docs/format/builtins/block.md).
-//! Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `block` (mechanics `block`; docs/architecture/sim/builtins.md; docs/format/builtins/block.md).
+//! Tier 1.
 //!
 //! A block has no behavior: the kid's collision handlers do the work. Create applies the
 //! per-instance overrides (`solid`, `visible`, `depth`) and, with `visual_spawns_collider`
@@ -39,51 +39,73 @@ const SPECS: &[ParamSpec] = &[
         name: "mask",
         ty: ParamType::Enum(MASKS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "depth",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "kid_collides",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "blood_sticks",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "slip",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visual_spawns_collider",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "collider",
         ty: ParamType::Kind,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "proximity_frame",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-lemon"],
+            issue: 1269,
+        }),
     },
 ];
 

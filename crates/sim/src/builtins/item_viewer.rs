@@ -1,5 +1,5 @@
-//! Built-in `item_viewer` (mechanics `item_viewer`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/item_viewer.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `item_viewer` (mechanics `item_viewer`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/item_viewer.md). Tier 2.
 //!
 //! Shows a collected boss reward or item: visible only while `global.boss[index]`
 //! (`kind = "boss"`) or `global.item[index]` (`kind = "item"`) is set (KAE bossItemViewer, JUN
@@ -18,16 +18,19 @@ const SPECS: &[ParamSpec] = &[
         name: "kind",
         ty: ParamType::Enum(KINDS),
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "index",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "sprite",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

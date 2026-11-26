@@ -1,0 +1,7 @@
+#:schema ../../../../../docs/format/schema/v0/physics.schema.json
+# The kid floats where the room puts it, level with the boss: this package measures the boss's
+# scripts, not platforming, so it needs no floor.
+preset = "A1"
+
+[numbers]
+gravity = 0.0

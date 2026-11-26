@@ -1,5 +1,4 @@
-//! Timeline files to `TimelineDef` (docs/plans/sim-core.md 8.2 step 7; docs/format/timelines.md).
-//! WP0 creates the file; WP7b owns it.
+//! Timeline files to `TimelineDef` (docs/format/timelines.md).
 //!
 //! `timelines/<id>.toml` holds `moments = [{ t = 0, call = "intro" }, ...]` in tick order and an
 //! optional `loop`. The def keeps the ticks (`EventKind::Moment(step)` runs on the instance that
@@ -30,7 +29,7 @@ struct Moment {
 }
 
 /// Reads every timeline file (step 7). The result's index is the `TimelineId`; ids are the file
-/// stems in path order. `load::load_game` (WP7a) calls this.
+/// stems in path order. `load::load_game` calls this.
 pub fn load(files: &PackageFiles, diags: &mut Vec<Diagnostic>) -> Vec<TimelineDef> {
     let mut out = Vec::new();
     for (path, bytes) in files.iter() {

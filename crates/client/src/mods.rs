@@ -5,7 +5,8 @@
 //! ticking there and a "Run over" banner shows; the window stays open on that frame until the
 //! quick-retry key, or at once with auto-retry (`retry.rs`). Slow motion and Frame advance act
 //! on the clock (practice.rs); Hitboxes and No background change only the picture (visual.rs).
-//! Save states are rejected until they are built (#39).
+//! Save states (#39) are built: in a practice or Save states run, F5 saves the world and F6
+//! restores it (practice.rs), and such a run is never recorded.
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -14,21 +15,43 @@ use iwbtg_sim::mods::{Mod, ModSet};
 use crate::view::{Game, GameCamera, SimTick};
 
 /// The mods the client can play so far.
-pub(crate) const BUILT: [Mod; 5] = [
+pub(crate) const BUILT: [Mod; 6] = [
     Mod::SuddenDeath,
     Mod::Hitboxes,
     Mod::NoBackground,
     Mod::SlowMotion,
     Mod::FrameAdvance,
+    Mod::SaveStates,
 ];
 
 /// The mods' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct ModsArgs {
     /// Mods for this run, by code: `SD` (Sudden Death), `HB` (Hitboxes), `NB` (No background),
-    /// `SL` (Slow motion, see `--slow-speed`), `FA` (Frame advance). Several join with `,` or `+`.
+    /// `SL` (Slow motion, see `--slow-speed`), `FA` (Frame advance), `SS` (Save states, F5/F6).
+    /// Several join with `,` or `+`.
     #[arg(long, value_name = "CODES", value_parser = parse_built, default_value = "")]
     pub mods: ModSet,
+}
+
+/// The mods' place in the module list (main.rs): its flags, the run's play-mode line and its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ModsArgs;
+
+    fn prepare(args: &mut ModsArgs, startup: &crate::registration::Startup) -> Result<(), String> {
+        eprintln!("{}", describe(args.mods, startup.ranked));
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ModsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ModsPlugin(args.mods));
+    }
 }
 
 /// [`ModSet::parse`], then refuses a mod the client does not play yet.
@@ -181,11 +204,7 @@ mod tests {
         assert_eq!(parse_built("").unwrap(), ModSet::NONE);
         assert_eq!(parse_built("sl+fa").unwrap().codes(), "SL+FA");
         assert_eq!(parse_built("hb,nb").unwrap().codes(), "HB+NB");
-        assert!(
-            parse_built("SD,SS")
-                .unwrap_err()
-                .contains("SS (Save states) is not built yet")
-        );
+        assert_eq!(parse_built("SD,SS").unwrap().codes(), "SD+SS");
         assert!(parse_built("ZZ").unwrap_err().contains("unknown mod"));
     }
 

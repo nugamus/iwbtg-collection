@@ -1,4 +1,4 @@
-# M4 mockups: game select, loading, HUD, pause, results
+# Phase 6 (Ranked-ready) mockups: game select, loading, HUD, pause, results
 
 Approved by the user as the current design on 2026-11-04 (#478, PR #480; three feedback rounds on the PR). Implementation issues link here: build each screen from its artboard. Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard, and the numbers in its script are the sample data drawn.
 
@@ -31,3 +31,7 @@ Direction: modernise IWBTG without losing its identity. Structure, motion and be
 ## Data and art
 
 Titles and creators come from our port list; every other number, player name and avatar is sample data. All art is placeholder except the delicious fruit, which is the real sprite, uploaded to the canvas as an asset (`/_blob/…` links) and not committed here.
+
+## Rendering locally
+
+`png/` has a reference PNG of each approved screen (#628), made by `python -I docs/design/mockups/render.py m4`: `support.js` here loads `../dc-render.js`, a small renderer of our own for the `.dc.html` format, and `render.py` serves the folder and captures each artboard with headless Chrome at its `canvas.json` size. The fruit shows as a placeholder shape unless a local copy sits in `docs/design/mockups/blobs/<id>.png` (gitignored). [docs/lanes/ui.md](../../../lanes/ui.md) says how to diff a client screenshot against a reference.

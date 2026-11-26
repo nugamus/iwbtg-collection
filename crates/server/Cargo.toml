@@ -1,0 +1,83 @@
+[package]
+name = "iwbtg-server"
+description = "IWBTG Collection leaderboard server: submissions, replay verification, review queue (docs/server.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+# Tests live in one executable (#517): a new test file is listed in tests/it.rs.
+autotests = false
+
+[[bin]]
+name = "iwbtg-server"
+path = "src/main.rs"
+
+[dependencies]
+# The HTTP surface (docs/server.md, Components): axum 0.8 on tokio.
+axum = "0.8"
+tokio = { version = "1.54.1", features = ["macros", "net", "fs", "io-util", "time", "rt-multi-thread"] }
+# --bind; the `env` feature adds IWBTG_BIND.
+clap = { workspace = true, features = ["env"] }
+# JSON requests and responses for the auth endpoints (docs/server.md, Accounts and sign-in).
+serde = { workspace = true }
+# Argon2id password hashes, PHC strings (docs/server.md, Accounts and sign-in; #156).
+argon2 = "0.5"
+# Salt generation. password-hash re-exports rand_core, but OsRng is behind its `getrandom` feature,
+# so name the crate directly with that feature enabled.
+rand_core = { version = "0.6", features = ["getrandom"] }
+# SHA-256 of the session token and reset codes, so the database never holds a usable credential
+# (#157, #160).
+sha2 = { workspace = true }
+# The admin review queue's TOTP (RFC 6238) over SHA-256 (#58).
+hmac = "0.13"
+# Replay decoding for submissions, and later the verification worker (#162, #163): the server
+# runs the exact simulation the client runs (docs/server.md, Components).
+iwbtg-sim = { workspace = true }
+# Password-reset email (#160). `native-tls` keeps the OS trust store, matching the healthchecks
+# client: no bundled CA crate, so no CDLA-Permissive-2.0 edge in deny.toml.
+lettre = { version = "0.11", default-features = false, features = [
+  "builder",
+  "hostname",
+  "native-tls",
+  "smtp-transport",
+] }
+# SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
+# the driver is a local file. `macros` is only for `sqlx::migrate!`; no `query!` yet, so no
+# DATABASE_URL or `.sqlx` offline data is needed to build.
+# `ReaderStream` for `/files`: responses stream from disk instead of buffering a whole package
+# (docs/server.md, Game downloads; #1506). `axum::body::Body::from_stream` needs a `Stream`.
+tokio-util = { version = "0.7", features = ["io"] }
+sqlx = { version = "0.9", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "macros",
+  "migrate",
+] }
+# The signed removal-list format, shared with `iwbtg removals sign` (docs/server.md, Removal
+# list; #808, #1537), so the producer and the validator cannot drift.
+iwbtg-removal = { workspace = true }
+serde_json = { workspace = true }
+# JSON logs to stdout (docs/server.md, Logs and monitoring).
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.23", features = ["json"] }
+# healthchecks.io pings (docs/server.md, Logs and monitoring): blocking and much smaller than an
+# async client. `native-tls-no-default` uses the OS trust store; the rustls feature would pull
+# webpki-roots, whose CDLA-Permissive-2.0 data licence deny.toml does not allow. The agent sets
+# TlsProvider::NativeTls + RootCerts::PlatformVerifier explicitly (src/health.rs).
+ureq = { version = "3.5", default-features = false, features = ["native-tls-no-default"] }
+
+[dev-dependencies]
+# `ServiceExt::oneshot`: the tests drive the router in-process, no port to pick.
+tower = { version = "0.5", features = ["util"] }
+# Auth tests send and read JSON bodies.
+serde_json = { workspace = true }
+# Auth tests submit the HTML forms as `application/x-www-form-urlencoded`.
+serde_urlencoded = "0.7"
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[lints]
+workspace = true

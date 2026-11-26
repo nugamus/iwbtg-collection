@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use super::filters::{self, Filters, Row};
-use super::library::Library;
+use super::library::{self, Library};
 use crate::ui::fonts::Type;
 use crate::ui::motion::{Ease, OffsetX, OffsetY, Opacity, Tween};
 use crate::ui::shape::{Band, FadeMask, Ink, Shape, Side, UiOpacity, Veil};
@@ -34,11 +34,12 @@ const FROM_RIGHT: f32 = 860.0;
 const MAP_INDENT: f32 = 30.0;
 /// The selected game and map slide this far left.
 pub const SLIDE: f32 = 25.0;
-/// The first panel's top.
-pub const TOP: f32 = 150.0;
+/// The first panel's top (under the toolbar, m5 A3).
+pub const TOP: f32 = 150.0 + super::UNDER_TOOLBAR;
 /// The list keeps the selection centred between [`TOP`] and the footer's top (1080 less the
-/// footer's 26 px margin and the 108 px player card).
-pub const BOTTOM: f32 = 1080.0 - 134.0;
+/// footer's 26 px margin and the 108 px player card). Under the toolbar the window keeps m4's
+/// height and runs that much further down, behind the footer, as m5 A3 draws it.
+pub const BOTTOM: f32 = 1080.0 - 134.0 + super::UNDER_TOOLBAR;
 /// Panels that scroll above [`TOP`] fade out over this many px.
 const FADE: f32 = 30.0;
 /// Room left of the panels for the slide, the shear and the shadows.
@@ -46,6 +47,11 @@ const LEFT_ROOM: f32 = 60.0;
 /// The list's opacity while you work on the left side. The artboards do not show it (#149,
 /// `revisit`).
 pub const DIM: f32 = 0.5;
+
+/// The game a Cleared mark's fruit belongs to, so an arriving preview can replace the
+/// placeholder (#1593).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FruitMark(pub usize);
 
 /// The game and map picked. #148's left side reads it.
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -58,6 +64,59 @@ pub struct Selection {
 /// until the left side exists (#148).
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ListDim(pub bool);
+
+/// Asks for the previews of the shown games around the pick (the visible window and its
+/// neighbours); the library then loads them off the UI thread (#1593).
+pub(super) fn want_previews(
+    sel: Res<Selection>,
+    shown: Res<Shown>,
+    lib: Option<ResMut<Library>>,
+) {
+    let Some(mut lib) = lib else {
+        return;
+    };
+    if !sel.is_changed() && !shown.is_changed() {
+        return;
+    }
+    let order = shown.order();
+    let Some(pos) = order.iter().position(|game| *game == sel.game) else {
+        lib.want(&[]);
+        return;
+    };
+    let start = pos.saturating_sub(library::PREVIEW_RADIUS);
+    let end = (pos + library::PREVIEW_RADIUS + 1).min(order.len());
+    lib.want(&order[start..end]);
+}
+
+/// Draws previews as they arrive. A game whose preview has not arrived (or was evicted) keeps
+/// its dark placeholder panel and the placeholder fruit (#1593).
+pub(super) fn previews(
+    mut lib: Option<ResMut<Library>>,
+    mut images: ResMut<Assets<Image>>,
+    mut seen: Local<u64>,
+    mut panels: Query<(&GamePanel, &mut Shape)>,
+    mut marks: Query<(&FruitMark, &mut ImageNode)>,
+) {
+    let Some(lib) = lib.as_mut() else {
+        return;
+    };
+    lib.poll(&mut images);
+    if lib.revision() == *seen {
+        return;
+    }
+    *seen = lib.revision();
+    for (game, mut shape) in &mut panels {
+        shape.image = lib.art.get(game.0).cloned().flatten();
+    }
+    for (mark, mut image) in &mut marks {
+        image.image = lib
+            .fruit
+            .get(mark.0)
+            .cloned()
+            .flatten()
+            .unwrap_or_else(|| lib.placeholder_fruit.clone());
+    }
+}
 
 /// The rows the list shows now, from the library and the [`Filters`] ([`filters::rows`]).
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
@@ -118,11 +177,12 @@ fn veil(selected: bool) -> Veil {
     }
 }
 
-fn game_shape(art: Handle<Image>, selected: bool) -> Shape {
-    let shape = Shape::fill(tokens::GROUND)
-        .with_image(art)
-        .with_veil(veil(selected));
-    style_game(shape, selected)
+fn game_shape(art: Option<Handle<Image>>, selected: bool) -> Shape {
+    let shape = match art {
+        Some(art) => Shape::fill(tokens::GROUND).with_image(art),
+        None => Shape::fill(tokens::GROUND),
+    };
+    style_game(shape.with_veil(veil(selected)), selected)
 }
 
 /// The selected game's white outline and deeper shadow.
@@ -274,7 +334,9 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
             .id();
         commands.entity(column).add_child(group);
         let dots: Vec<Color> = game.maps.iter().map(|m| stars_color(m.stars)).collect();
-        let fruit = lib.fruit[g].clone();
+        let fruit = lib.fruit[g]
+            .clone()
+            .unwrap_or_else(|| lib.placeholder_fruit.clone());
         let game_panel = commands
             .spawn((
                 panel(WIDTH, GAME_HEIGHT, game_shape(lib.art[g].clone(), false)),
@@ -324,6 +386,7 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                             },
                             ImageNode::new(fruit),
                             Ink(Color::WHITE),
+                            FruitMark(g),
                         ),
                         text("Cleared", Type::PILL_CAPS, Color::WHITE),
                     ],
@@ -513,13 +576,14 @@ pub(super) fn looks(
 pub(super) fn refilter(
     filters: Res<Filters>,
     lib: Res<Library>,
+    lists: Res<super::collections::Collections>,
     mut shown: ResMut<Shown>,
     mut sel: ResMut<Selection>,
 ) {
-    if !filters.is_changed() && !lib.is_changed() {
+    if !filters.is_changed() && !lib.is_changed() && !lists.is_changed() {
         return;
     }
-    let rows = filters::rows(&lib.games, &lib.records, &filters);
+    let rows = filters::rows(&lib.games, &lib.records, &filters, &lists);
     if shown.rows != rows {
         shown.rows = rows;
     }
@@ -732,7 +796,8 @@ mod tests {
 
     #[test]
     fn the_artboard_list_needs_no_scroll() {
-        // Main.dc.html: Kaenbyou, the fourth of seven games, open on its third of five maps.
+        // Main.dc.html (and m5 A3): Kaenbyou, the fourth of seven games, open on its third of five
+        // maps.
         let maps = [3, 2, 3, 5, 3, 2, 2];
         let sel = Selection { game: 3, map: 2 };
         let placed = place(&all(7), &maps, sel);

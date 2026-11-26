@@ -1,0 +1,552 @@
+//! The `iwbtg pkg check|fmt|hash|upgrade` commands and the package hashes `pkg pack` prints
+//! (docs/architecture/cli.md). They live here, with the loader they report on, so the package
+//! format and its commands change together (#1120); the `iwbtg` binary in `crates/tools` reads the
+//! package (folder or `.iwbz`, engine pack bundled) and passes it in with stdout.
+//!
+//! `check` validates and loads the package with [`load_report`], strictly or in trace mode
+//! (`--trace-mode`: unmapped script kinds load inert and converter gaps are warnings, for research
+//! converter output). It prints every diagnostic, warnings included, then the gameplay hash and
+//! `OK (<n> warnings)`, or `FAILED: <n> errors, <n> warnings`.
+//!
+//! Each command returns `Ok(false)` when it ran and found problems (exit 1); `Err` is an output or
+//! file write failure.
+
+use std::io::{self, Write};
+use std::path::Path;
+
+use crate::load::{LoadMode, load_report};
+use crate::physics::PhysicsStanding;
+use crate::{PackageFiles, Severity};
+
+fn mode(trace_mode: bool) -> LoadMode {
+    if trace_mode {
+        LoadMode::Trace {
+            unmapped_kinds_inert: true,
+        }
+    } else {
+        LoadMode::Strict
+    }
+}
+
+/// `iwbtg pkg check <pkg> [--trace-mode]`: writes each diagnostic and a summary; `Ok(false)` on
+/// any error.
+pub fn check(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io::Result<bool> {
+    let report = load_report(files, mode(trace_mode));
+    let mut errors = 0usize;
+    let mut warnings = 0usize;
+    for d in &report.diagnostics {
+        match d.severity {
+            Severity::Error => errors += 1,
+            Severity::Warning => warnings += 1,
+        }
+        writeln!(out, "{d}")?;
+    }
+    if report.ok() {
+        if let Some(standing) = &report.physics {
+            for line in physics_lines(standing) {
+                writeln!(out, "{line}")?;
+            }
+        }
+        if let Some(compat) = &report.compat {
+            for line in compat.lines() {
+                writeln!(out, "{line}")?;
+            }
+        }
+        if let Some(hash) = report.gameplay_hash {
+            writeln!(out, "gameplay_hash: {}", hex(&hash))?;
+        }
+        writeln!(out, "OK ({warnings} warnings)")?;
+    } else {
+        writeln!(out, "FAILED: {errors} errors, {warnings} warnings")?;
+    }
+    Ok(report.ok())
+}
+
+/// The `physics:` lines of `pkg check` (#802, #970): the pack name when the game's physics match
+/// its pack's family preset and no room profile differs, else `custom (...)` with the fields of
+/// the game's profile and each differing room profile a built room names, named by id (#1063).
+fn physics_lines(standing: &PhysicsStanding) -> Vec<String> {
+    if !standing.is_custom() {
+        return vec![format!("physics: {}", standing.name())];
+    }
+    let mut parts = Vec::new();
+    match standing.differs.len() {
+        0 => {}
+        1 => parts.push("1 field differs".to_owned()),
+        n => parts.push(format!("{n} fields differ")),
+    }
+    match standing.rooms.len() {
+        0 => {}
+        1 => parts.push("1 room profile differs".to_owned()),
+        n => parts.push(format!("{n} room profiles differ")),
+    }
+    let mut lines = vec![format!("physics: custom ({})", parts.join(", "))];
+    if !standing.differs.is_empty() {
+        lines.push(format!("physics fields: {}", standing.differs.join(", ")));
+    }
+    for room in &standing.rooms {
+        lines.push(format!("physics room `{}`: {}", room.id, room.differs.join(", ")));
+    }
+    lines
+}
+
+/// `iwbtg pkg fmt <pkg> [--check]`: formats every `.toml` file of the package read from `dir`
+/// (`tests/` included: its files are data too; the bundled engine pack is not) in the canonical
+/// layout, writing the ones that change back under `dir`. With `check` nothing is written, the
+/// files that would change are listed and the result is `Ok(false)`.
+pub fn fmt(dir: &Path, files: &PackageFiles, check: bool, out: &mut impl Write) -> io::Result<bool> {
+    let mut changed = Vec::new();
+    let mut broken = false;
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(crate::engine_pack::ENGINE_DIR))
+    {
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            writeln!(out, "{path}: not UTF-8")?;
+            broken = true;
+            continue;
+        };
+        match crate::fmt::format_toml(text) {
+            Ok(formatted) if formatted == text => {}
+            Ok(formatted) => {
+                if !check {
+                    let target = dir.join(path);
+                    std::fs::write(&target, formatted.as_bytes())
+                        .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", target.display())))?;
+                }
+                changed.push(path.to_owned());
+            }
+            Err(e) => {
+                writeln!(out, "{path}: {e}")?;
+                broken = true;
+            }
+        }
+    }
+    let verb = if check { "would change" } else { "formatted" };
+    for p in &changed {
+        writeln!(out, "{verb}: {p}")?;
+    }
+    if changed.is_empty() && !broken {
+        writeln!(out, "no changes")?;
+    } else if !changed.is_empty() {
+        writeln!(out, "{} file(s) {verb}", changed.len())?;
+    }
+    Ok(!broken && !(check && !changed.is_empty()))
+}
+
+// Writes scratch folders under `temp_dir`, which wasm32-wasip1 has not got (the CI wasip1 job).
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod fmt_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("iwbtg-fmt-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("rooms")).unwrap();
+        dir
+    }
+
+    /// Reads the folder as the `iwbtg` binary would (no engine pack here) and formats it.
+    fn fmt_main(dir: &Path, check: bool) -> io::Result<bool> {
+        let files = PackageFiles::load_dir(dir).unwrap();
+        fmt(dir, &files, check, &mut io::sink())
+    }
+
+    #[test]
+    fn fmt_writes_then_a_second_run_and_check_find_nothing() {
+        let dir = scratch("write");
+        std::fs::write(
+            dir.join("rooms/a.toml"),
+            "size=[800,608]\ninstances=[{x=1,y=2,kind=\"spike\"}]\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("game.toml"), "id = \"x\"\n").unwrap();
+        assert!(!fmt_main(&dir, true).unwrap(), "check reports the file");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("rooms/a.toml")).unwrap(),
+            "size=[800,608]\ninstances=[{x=1,y=2,kind=\"spike\"}]\n",
+            "check writes nothing"
+        );
+        assert!(fmt_main(&dir, false).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("rooms/a.toml")).unwrap(),
+            "size = [800, 608]\ninstances = [\n  { kind = \"spike\", x = 1, y = 2 },\n]\n"
+        );
+        assert!(fmt_main(&dir, false).unwrap(), "idempotent: nothing left to do");
+        assert!(fmt_main(&dir, true).unwrap(), "and check agrees");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fmt_fails_on_a_file_that_is_not_toml() {
+        let dir = scratch("bad");
+        std::fs::write(dir.join("rooms/a.toml"), "a = \n").unwrap();
+        assert!(!fmt_main(&dir, false).unwrap());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+/// The two hashes of a package, as lowercase hex: `(gameplay_hash, content_hash)`. The gameplay
+/// hash exists only for a package that loads without errors; those errors are returned instead.
+pub fn hashes(files: &PackageFiles, trace_mode: bool) -> Result<(String, String), Vec<String>> {
+    let report = load_report(files, mode(trace_mode));
+    let gameplay = match report.gameplay_hash {
+        Some(h) if report.ok() => h,
+        _ => {
+            return Err(report
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == Severity::Error)
+                .map(ToString::to_string)
+                .collect());
+        }
+    };
+    Ok((hex(&gameplay), hex(&files.content_hash())))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// `iwbtg pkg hash <pkg>`: writes `gameplay_hash:` and `content_hash:` (docs/format/versioning.md).
+/// `Ok(false)` (exit 1) when the package has errors, which are written instead.
+pub fn hash(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io::Result<bool> {
+    match hashes(files, trace_mode) {
+        Ok((gameplay, content)) => {
+            writeln!(out, "gameplay_hash: {gameplay}")?;
+            writeln!(out, "content_hash: {content}")?;
+            Ok(true)
+        }
+        Err(errors) => {
+            for e in &errors {
+                writeln!(out, "{e}")?;
+            }
+            writeln!(
+                out,
+                "FAILED: the package has {} errors, so it has no gameplay hash",
+                errors.len()
+            )?;
+            Ok(false)
+        }
+    }
+}
+
+/// What `iwbtg pkg upgrade` would write: the files that change and the gameplay hash before
+/// and after (docs/format/v1.md, Upgrading a format-0 package).
+#[derive(Debug)]
+pub struct UpgradePlan {
+    /// The package's format before the upgrade.
+    pub from: u32,
+    /// Each file that changes, as (path, new bytes), in path order.
+    pub changed: Vec<(String, Vec<u8>)>,
+    /// `gameplay_hash` of the package as it is.
+    pub hash_before: [u8; 32],
+    /// `gameplay_hash` of the upgraded package. It differs from `hash_before` until #928 makes
+    /// the hash stable across migrations (docs/architecture/versioning.md, Format 1 freeze).
+    pub hash_after: [u8; 32],
+}
+
+/// Plans the upgrade of `files` to [`crate::FORMAT_VERSION`]: the package must load, every
+/// `.toml` file outside the bundled engine pack gets the current `#:schema` folder, `game.toml`
+/// is migrated step by step ([`crate::migrate`]), and the result must load into the same
+/// `GameDef`. `Err` carries the lines to print: the package's errors, or why the upgraded
+/// package is refused.
+pub fn plan_upgrade(files: &PackageFiles, trace_mode: bool) -> Result<UpgradePlan, Vec<String>> {
+    let errors = |report: &crate::load::LoadReport| -> Vec<String> {
+        report
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .map(ToString::to_string)
+            .collect()
+    };
+    let before = load_report(files, mode(trace_mode));
+    let (Some(def), Some(hash_before), Some(resolved), true) = (
+        before.def.as_ref(),
+        before.gameplay_hash,
+        before.compat.as_ref(),
+        before.ok(),
+    ) else {
+        let mut lines = errors(&before);
+        lines.push("the package must load before it is upgraded".to_owned());
+        return Err(lines);
+    };
+    let text = |bytes: &[u8]| -> Result<String, String> {
+        let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF".as_slice()).unwrap_or(bytes);
+        String::from_utf8(bytes.to_vec()).map_err(|_| "not UTF-8".to_owned())
+    };
+    let manifest = text(files.get(crate::manifest::MANIFEST_PATH).unwrap_or_default())
+        .map_err(|e| vec![format!("game.toml: {e}")])?;
+    let from = crate::migrate::manifest_format(&manifest).unwrap_or(crate::FORMAT_VERSION);
+    let mut upgraded = files.clone();
+    let mut changed = Vec::new();
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(crate::engine_pack::ENGINE_DIR))
+    {
+        let old = text(bytes).map_err(|e| vec![format!("{path}: {e}")])?;
+        let mut new = crate::migrate::upgrade_schema_line(&old);
+        if path == crate::manifest::MANIFEST_PATH {
+            new = crate::migrate::upgrade_manifest(&new, resolved).map_err(|e| vec![e])?;
+        }
+        if new.as_bytes() != bytes {
+            upgraded
+                .insert(path, new.clone().into_bytes())
+                .map_err(|e| vec![format!("{path}: {e}")])?;
+            changed.push((path.to_owned(), new.into_bytes()));
+        }
+    }
+    let after = load_report(&upgraded, mode(trace_mode));
+    let Some(hash_after) = after.gameplay_hash.filter(|_| after.ok()) else {
+        let mut lines = errors(&after);
+        lines.push("the upgraded package does not load; nothing was written (please file a bug)".to_owned());
+        return Err(lines);
+    };
+    if after.def.as_ref() != Some(def) {
+        return Err(vec![
+            "the upgraded package would play differently; nothing was written (please file a bug)".to_owned(),
+        ]);
+    }
+    Ok(UpgradePlan {
+        from,
+        changed,
+        hash_before,
+        hash_after,
+    })
+}
+
+/// `iwbtg pkg upgrade <dir> [--check] [--trace-mode]`: rewrites the package in `dir` to the
+/// current format ([`plan_upgrade`]) and prints each changed file and both gameplay hashes. With
+/// `check` nothing is written and `Ok(false)` means the package is not current. A package that
+/// does not load, or whose upgrade would not load into the same `GameDef`, is left alone and is
+/// `Ok(false)`.
+pub fn upgrade(
+    dir: &Path,
+    files: &PackageFiles,
+    check: bool,
+    trace_mode: bool,
+    out: &mut impl Write,
+) -> io::Result<bool> {
+    let plan = match plan_upgrade(files, trace_mode) {
+        Ok(plan) => plan,
+        Err(lines) => {
+            for line in &lines {
+                writeln!(out, "{line}")?;
+            }
+            writeln!(out, "FAILED: not upgraded")?;
+            return Ok(false);
+        }
+    };
+    if plan.changed.is_empty() {
+        writeln!(out, "format {}: already current, no changes", plan.from)?;
+        return Ok(true);
+    }
+    if !check {
+        for (path, bytes) in &plan.changed {
+            let target = dir.join(path);
+            std::fs::write(&target, bytes)
+                .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", target.display())))?;
+        }
+    }
+    let verb = if check { "would change" } else { "upgraded" };
+    for (path, _) in &plan.changed {
+        writeln!(out, "{verb}: {path}")?;
+    }
+    writeln!(out, "format {} -> {}", plan.from, crate::FORMAT_VERSION)?;
+    writeln!(out, "gameplay_hash before: {}", hex(&plan.hash_before))?;
+    writeln!(out, "gameplay_hash after:  {}", hex(&plan.hash_after))?;
+    if plan.hash_before != plan.hash_after {
+        writeln!(
+            out,
+            "note: the gameplay hash moves with the format until #928; the game plays the same"
+        )?;
+    }
+    Ok(!check)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::physics::RoomPhysicsStanding;
+
+    fn golden() -> PackageFiles {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden/one_room.pkg");
+        PackageFiles::load_dir(dir).unwrap()
+    }
+
+    fn edit(files: &PackageFiles, path: &str, f: impl FnOnce(String) -> String) -> PackageFiles {
+        let mut out = files.clone();
+        let text = String::from_utf8(files.get(path).unwrap().to_vec()).unwrap();
+        out.insert(path, f(text).into_bytes()).unwrap();
+        out
+    }
+
+    #[test]
+    fn a_comment_keeps_the_gameplay_hash_and_changes_the_content_hash() {
+        let base = golden();
+        let (g0, c0) = hashes(&base, false).unwrap();
+        let commented = edit(&base, "rooms/title.toml", |t| {
+            format!("# a note for the next editor\n{t}")
+        });
+        let (g1, c1) = hashes(&commented, false).unwrap();
+        assert_eq!(g0, g1, "a comment is not gameplay");
+        assert_ne!(c0, c1, "but it is a different file");
+    }
+
+    #[test]
+    fn music_keeps_the_gameplay_hash() {
+        let base = golden();
+        let (g0, c0) = hashes(&base, false).unwrap();
+        let mut with_music = base.clone();
+        with_music
+            .insert("music/theme.ogg", b"OggS not really audio".to_vec())
+            .unwrap();
+        let (g1, c1) = hashes(&with_music, false).unwrap();
+        assert_eq!(g0, g1);
+        assert_ne!(c0, c1);
+    }
+
+    #[test]
+    fn a_gameplay_change_changes_both_hashes() {
+        let base = golden();
+        let (g0, c0) = hashes(&base, false).unwrap();
+        let wider = edit(&base, "rooms/title.toml", |t| t.replace("800", "801"));
+        let (g1, c1) = hashes(&wider, false).unwrap();
+        assert_ne!(g0, g1, "the room size is gameplay");
+        assert_ne!(c0, c1);
+    }
+
+    #[test]
+    fn line_ends_do_not_change_the_content_hash_and_tests_are_not_shipped() {
+        let base = golden();
+        let crlf = edit(&base, "rooms/title.toml", |t| t.replace('\n', "\r\n"));
+        assert_eq!(base.content_hash(), crlf.content_hash());
+        let mut with_tests = base.clone();
+        with_tests
+            .insert("tests/trace-map.toml", b"x = 1\n".to_vec())
+            .unwrap();
+        assert_eq!(
+            base.content_hash(),
+            with_tests.content_hash(),
+            "tests/ is not shipped"
+        );
+    }
+
+    #[test]
+    fn check_and_hash_print_the_same_gameplay_hash() {
+        let base = golden();
+        let (gameplay, content) = hashes(&base, false).unwrap();
+        let mut out = Vec::new();
+        assert!(check(&base, false, &mut out).unwrap());
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.contains(&format!(
+                "gameplay_hash: {gameplay}
+"
+            )),
+            "{text}"
+        );
+        assert!(
+            text.ends_with(
+                "OK (0 warnings)
+"
+            ),
+            "{text}"
+        );
+        let mut out = Vec::new();
+        assert!(hash(&base, false, &mut out).unwrap());
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            format!(
+                "gameplay_hash: {gameplay}
+content_hash: {content}
+"
+            )
+        );
+    }
+
+    #[test]
+    fn a_broken_package_fails_check_and_has_no_hashes() {
+        let broken = edit(&golden(), "rooms/title.toml", |_| {
+            "size = [0, 0]
+"
+            .to_owned()
+        });
+        let mut out = Vec::new();
+        assert!(!check(&broken, false, &mut out).unwrap());
+        assert!(String::from_utf8(out).unwrap().contains("FAILED: "));
+        assert!(!hash(&broken, false, &mut io::sink()).unwrap());
+    }
+
+    #[test]
+    fn a_broken_package_has_no_hashes() {
+        let broken = edit(&golden(), "rooms/title.toml", |_| "size = [0, 0]\n".to_owned());
+        assert!(hashes(&broken, false).is_err());
+    }
+
+    #[test]
+    fn physics_lines_name_the_pack_or_the_differing_fields() {
+        let matching = PhysicsStanding {
+            pack: Some("a1".to_owned()),
+            family: iwbtg_sim::def::KidFamily::A1,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(physics_lines(&matching), vec!["physics: a1".to_owned()]);
+        let custom = PhysicsStanding {
+            differs: vec!["numbers.gravity".to_owned(), "events.step".to_owned()],
+            ..matching
+        };
+        assert_eq!(
+            physics_lines(&custom),
+            vec![
+                "physics: custom (2 fields differ)".to_owned(),
+                "physics fields: numbers.gravity, events.step".to_owned(),
+            ]
+        );
+        let bare = PhysicsStanding {
+            pack: None,
+            family: iwbtg_sim::def::KidFamily::B,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(physics_lines(&bare), vec!["physics: B preset".to_owned()]);
+    }
+
+    #[test]
+    fn physics_lines_name_a_differing_room_profile() {
+        let room = RoomPhysicsStanding {
+            id: "fast".to_owned(),
+            differs: vec!["numbers.run_speed".to_owned()],
+        };
+        let matching = PhysicsStanding {
+            pack: Some("a1".to_owned()),
+            family: iwbtg_sim::def::KidFamily::A1,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(
+            physics_lines(&PhysicsStanding {
+                rooms: vec![room.clone()],
+                ..matching.clone()
+            }),
+            vec![
+                "physics: custom (1 room profile differs)".to_owned(),
+                "physics room `fast`: numbers.run_speed".to_owned(),
+            ]
+        );
+        // The game's own profile differs too: both are named.
+        assert_eq!(
+            physics_lines(&PhysicsStanding {
+                differs: vec!["events.step".to_owned()],
+                rooms: vec![room],
+                ..matching
+            }),
+            vec![
+                "physics: custom (1 field differs, 1 room profile differs)".to_owned(),
+                "physics fields: events.step".to_owned(),
+                "physics room `fast`: numbers.run_speed".to_owned(),
+            ]
+        );
+    }
+}

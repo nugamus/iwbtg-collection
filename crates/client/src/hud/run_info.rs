@@ -20,6 +20,7 @@ use crate::stats::fmt_ticks;
 use crate::ui::fonts::Type;
 use crate::ui::glow::{Glow, glowing};
 use crate::ui::icons::{Icon, icon};
+use crate::ui::notice;
 use crate::ui::shape::{Ink, Shape};
 use crate::ui::tokens;
 use crate::ui::widgets::{sheared, text};
@@ -161,6 +162,7 @@ pub fn timer_parts(ticks: u64, rate: u32) -> (String, String) {
 pub fn read(
     game: NonSend<Game>,
     mods: Option<Res<RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
     collector: Option<Res<Collector>>,
     files: Option<Res<ArtFiles>>,
     mut labels: Local<[Option<String>; 4]>,
@@ -174,19 +176,33 @@ pub fn read(
     let sim = &game.sim;
     let world = sim.world();
     let mods = mods.map_or(ModSet::NONE, |m| m.0);
-    let unranked = sim.options().mode == PlayMode::Original || mods.unranked_by().is_some();
-    let held = collector.map_or(0, |c| {
+    let unranked = sim.options().mode == PlayMode::Original
+        || practice.is_some_and(|p| p.0)
+        || mods.unranked_by().is_some();
+    let held = collector.as_ref().map_or(0, |c| {
         let f = c.last();
         f.held | f.pressed
     });
     if files.as_ref().is_none_or(|f| f.is_changed()) {
-        *labels = files.as_ref().map_or_else(Default::default, |f| {
+        let parsed = files.as_ref().map_or_else(Default::default, |f| {
             f.0.get("game.toml")
                 .and_then(|b| std::str::from_utf8(b).ok())
                 .and_then(|t| Manifest::parse(t).ok())
                 .and_then(|m| m.controls.map(|c| c.labels().map(|l| l.map(str::to_owned))))
                 .unwrap_or_default()
         });
+        // #52: before play, name the extra actions this game labels and the keys bound to them.
+        // Once per package load, which is when `ArtFiles` changes.
+        if files.is_some()
+            && let Some(collector) = collector.as_ref()
+            && let Some(line) = crate::controls::extra_actions_notice(
+                parsed.each_ref().map(|l| l.as_deref()),
+                collector.bindings(),
+            )
+        {
+            notice::post(notice::Kind::Controls, &line);
+        }
+        *labels = parsed;
     }
     let want = Look {
         unranked,
@@ -197,7 +213,8 @@ pub fn read(
     if *look != want {
         *look = want;
     }
-    let stages = sim.def().timing.stages.len() as u32 + 1;
+    // The selected map's chain (#1010): maps may have their own stage list.
+    let stages = sim.def().map_timing(world.map).stages.len() as u32 + 1;
     let deaths = world.engine.run.deaths;
     let now = RunInfo {
         ticks: preview
@@ -705,6 +722,64 @@ mod tests {
             [Some("Teleport".into()), None, Some("Slow".into()), None]
         );
         assert_eq!(looks("clear.pkg"), [None, None, None, None]);
+    }
+
+    /// #1010: the stage total comes from the selected map's timing chain, not the package
+    /// `[timing]`'s one.
+    #[test]
+    fn the_stage_total_comes_from_the_selected_map() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut def = (*pkg.def).clone();
+        let base = def.map_timing(0).clone();
+        def.maps = vec![
+            iwbtg_sim::def::MapDef {
+                id: "main".to_owned(),
+                timing: base.clone(),
+                start: iwbtg_sim::stripped::RankedStart::default(),
+            },
+            iwbtg_sim::def::MapDef {
+                id: "two".to_owned(),
+                timing: iwbtg_sim::timing::TimingDef {
+                    start: base.start,
+                    end: base.end,
+                    stages: vec![
+                        iwbtg_sim::timing::TimingTrigger::RunStart,
+                        iwbtg_sim::timing::TimingTrigger::RunStart,
+                    ],
+                },
+                start: iwbtg_sim::stripped::RankedStart::default(),
+            },
+        ];
+        let def = std::sync::Arc::new(def);
+        let options = iwbtg_sim::sim::SimOptions {
+            start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: iwbtg_sim::sound::DllMode::Model,
+            mode: PlayMode::Original,
+            map: Some("two".to_owned()),
+        };
+        let prepared = iwbtg_sim::sim::Sim::prepare(&def).unwrap();
+        let sim = iwbtg_sim::sim::Sim::new_prepared(def, options, &prepared).unwrap();
+        let mut world = World::new();
+        world.insert_non_send(Game { sim });
+        world.insert_resource(Paused::default());
+        world.insert_resource(Preview::default());
+        world.insert_resource(crate::hud::Shown::default());
+        world.init_resource::<StageDeaths>();
+        world.init_resource::<RunInfo>();
+        world.init_resource::<Look>();
+        // The first tick fires both RunStart stages.
+        world
+            .non_send_mut::<Game>()
+            .sim
+            .step(iwbtg_sim::input::InputFrame::EMPTY);
+        world.run_system_once(read).unwrap();
+        let info = world.resource::<RunInfo>();
+        assert_eq!(info.stages, 3, "two stage splits and the end");
+        assert_eq!(info.stage, 3, "both stages done: the last segment");
     }
 
     #[test]

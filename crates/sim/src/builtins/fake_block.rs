@@ -1,5 +1,5 @@
-//! Built-in `fake_block` (mechanics `fake_block`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/fake_block.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `fake_block` (mechanics `fake_block`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/fake_block.md). Tier 2.
 //!
 //! Looks like a block but is not solid, or vanishes. Create applies `solid` (default the
 //! kind data) and `visible`. `vanish_on`:
@@ -42,41 +42,52 @@ const SPECS: &[ParamSpec] = &[
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "vanish_on",
         ty: ParamType::Enum(VANISH),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "approach_distance",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "blood_solid_when_no_kid",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["deride-kotaro-from-aslant"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "stops_bullets",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "reverses_platforms",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

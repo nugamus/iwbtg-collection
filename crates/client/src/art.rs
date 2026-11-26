@@ -11,6 +11,7 @@
 //! room's colour and leaves out the background layers that are not foregrounds.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
@@ -22,20 +23,33 @@ use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
 use crate::shell::{self, InRun, LoadedPackage, RUN_ONLY};
-use crate::view::order::Ladder;
+use crate::view::order::{Ladder, Layer};
 use crate::view::{Game, RoomSize};
 use crate::visual::PlainBackdrop;
 
-const COLOR_Z: f32 = -996.0;
-const BACKGROUND_Z: f32 = -995.0;
-/// In front of every instance and tile (`view::order::WORLD_Z`), behind the overlay (z 1000).
-const FOREGROUND_Z: f32 = 995.0;
-
+/// The loaded package's files, shared with the other run resources that read them. Cloning this
+/// resource's handle copies an [`Arc`], never the package's bytes: every room build and scroll
+/// borrows the one immutable store that [`LoadedPackage`] owns.
 #[derive(Resource)]
-pub struct ArtFiles(pub PackageFiles);
+pub struct ArtFiles(pub Arc<PackageFiles>);
 
 /// Room backgrounds and tile layers of the loaded package, for each run (`shell`).
 pub struct ArtPlugin;
+
+/// The room art's place in the module list (main.rs): its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ArtPlugin);
+    }
+}
 
 impl Plugin for ArtPlugin {
     fn build(&self, app: &mut App) {
@@ -199,10 +213,19 @@ fn corner(room: Vec2, at: Vec2, z: f32) -> Transform {
     Transform::from_xyz(at.x - room.x / 2.0, room.y / 2.0 - at.y, z)
 }
 
+/// The declared layer of background `bg` at its file index `n` in the room's list: a background
+/// band, or the foreground band when it is a foreground layer. Later layers draw on top
+/// (`Layer` owns the tie rule).
+fn background_layer(bg: &Background, n: usize) -> Layer {
+    if bg.foreground {
+        Layer::Foreground(n)
+    } else {
+        Layer::Background(n)
+    }
+}
+
 fn background_z(bg: &Background, n: usize) -> f32 {
-    let base = if bg.foreground { FOREGROUND_Z } else { BACKGROUND_Z };
-    // Later layers draw on top.
-    base + n as f32 * 1e-3
+    background_layer(bg, n).z()
 }
 
 fn spawn_background(
@@ -225,6 +248,12 @@ fn spawn_background(
         .collect()
 }
 
+/// Whether the art on screen must be rebuilt: the sim is in another room, or a retry restarted
+/// the same room's clock at its first tick.
+fn needs_rebuild(shown: Option<RoomId>, start_tick: u64, room: RoomId, tick: u64) -> bool {
+    shown != Some(room) || tick < start_tick
+}
+
 /// Rebuilds the art when the sim's room changes.
 #[allow(
     clippy::too_many_arguments,
@@ -245,7 +274,7 @@ pub fn sync_room_art(
     let room = game.sim.world().room;
     let tick = game.sim.world().tick;
     // A retry starts a new sim in the same room with the tick back at its start.
-    if shown.room == Some(room) && tick >= shown.start_tick {
+    if !needs_rebuild(shown.room, shown.start_tick, room, tick) {
         return;
     }
     shown.room = Some(room);
@@ -276,7 +305,7 @@ pub fn sync_room_art(
             commands
                 .spawn((
                     Sprite::from_color(color, size),
-                    Transform::from_xyz(0.0, 0.0, COLOR_Z),
+                    Transform::from_xyz(0.0, 0.0, Layer::Colour.z()),
                     RUN_ONLY,
                 ))
                 .id(),
@@ -351,7 +380,7 @@ pub(crate) fn still(
     let tiles = load_tiles(files, name).unwrap_or_default();
     let mut out = Vec::new();
     if let Some([r, g, b]) = art.color {
-        let t = corner(room, Vec2::ZERO, COLOR_Z);
+        let t = corner(room, Vec2::ZERO, Layer::Colour.z());
         out.push((Sprite::from_color(Color::srgb_u8(r, g, b), room), t));
     }
     for (n, bg) in art.backgrounds.iter().enumerate() {
@@ -408,6 +437,66 @@ mod tests {
     use super::*;
 
     #[test]
+    fn art_files_for_one_package_share_its_bytes() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        // Two runs' worth of the resource, as the shell builds it: cloning the `Arc` shares the
+        // store the package owns instead of copying every file.
+        let a = ArtFiles(pkg.files.clone());
+        let b = ArtFiles(pkg.files.clone());
+        assert!(Arc::ptr_eq(&pkg.files, &a.0));
+        assert!(Arc::ptr_eq(&a.0, &b.0));
+        // The package plus both resources hold one allocation, not three.
+        assert_eq!(Arc::strong_count(&a.0), 3);
+        // Both read the same bytes, and the loader finds the room art through either.
+        assert_eq!(a.0.get("game.toml"), b.0.get("game.toml"));
+        assert_eq!(
+            load_room_art(&a.0, &pkg.def.room(pkg.def.start_room).unwrap().name),
+            load_room_art(&b.0, &pkg.def.room(pkg.def.start_room).unwrap().name)
+        );
+        // Closing the run drops its resources: the package is the only owner again, so the store
+        // is released at that boundary rather than leaked per run.
+        drop((a, b));
+        assert_eq!(Arc::strong_count(&pkg.files), 1);
+    }
+
+    /// Backgrounds and tile layers load through the shared store, as a room build reads them.
+    /// The showcase's first room has three background layers and two tile layers.
+    #[test]
+    fn room_backgrounds_and_tiles_load_through_the_shared_store() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let a = ArtFiles(pkg.files.clone());
+        let b = ArtFiles(pkg.files.clone());
+        let art = load_room_art(&a.0, "courtyard").unwrap();
+        assert_eq!(art.backgrounds.len(), 3);
+        assert!(art.color.is_some());
+        let tiles = load_tiles(&a.0, "courtyard").unwrap();
+        assert_eq!(tiles.len(), 2);
+        assert!(!tiles[0].tiles.is_empty());
+        // The same through the other run's handle, and distinct packages never share a store.
+        assert_eq!(tiles.len(), load_tiles(&b.0, "courtyard").unwrap().len());
+        let other = crate::package::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg"),
+            false,
+        )
+        .unwrap();
+        assert!(!Arc::ptr_eq(&a.0, &other.files));
+    }
+
+    /// A new room rebuilds the art, and so does a retry that restarts the room's clock; a tick
+    /// moving forward in the same room does not.
+    #[test]
+    fn a_new_room_or_a_retry_rebuilds_the_art() {
+        let (room, other) = (RoomId(1), RoomId(2));
+        assert!(needs_rebuild(None, 0, room, 0), "the first build");
+        assert!(!needs_rebuild(Some(room), 10, room, 10));
+        assert!(!needs_rebuild(Some(room), 10, room, 99));
+        assert!(needs_rebuild(Some(room), 10, other, 10), "another room");
+        assert!(needs_rebuild(Some(room), 10, room, 0), "a retry");
+    }
+
+    #[test]
     fn no_background_keeps_only_the_foreground_layers() {
         let behind = Background::new("sky", 0..3);
         let front = Background {
@@ -421,13 +510,27 @@ mod tests {
     }
 
     #[test]
+    fn backgrounds_take_their_declared_layer_from_the_file_foreground_flag() {
+        let behind = Background::new("sky", 0..3);
+        let front = Background {
+            foreground: true,
+            ..Background::new("stone", 0..5)
+        };
+        // The file index is the tie rule, foregrounds included, as before.
+        assert_eq!(background_layer(&behind, 2), Layer::Background(2));
+        assert_eq!(background_layer(&front, 2), Layer::Foreground(2));
+        assert!(background_z(&behind, 2) < Layer::World.z());
+        assert!(background_z(&front, 2) > Layer::World.z());
+    }
+
+    #[test]
     fn deeper_layers_are_farther_back_and_never_past_the_backgrounds() {
         let ladder = Ladder::new([0.0, 1_000_000.0, -50.0, 1e12, -1e12]);
         assert!(ladder.tile_z(1) < ladder.tile_z(0));
         assert!(ladder.tile_z(2) > ladder.tile_z(0));
-        // Eight background layers sit at BACKGROUND_Z + n * 1e-3.
-        assert!(ladder.tile_z(3) > BACKGROUND_Z + 8e-3);
-        assert!(ladder.tile_z(4) < FOREGROUND_Z);
+        // Eight background layers sit in the background band, below the world band.
+        assert!(ladder.tile_z(3) > Layer::Background(7).z());
+        assert!(ladder.tile_z(4) < Layer::Foreground(0).z());
     }
 
     #[test]

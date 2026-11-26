@@ -1,5 +1,5 @@
-//! Built-in `spike` (mechanics `spike`; collision spikes Confirmed; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/spike.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `spike` (mechanics `spike`; collision spikes Confirmed; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/spike.md). Tier 1.
 //!
 //! A spike is a killer: its class is `ClassMask::KILLER` (set by the loader) and the kid's
 //! "Collision with killer" handler kills, so the spike has no kill code. The mask comes from the
@@ -28,31 +28,40 @@ const SPECS: &[ParamSpec] = &[
         name: "dir",
         ty: ParamType::Enum(DIRS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "size",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "depth",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroys_bullets",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "auto_rotate",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

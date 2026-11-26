@@ -1,7 +1,10 @@
-//! Sprite and image variables and the per-tick animation update (docs/plans/sim-core.md 2.1
+//! Sprite and image variables and the per-tick animation update (docs/architecture/sim/tick.md
 //! rows 8b and 13, R7, R7b-R7d).
 //!
-//! WP0 declared; WP1 owns. CLONE_SPEC "sprites and animation", Confirmed (recorder): once per
+//! One system in the R30 tick scheduler: `TimingRules::animation` declares an advance to be
+//! frames per tick, and `TimingRules::anim_slot` places the phase that applies it.
+//!
+//! CLONE_SPEC "sprites and animation", Confirmed (recorder): once per
 //! step, after End Step and Draw, `image_index += image_speed`; at least `image_number` wraps by
 //! subtracting it once and fires Animation End, whose changes stand
 //! (traces/kaenbyou/t-anim-1.csv rows 18 and 45, traces/rely-the-needle-4-2/anim-save-end.csv
@@ -160,13 +163,13 @@ impl Image {
 /// (recorder), traces/kaenbyou/t-anim-1.csv). Returns true when Animation End fires.
 ///
 /// `frames` is the sprite's `image_number`. With no sprite, or a sprite of 0 frames, the index
-/// advances and never wraps under `TickRules::anim_nosprite = Advance` (Confirmed (recorder),
+/// advances and never wraps under `TimingRules::anim_nosprite = Advance` (Confirmed (recorder),
 /// traces/little-trap/anim-nosprite.csv) and stays under `Frozen`. An index that goes below 0
-/// follows `TickRules::anim_below_zero` (sprites Inferred step 3, not traced). A non-finite
+/// follows `TimingRules::anim_below_zero` (sprites Inferred step 3, not traced). A non-finite
 /// result halts (N15).
 pub fn advance(img: &mut Image, frames: u16, rules: &TickRules) -> Result<bool, SimError> {
     if img.sprite.is_none() || frames == 0 {
-        if rules.anim_nosprite == NoSpriteAnim::Advance {
+        if rules.timing.anim_nosprite == NoSpriteAnim::Advance {
             img.index = finite(img.index + img.speed, "image_index")?;
         }
         return Ok(false);
@@ -177,7 +180,7 @@ pub fn advance(img: &mut Image, frames: u16, rules: &TickRules) -> Result<bool, 
     if index.get() >= n.get() {
         index -= n;
         fired = true;
-    } else if index.get() < 0.0 && rules.anim_below_zero == BelowZeroWrap::AddFramesAndFire {
+    } else if index.get() < 0.0 && rules.timing.anim_below_zero == BelowZeroWrap::AddFramesAndFire {
         index += n;
         fired = true;
     }
@@ -236,7 +239,7 @@ mod tests {
         let mut img = sprite_img(0.0, -0.5);
         assert!(advance(&mut img, 4, &rules).unwrap());
         assert_eq!(img.index(), Real::new(3.5));
-        rules.anim_below_zero = BelowZeroWrap::None;
+        rules.timing.anim_below_zero = BelowZeroWrap::None;
         let mut img = sprite_img(0.0, -0.5);
         assert!(!advance(&mut img, 4, &rules).unwrap());
         assert_eq!(img.index(), Real::new(-0.5));
@@ -247,7 +250,7 @@ mod tests {
             assert!(!advance(&mut img, 0, &rules).unwrap());
         }
         assert_eq!(img.index(), Real::new(60.0), "anim-nosprite: never wraps");
-        rules.anim_nosprite = NoSpriteAnim::Frozen;
+        rules.timing.anim_nosprite = NoSpriteAnim::Frozen;
         assert!(!advance(&mut img, 0, &rules).unwrap());
         assert_eq!(img.index(), Real::new(60.0));
     }

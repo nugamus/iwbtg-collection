@@ -1,7 +1,7 @@
-//! The per-tick step budget (decision 0001 "Step budget"). WP9.1 owns it.
+//! The per-tick step budget (decision 0001 "Step budget").
 //!
 //! One budget unit is one Rhai operation (one `on_progress` callback). Host functions that do
-//! real work charge extra units to the same counter (WP9.2 fixes the cost table). The tick-wide
+//! real work charge extra units to the same counter (the cost table is fixed). The tick-wide
 //! counter resets at the start of every tick. Exceeding the tick budget or a single call's
 //! budget ends the call with `ErrorTerminated`, which is a deterministic script error: a runaway
 //! script halts the sim the same way on every target.
@@ -29,6 +29,8 @@ pub const COSTS: &[(&str, u64, u64, &str)] = &[
     ("instance_create", 50, 0, ""),
     ("instances", 0, 1, "instance returned"),
     ("collision_line", 0, 1, "pixel sampled"),
+    ("index$get$", 0, 1, "stored array element copied"),
+    ("index$set$", 0, 1, "stored array element copied"),
 ];
 
 /// The extra units `name` charges: (per call, per item). `(0, 0)` for a function not listed.

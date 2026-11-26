@@ -218,6 +218,62 @@ mod tests {
         assert!(matches!(&ev[1], Event::Cleared { splits, .. } if splits == &vec![50, 50, 50]));
     }
 
+    /// #1011: the plugin seeds the tracker with the pre-step state, so the very first tick is
+    /// counted and a death on it is not lost.
+    #[test]
+    fn a_death_on_the_first_tick_is_counted_after_a_seed() {
+        let mut t = Tracker::new(0);
+        assert!(t.observe(at(0, 0, 0, false, 0)).is_empty(), "the seed");
+        assert_eq!(
+            t.observe(at(1, 1, 0, false, 1)),
+            vec![Event::Ticked, Event::Died { segment: 0, n: 1 }]
+        );
+    }
+
+    /// #1011: a one-tick clear is recorded, where the first post-seed observation alone as the
+    /// baseline would hide it (`ended` is already true and never changes again).
+    #[test]
+    fn a_one_tick_clear_is_recorded() {
+        let mut t = Tracker::new(0);
+        t.observe(at(0, 0, 0, false, 0));
+        assert_eq!(
+            t.observe(at(1, 0, 0, true, 1)),
+            vec![
+                Event::Ticked,
+                Event::Cleared {
+                    ticks: 1,
+                    deaths: 0,
+                    splits: vec![1],
+                    segment_deaths: vec![0],
+                    death_log: Vec::new(),
+                }
+            ]
+        );
+    }
+
+    /// #1011: a stage split on the first tick is recorded.
+    #[test]
+    fn a_split_on_the_first_tick_is_recorded() {
+        let mut t = Tracker::new(1);
+        t.observe(at(0, 0, 0, false, 0));
+        assert_eq!(t.observe(at(1, 0, 1, false, 1)), vec![Event::Ticked]);
+        let ev = t.observe(at(2, 0, 1, true, 2));
+        assert!(matches!(&ev[1], Event::Cleared { splits, .. } if splits == &vec![1, 2]));
+    }
+
+    /// The baseline may hold deaths from a save (`StartPoint::FromSave`): they are not counted
+    /// as this run's, only a death after the seed is.
+    #[test]
+    fn a_seeded_baseline_keeps_the_saves_death_counter() {
+        let mut t = Tracker::new(0);
+        t.observe(at(0, 5, 0, false, 0));
+        assert_eq!(t.observe(at(1, 5, 0, false, 1)), vec![Event::Ticked]);
+        assert_eq!(
+            t.observe(at(2, 6, 0, false, 2)),
+            vec![Event::Ticked, Event::Died { segment: 0, n: 1 }]
+        );
+    }
+
     /// A death is logged where and when the kid was last seen alive, once per counted death;
     /// a restart while alive logs the spot before the restart, not the new kid at the save.
     #[test]

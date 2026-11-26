@@ -1,4 +1,7 @@
-//! Path following (docs/plans/sim-core.md 3.1, M8; UNKNOWN U9, U-MECH-4). Tier 2.
+//! Path following (docs/architecture/sim/motion.md, M8; UNKNOWN U9, U-MECH-4). Tier 2.
+//!
+//! One system in the R30 tick scheduler: `TimingRules::paths` declares the path clock to be
+//! ticks, and [`advance`] moves the position once, inside automatic motion.
 //!
 //! [`advance`] is the only path rule. What the spec has (CLONE_SPEC motion U9, Confirmed
 //! (recorder) by `traces/rely-the-needle-4-2/t-evo-1.csv`): a probe on a 40 px path at path speed
@@ -7,7 +10,7 @@
 //! position reads 1.0 and x stays at the end. Everything else here is the M8 default (Design,
 //! OPEN until TR-MECH-02): straight segments between the points, the position advancing by
 //! `path_speed / length` per tick, a closed path's last point joined to its first, the points'
-//! speed factors ignored, smooth paths `SimError::Unsupported`. WP2 owns this file.
+//! speed factors ignored, smooth paths `SimError::Unsupported`.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +26,8 @@ pub struct PathRun {
     pub path: PathId,
     /// GM `path_position`, 0 to 1.
     pub position: Real,
+    /// GM `path_positionprevious`: `position` at the start of the last [`advance`].
+    pub position_previous: Real,
     /// GM `path_speed`.
     pub speed: Real,
     /// What happens at the end.
@@ -31,6 +36,10 @@ pub struct PathRun {
     pub absolute: bool,
     /// GM `path_scale`.
     pub scale: Real,
+    /// GM `path_orientation`, degrees. The M8 default: the path's points rotate about its first
+    /// point before the relative anchor and scale apply (docs/architecture/sim/motion.md, OPEN
+    /// until TR-MECH-02).
+    pub orientation: Real,
     /// Start position for a relative path.
     pub xstart: Real,
     /// Start position for a relative path.
@@ -68,10 +77,12 @@ pub fn start(
     Ok(PathRun {
         path,
         position: Real::ZERO,
+        position_previous: Real::ZERO,
         speed,
         end_action,
         absolute,
         scale: Real::ONE,
+        orientation: Real::ZERO,
         xstart: m.x(),
         ystart: m.y(),
     })
@@ -140,6 +151,8 @@ fn point_at(segs: &[Segment], distance: Real) -> Option<Point> {
 /// Errors: `SimError::Invariant` for a path id that names nothing, `SimError::Unsupported` for a
 /// smooth path or a path of zero length, `SimError::NonFinite` for a non-finite result.
 pub fn advance(run: &mut PathRun, m: &mut Motion, def: &GameDef) -> Result<bool, SimError> {
+    // GM `path_positionprevious`: the position the last step started from.
+    run.position_previous = run.position;
     let pdef = run
         .path
         .index()
@@ -213,18 +226,49 @@ pub fn advance(run: &mut PathRun, m: &mut Motion, def: &GameDef) -> Result<bool,
 
     let (px, py) = point_at(&segs, run.position * length)
         .ok_or_else(|| SimError::invariant(format!("path {} has no points", pdef.name)))?;
+    let (p0x, p0y) = point_at(&segs, Real::ZERO)
+        .ok_or_else(|| SimError::invariant(format!("path {} has no points", pdef.name)))?;
+    let (dx, dy) = rotated(px - p0x, py - p0y, run.orientation);
     let (x, y) = if run.absolute {
-        (px, py)
+        // Scale on an absolute path is OPEN (M8); orientation still turns the path about its
+        // first point.
+        (p0x + dx, p0y + dy)
     } else {
-        let (p0x, p0y) = point_at(&segs, Real::ZERO)
-            .ok_or_else(|| SimError::invariant(format!("path {} has no points", pdef.name)))?;
-        (
-            run.xstart + (px - p0x) * run.scale,
-            run.ystart + (py - p0y) * run.scale,
-        )
+        (run.xstart + dx * run.scale, run.ystart + dy * run.scale)
     };
     m.place(x, y)?;
     Ok(fired)
+}
+
+/// Rotates a path offset by GM `path_orientation` (degrees, counter-clockwise with y down).
+fn rotated(dx: Real, dy: Real, degrees: Real) -> (Real, Real) {
+    // gm-compare: ok (an unrotated path is the exact common case)
+    if degrees.get() == 0.0 {
+        return (dx, dy);
+    }
+    let rad = num::degtorad(degrees);
+    let (c, s) = (num::cos(rad), num::sin(rad));
+    (dx * c + dy * s, dy * c - dx * s)
+}
+
+/// The point of `run`'s path at its `position` (GM `path_x`/`path_y`): the path's own point,
+/// before scale, orientation and the relative anchor.
+pub fn position_point(run: &PathRun, def: &GameDef) -> Result<(Real, Real), SimError> {
+    let pdef = run
+        .path
+        .index()
+        .and_then(|i| def.paths.get(i))
+        .ok_or_else(|| SimError::invariant(format!("path {:?} is not in the game", run.path)))?;
+    let segs = segments(pdef);
+    let length = segs.iter().fold(Real::ZERO, |acc, s| acc + s.2);
+    if length.get() <= 0.0 || !length.is_finite() {
+        return Err(SimError::unsupported(format!(
+            "path {} has no length (M8)",
+            pdef.name
+        )));
+    }
+    point_at(&segs, run.position * length)
+        .ok_or_else(|| SimError::invariant(format!("path {} has no points", pdef.name)))
 }
 
 /// GML `path_end`: the instance stops following its path.

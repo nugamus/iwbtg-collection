@@ -1,4 +1,4 @@
-//! Built-in `jump_refresher` (mechanics `jump_refresher`; docs/plans/sim-core.md 6.1;
+//! Built-in `jump_refresher` (mechanics `jump_refresher`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/jump_refresher.md). Tier 3.
 //!
 //! Showdown moreJumping and moreJumping2: a kid touching it gets `djump` true
@@ -29,11 +29,16 @@ const SPECS: &[ParamSpec] = &[
         name: "hide_ticks",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "tjump",
         ty: ParamType::Enum(TJUMP),
         required: false,
+        legacy: None,
     },
 ];
 

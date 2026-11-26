@@ -1,6 +1,6 @@
 //! The golden corpus: small engine worlds we build ourselves (no creator content), each run for a
 //! fixed number of ticks on a fixed input, with one pinned state hash per case
-//! (docs/plans/sim-core.md 10.6, docs/architecture/testing.md).
+//! (docs/architecture/sim/determinism.md; docs/architecture/testing.md).
 //!
 //! Two programs include this file with `#[path]`, so it uses only `iwbtg_sim`'s public API and
 //! `std`:
@@ -743,7 +743,7 @@ fn keys() -> Fixture {
     fx
 }
 
-/// One probe reaches the non-finite path (docs/plans/sim-core.md 10.2): the sim halts with
+/// One probe reaches the non-finite path (docs/architecture/sim/numbers.md): the sim halts with
 /// `NonFinite` and freezes, on every target.
 fn non_finite() -> Fixture {
     let mut b = builder();

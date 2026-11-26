@@ -1,5 +1,5 @@
-//! Built-in `gravity_flip` (mechanics `gravity_flip`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/gravity_flip.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `gravity_flip` (mechanics `gravity_flip`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/gravity_flip.md). Tier 2.
 //!
 //! `direction = "up"` (KOT obj_ue, FT grav_up): a touch by the normal kid sets `global.grav`.
 //! `direction = "down"` (obj_sita, grav_down): a touch by the flipped kid clears it. The kid
@@ -33,16 +33,22 @@ const SPECS: &[ParamSpec] = &[
         name: "direction",
         ty: ParamType::Enum(DIRECTIONS),
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "transition",
         ty: ParamType::Enum(TRANSITIONS),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["kaenbyou"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

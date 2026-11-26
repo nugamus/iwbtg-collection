@@ -298,6 +298,47 @@ impl Bindings {
             .find(|k| self.client[k.index()].pad.contains(&input))
     }
 
+    /// The keys bound to `action`, by key code (the controls panel's action rows, #52).
+    pub fn keys_of(&self, action: Action) -> Vec<u8> {
+        self.keys
+            .iter()
+            .filter(|(_, a)| **a == action)
+            .map(|(key, _)| *key)
+            .collect()
+    }
+
+    /// The controller inputs bound to `action` ([`Bindings::keys_of`]).
+    pub fn pads_of(&self, action: Action) -> Vec<PadInput> {
+        PadInput::ALL
+            .into_iter()
+            .filter(|p| self.pad_action(*p) == Some(action))
+            .collect()
+    }
+
+    /// The keys bound to a client key.
+    pub fn client_keys_of(&self, key: ClientKey) -> Vec<u8> {
+        self.client[key.index()].keys.iter().copied().collect()
+    }
+
+    /// The controller inputs bound to a client key.
+    pub fn client_pads_of(&self, key: ClientKey) -> Vec<PadInput> {
+        self.client[key.index()].pad.iter().copied().collect()
+    }
+
+    /// Whether `action` still has exactly its default keys and controller inputs.
+    pub fn is_default_action(&self, action: Action) -> bool {
+        let default = Bindings::default();
+        self.keys_of(action) == default.keys_of(action)
+            && self.pads_of(action) == default.pads_of(action)
+    }
+
+    /// Whether a client key still has exactly its default inputs.
+    pub fn is_default_client(&self, key: ClientKey) -> bool {
+        let default = Bindings::default();
+        self.client_keys_of(key) == default.client_keys_of(key)
+            && self.client_pads_of(key) == default.client_pads_of(key)
+    }
+
     /// The key quick-retries the run.
     pub fn is_quick_retry_key(&self, key: u8) -> bool {
         self.client_key(key) == Some(ClientKey::QuickRetry)
@@ -309,7 +350,8 @@ impl Bindings {
         self.client_pad(input) == Some(ClientKey::QuickRetry)
     }
 
-    /// Some key or controller input stands for `action`.
+    /// Some key or controller input stands for `action` (the binding tests).
+    #[cfg(test)]
     pub fn binds(&self, action: Action) -> bool {
         self.keys.values().any(|a| *a == action) || self.pad.contains(&Some(action))
     }
@@ -724,6 +766,37 @@ fn migrate_legacy() {
 mod tests {
     use super::*;
 
+    /// #1155: the sim, the trace `.inputs` compiler and the client device map read one action
+    /// table. The client differs only in the *mapping* (Escape/Start open the pause menu, #758),
+    /// never in the actions themselves. Client-only inputs are not actions.
+    #[test]
+    fn the_client_and_the_sim_share_one_action_table() {
+        use iwbtg_sim::input::KeyMap;
+
+        let sim_map = KeyMap::iwbtg();
+        let client = Bindings::default();
+        for (key, action) in IWBTG_DEFAULT_KEYS {
+            assert_eq!(Action::from_name(action.name()), Some(action));
+            assert!(Action::ALL.contains(&action), "{action:?} is in Action::ALL");
+            if key == vk::ESCAPE {
+                // The only device-map divergence: Escape is the client pause key (#758).
+                assert_eq!(sim_map.action(key), Some(Action::Menu));
+                assert_eq!(client.key_action(key), None);
+            } else {
+                assert_eq!(sim_map.action(key), Some(action));
+                assert_eq!(client.key_action(key), Some(action), "{key}");
+            }
+        }
+        for (input, action) in DEFAULT_PAD {
+            assert!(Action::ALL.contains(&action));
+            assert_eq!(client.pad_action(input), Some(action));
+        }
+        // The client's own keys never name an action, so they can never enter a frame.
+        for key in ClientKey::ALL {
+            assert_eq!(Action::from_name(key.name()), None, "{}", key.name());
+        }
+    }
+
     #[test]
     fn defaults_are_the_fangame_standard() {
         let b = Bindings::default();
@@ -968,7 +1041,7 @@ mod tests {
 }
 
 /// The bindings' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct BindingsArgs {
     /// Change a global binding and save it: `ACTION=INPUT[,INPUT...]`, an input being a key name
     /// (`Space`, `LShift`, `F5`) or `pad:<button>` (`pad:south`, `pad:dpad-left`, `pad:stick-up`).
@@ -979,6 +1052,43 @@ pub struct BindingsArgs {
     /// Print the global bindings and exit.
     #[arg(long)]
     pub show_bindings: bool,
+}
+
+/// The bindings' place in the module list (main.rs): its flags, its loaded bindings and its plugin.
+pub struct Registration;
+
+static LOADED: std::sync::OnceLock<Bindings> = std::sync::OnceLock::new();
+
+impl crate::registration::ClientModule for Registration {
+    type Args = BindingsArgs;
+
+    fn prepare(
+        args: &mut BindingsArgs,
+        startup: &crate::registration::Startup,
+    ) -> Result<(), String> {
+        let _ = LOADED.set(load(args, startup.isolated)?);
+        Ok(())
+    }
+
+    fn standalone(
+        args: &BindingsArgs,
+        _startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        args.show_bindings.then(|| {
+            print!("{}", LOADED.get().expect("bindings prepare ran").describe());
+            Ok(())
+        })
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: BindingsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(BindingsPlugin(
+            LOADED.get().expect("bindings prepare ran").clone(),
+        ));
+    }
 }
 
 /// Reads the bindings from the settings (`settings::load` has run), applying and saving any

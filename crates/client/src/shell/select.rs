@@ -1,34 +1,42 @@
 //! The select screen (`--select <folder>`): the packages in a folder as game select's list
 //! (#149, `select/list.rs`): a panel per game with its key art, its maps under the selected one.
 //! Up and Down pick a map, Left and Right a game, a click picks either; Enter (or a click on the
-//! selected map) plays, Escape quits. Above the list, search, group, sort and filters (#150,
+//! selected map) plays in the picked mode (m5: Time Attack the stripped game, Classic the game as
+//! made until the shelf, #851), Escape goes back to the main menu. The toolbar (`ui::toolbar`)
+//! runs along the top. Above the list, search, group, sort and filters (#150,
 //! `select/controls.rs`, `select/filters.rs`) pick the rows it shows. The left side is a
 //! placeholder until #148: the picked game and map, and the keys.
 
 use std::path::{Path, PathBuf};
 
 use bevy::camera::visibility::RenderLayers;
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PrimaryWindow;
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::stripped::PlayMode;
 
 use super::AppScreen;
 use crate::stats::Book;
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::fonts::Type;
+use crate::ui::mode::Mode;
 use crate::ui::notice;
 use crate::ui::tokens;
 use crate::ui::widgets::text;
 
+pub mod collections;
 pub mod controls;
 pub mod filters;
 pub mod footer;
 pub mod library;
 pub mod list;
 pub mod mod_sheet;
+pub mod practice;
 
+use collections::Collections;
 use filters::Filters;
 use library::{GameInfo, Library, file_name};
 use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
@@ -37,6 +45,9 @@ use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
 pub const TITLE: &str = "IWBTG Collection";
 /// The layout is drawn for a window this tall (the artboard's 1080), scaled to the real one.
 const DESIGN_HEIGHT: f32 = 1080.0;
+/// How far m5's toolbar moves m4's game select down (`A3_SelectTimeAttack`: the search row from
+/// y 48 to 96).
+pub const UNDER_TOOLBAR: f32 = 48.0;
 
 /// The left side's picked game title (placeholder until #148).
 #[derive(Component)]
@@ -46,18 +57,37 @@ struct PickedTitle;
 #[derive(Component)]
 struct PickedMap;
 
+/// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
+#[derive(Component)]
+struct HintText;
+
+/// The keys hint, and the hint when the folder holds no packages.
+const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, goes back";
+const NO_PACKAGES: &str = "No packages here (folders with a game.toml, .iwbz files).";
+
 /// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
 /// `--mod-select-preview`: the mod select sheet opens with the screen.
-pub struct SelectPlugin(pub Option<PathBuf>, pub bool);
+pub struct SelectPlugin(pub Option<PathBuf>, pub bool, pub bool);
 
 impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
         let preview = self.1;
+        let practice_preview = self.2;
+        // The player's favorites and collections (a test inserts its own empty set first).
+        if app.world().get_resource::<Collections>().is_none() {
+            app.insert_resource(Collections::open(crate::storage::Store::data()));
+        }
         app.init_resource::<ListDim>()
             .init_resource::<Filters>()
+            .init_resource::<collections::Renaming>()
             .init_resource::<Shown>()
             .init_resource::<mod_sheet::Sheet>()
+            .init_resource::<practice::Sheet>()
+            .init_resource::<practice::Pick>()
+            .insert_resource(practice::Preview(practice_preview))
+            // `failed` reads it; the screen's tests add this plugin without `ShellPlugin`.
+            .add_message::<super::StartFailed>()
             .add_systems(
                 OnEnter(AppScreen::Select),
                 move |mut commands: Commands,
@@ -68,9 +98,13 @@ impl Plugin for SelectPlugin {
                       mods: Option<Res<crate::mods::RunMods>>,
                       speed: Option<Res<crate::practice::SlowSpeed>>,
                       mut sheet: ResMut<mod_sheet::Sheet>,
+                      mut practice_sheet: ResMut<practice::Sheet>,
+                      mut practice_pick: ResMut<practice::Pick>,
                       filters: Res<Filters>,
+                      lists: Res<Collections>,
                       mut shown: ResMut<Shown>,
                       mut backdrop: ResMut<Backdrop>,
+                      mode: Option<Res<Mode>>,
                       mut window: Query<&mut Window, With<PrimaryWindow>>| {
                     let paths = folder.as_deref().map(packages).unwrap_or_default();
                     let empty = Book::default();
@@ -86,15 +120,18 @@ impl Plugin for SelectPlugin {
                     let mods = mods.map_or(ModSet::NONE, |m| m.0);
                     let speed = speed.map_or(crate::practice::SLOW_SPEEDS[0], |s| s.0);
                     sheet.open = false;
+                    practice_sheet.open = false;
+                    practice_pick.start = None;
                     if preview {
                         sheet.open_with(mods);
                     }
                     let camera = camera(&mut commands);
                     let sel = sel.map(|s| *s).unwrap_or_default();
-                    let same = |l: &Library| {
-                        l.folder.as_deref() == folder.as_deref()
-                            && l.games.iter().map(|g| &g.path).eq(paths.iter())
-                    };
+                    // A package replaced or changed at the same path has a new key (#1593).
+                    let keys: Vec<library::PathKey> =
+                        paths.iter().map(|p| library::path_key(p)).collect();
+                    let same =
+                        |l: &Library| l.matches(folder.as_deref(), &paths, &keys);
                     let sel = match lib {
                         // Back from a run: the art is kept, the PBs and clears are read again.
                         Some(lib) if same(&lib) => {
@@ -107,6 +144,7 @@ impl Plugin for SelectPlugin {
                                 lib,
                                 sel,
                                 &filters,
+                                &lists,
                                 &mut shown,
                             )
                         }
@@ -120,6 +158,7 @@ impl Plugin for SelectPlugin {
                                 &lib,
                                 sel,
                                 &filters,
+                                &lists,
                                 &mut shown,
                             );
                             commands.insert_resource(lib);
@@ -127,6 +166,18 @@ impl Plugin for SelectPlugin {
                         }
                     };
                     commands.insert_resource(sel);
+                    commands.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            right: Val::Px(0.0),
+                            top: Val::Px(0.0),
+                            ..default()
+                        },
+                        UiTargetCamera(camera),
+                        DespawnOnExit(AppScreen::Select),
+                        children![crate::ui::toolbar::toolbar(mode.as_deref().copied().unwrap_or_default())],
+                    ));
                     footer::spawn(&mut commands, camera, mods);
                     mod_sheet::spawn(
                         &mut commands,
@@ -143,27 +194,49 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
+            .add_observer(practice::open)
+            .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
+            .add_observer(collections::favorite)
+            .add_observer(collections::member)
+            .add_observer(collections::create)
             .add_observer(mod_sheet::on_activate)
             .add_observer(mod_sheet::on_option)
             .add_systems(
                 Update,
                 (
-                    controls::search,
-                    list::refilter,
-                    controls::labels,
-                    keys.run_if(mod_sheet::closed),
-                    mod_sheet::keys,
-                    mod_sheet::slide,
-                    mod_sheet::follow,
-                    mod_sheet::auto_retry,
-                    records,
-                    list::looks,
-                    list::arrange,
-                    list::settle,
-                    list::dim,
-                    picked,
-                    scale,
+                    (
+                        controls::search,
+                        list::refilter,
+                        controls::labels,
+                        keys.run_if(mod_sheet::closed).run_if(practice::closed),
+                        collections::keys,
+                        mod_sheet::keys,
+                        mod_sheet::slide,
+                        mod_sheet::follow,
+                        mod_sheet::auto_retry,
+                        records,
+                        list::looks,
+                        list::arrange,
+                        list::settle,
+                        list::dim,
+                        list::want_previews,
+                        list::previews,
+                        picked,
+                        collections::favorite_label,
+                        collections::chips,
+                    )
+                        .chain(),
+                    (
+                        opening,
+                        failed,
+                        collections::editor_labels,
+                    practice::chips,
+                    practice::keys,
+                    practice::preview,
+                        scale,
+                    )
+                        .chain(),
                 )
                     .chain()
                     .run_if(in_state(AppScreen::Select)),
@@ -216,6 +289,7 @@ fn camera(commands: &mut Commands) -> Entity {
 
 /// Spawns the page for `lib` with the rows `filters` leave (into `shown`) and returns the
 /// selection, kept inside the rows.
+#[allow(clippy::too_many_arguments, reason = "the page's parts")]
 fn enter(
     commands: &mut Commands,
     camera: Entity,
@@ -223,9 +297,10 @@ fn enter(
     lib: &Library,
     sel: Selection,
     filters: &Filters,
+    lists: &Collections,
     shown: &mut Shown,
 ) -> Selection {
-    shown.rows = filters::rows(&lib.games, &lib.records, filters);
+    shown.rows = filters::rows(&lib.games, &lib.records, filters, lists);
     let order = shown.order();
     let game = if order.contains(&sel.game) {
         sel.game
@@ -239,16 +314,16 @@ fn enter(
     };
     let where_ = folder.map_or_else(String::new, |f| f.display().to_string());
     let hint = if lib.games.is_empty() {
-        "No packages here (folders with a game.toml, .iwbz files)."
+        NO_PACKAGES
     } else {
-        "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits"
+        HINT
     };
     // The left side: a placeholder until #148's title wedge, stats and tabs.
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(64.0),
-            top: Val::Px(150.0),
+            top: Val::Px(150.0 + UNDER_TOOLBAR),
             width: Val::Px(860.0),
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(12.0),
@@ -264,7 +339,30 @@ fn enter(
             ),
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
-            text(hint, Type::BODY, tokens::SOFT),
+            (text(hint, Type::BODY, tokens::SOFT), HintText),
+            (
+                Node {
+                    column_gap: Val::Px(10.0),
+                    align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
+                    ..default()
+                },
+                children![
+                    (
+                        crate::ui::widgets::button(
+                            "Practice",
+                            crate::ui::widgets::ButtonKind::Control
+                        ),
+                        practice::OpenButton
+                    ),
+                    text(
+                        "Start at a stage, your save or any room · practice runs stay off the leaderboard",
+                        Type::barlow(14.0, 400),
+                        tokens::MUTED
+                    ),
+                ],
+            ),
+            collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
         ],
     ));
     controls::spawn(commands, camera, lib, filters);
@@ -277,34 +375,92 @@ fn map_id(game: &GameInfo, index: usize) -> Option<String> {
     game.maps.get(index).map(|m| m.id.clone())
 }
 
-/// Starts the package at `path` on map `map` (`None`: its first); one that does not open shows the NOT OPENED notice.
-fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
+/// Stages the package at `path` on map `map` (`None`: its first); the list stays up with
+/// `Opening <name>…` until it is ready, and one that does not open shows the NOT OPENED notice.
+fn play(
+    commands: &mut Commands,
+    path: PathBuf,
+    map: Option<String>,
+    mode: PlayMode,
+    start: Option<iwbtg_sim::room::StartPoint>,
+) {
     commands.queue(move |world: &mut World| {
-        if let Err(e) = super::start_map(world, &path, map.as_deref()) {
-            eprintln!("{e}");
-            notice::post(notice::Kind::Drop, &e.to_string());
+        if let Some(mut practice) = world.get_resource_mut::<crate::practice::Practice>() {
+            practice.0 = false;
         }
+        super::start_map(world, &path, map.as_deref(), mode, start);
     });
 }
 
+/// How the picked mode plays a game: Time Attack the stripped game from its ranked start,
+/// Classic the game as made (docs/product.md, Two ways to play each game).
+fn play_mode(mode: Option<&Mode>) -> PlayMode {
+    match mode.copied().unwrap_or_default() {
+        Mode::TimeAttack => PlayMode::Stripped,
+        Mode::Classic => PlayMode::Original,
+    }
+}
+
+/// A staged start that did not commit: the run on screen (if any) is unchanged, and the notice
+/// says why.
+fn failed(mut failed: MessageReader<super::StartFailed>) {
+    for super::StartFailed(e) in failed.read() {
+        eprintln!("{e}");
+        notice::post(notice::Kind::Drop, &e.to_string());
+    }
+}
+
+/// Shows `Opening <name>…` while a start is preparing, and the keys hint otherwise.
+fn opening(
+    pending: Option<Res<super::PendingStart>>,
+    lib: Option<Res<Library>>,
+    mut last: Local<String>,
+    mut hint: Query<&mut Text, With<HintText>>,
+) {
+    let empty = lib.as_deref().is_none_or(|l| l.games.is_empty());
+    // Nothing to write unless the pending start appeared or went away; the base hint does not
+    // allocate the common path.
+    let opening = pending.as_deref().map(super::PendingStart::opening);
+    let text = opening.as_deref().unwrap_or(if empty { NO_PACKAGES } else { HINT });
+    if last.as_str() == text {
+        return;
+    }
+    last.clear();
+    last.push_str(text);
+    let styled = Type::BODY.set(text);
+    for mut t in &mut hint {
+        t.0 = styled.clone();
+    }
+}
+
 /// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
-/// the search field's cursor instead while it holds text), Enter plays the selected map.
-/// Escape closes an open dropdown, else clears the search, else quits.
+/// the search field's cursor instead while it holds text), Enter plays the selected map in the
+/// picked mode.
+/// Escape closes an open dropdown, else clears the search, else goes back to the main menu. While the new
+/// collection's name field has the focus, the arrows and Enter stay out of the way: Enter
+/// creates the collection ([`collections::keys`]) and Escape goes back to the search field.
 #[allow(clippy::too_many_arguments, reason = "the screen's keys")]
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     lib: Res<Library>,
     shown: Res<Shown>,
-    focus: Res<bevy::input_focus::InputFocus>,
+    mut focus: ResMut<InputFocus>,
     buttons: Query<(), With<bevy::ui_widgets::Button>>,
+    names: Query<(), With<collections::NameField>>,
     menus: Query<Entity, With<controls::Menu>>,
-    mut search: Query<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>,
+    mut search: Query<
+        (Entity, &mut bevy::text::EditableText),
+        With<crate::ui::widgets::SearchField>,
+    >,
     mut sel: ResMut<Selection>,
+    mode: Option<Res<Mode>>,
+    mut next: ResMut<NextState<AppScreen>>,
     mut commands: Commands,
 ) {
     let maps: Vec<usize> = lib.games.iter().map(|g| g.maps.len()).collect();
     let order = shown.order();
-    let typing = search.iter().any(|s| !s.value().to_string().is_empty());
+    let typing = search.iter().any(|(_, s)| !s.value().to_string().is_empty());
+    let naming = focus.get().is_some_and(|e| names.contains(e));
     for key in [
         KeyCode::ArrowDown,
         KeyCode::ArrowUp,
@@ -312,7 +468,7 @@ fn keys(
         KeyCode::ArrowLeft,
     ] {
         let sideways = matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight);
-        if keys.just_pressed(key) && !(sideways && typing) {
+        if keys.just_pressed(key) && !(sideways && typing) && !naming {
             let next = list::step(&order, &maps, *sel, key);
             if next != *sel {
                 *sel = next;
@@ -323,18 +479,32 @@ fn keys(
     let on_button = focus.get().is_some_and(|e| buttons.contains(e));
     if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
         && !on_button
+        && !naming
         && order.contains(&sel.game)
         && let Some(game) = lib.games.get(sel.game)
     {
-        play(&mut commands, game.path.clone(), map_id(game, sel.map));
+        play(
+            &mut commands,
+            game.path.clone(),
+            map_id(game, sel.map),
+            play_mode(mode.as_deref()),
+            None,
+        );
     }
-    if keys.just_pressed(KeyCode::Escape) && !controls::close_menus(&mut commands, &menus) {
-        if typing {
-            for mut s in &mut search {
-                s.clear();
+    if keys.just_pressed(KeyCode::Escape) {
+        if naming {
+            if let Some((entity, _)) = search.iter_mut().next() {
+                focus.set(entity, FocusCause::Navigated);
             }
-        } else {
-            commands.write_message(AppExit::Success);
+        } else if !controls::close_menus(&mut commands, &menus) {
+            if typing {
+                for (_, mut s) in &mut search {
+                    s.clear();
+                }
+            } else {
+                // No Home button: Back steps towards the main menu (m5 B8).
+                next.set(AppScreen::Menu);
+            }
         }
     }
 }
@@ -347,6 +517,7 @@ fn on_click(
     maps: Query<&MapPanel>,
     lib: Option<Res<Library>>,
     sel: Option<ResMut<Selection>>,
+    mode: Option<Res<Mode>>,
     mut commands: Commands,
 ) {
     let (Some(lib), Some(mut sel)) = (lib, sel) else {
@@ -363,7 +534,13 @@ fn on_click(
         };
         if picked == *sel {
             if let Some(game) = lib.games.get(map.0) {
-                play(&mut commands, game.path.clone(), map_id(game, map.1));
+                play(
+                    &mut commands,
+                    game.path.clone(),
+                    map_id(game, map.1),
+                    play_mode(mode.as_deref()),
+                    None,
+                );
             }
         } else {
             *sel = picked;
@@ -402,7 +579,7 @@ fn picked(
 }
 
 /// Scales the page with the window.
-fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
+pub(super) fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
     let h = window.size().y;
     if h < 1.0 {
         return;
@@ -442,11 +619,48 @@ mod tests {
             .init_resource::<bevy::input_focus::InputFocus>()
             .init_resource::<UiScale>()
             .init_resource::<Backdrop>()
+            .init_resource::<Collections>()
+            .init_resource::<crate::practice::Practice>()
             .init_state::<AppScreen>()
-            .add_plugins(SelectPlugin(Some(fixtures), false));
+            .add_plugins(SelectPlugin(Some(fixtures), false, false));
         app.update();
         app.update();
         app
+    }
+
+    /// The hint under the pick, as drawn.
+    fn hint_text(app: &mut App) -> String {
+        let world = app.world_mut();
+        let mut hint = world.query_filtered::<&Text, With<HintText>>();
+        hint.single(world).unwrap().0.clone()
+    }
+
+    /// The select screen shows `Opening <name>…` while a staged start prepares (#1023): the
+    /// player gets feedback before the expensive work, without leaving the list.
+    #[test]
+    fn the_hint_says_opening_while_a_start_prepares() {
+        let mut app = screen();
+        assert_eq!(hint_text(&mut app), HINT);
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.world_mut()
+            .insert_resource(super::super::PendingStart {
+                generation: 1,
+                path: PathBuf::from("big-game.pkg"),
+                map: None,
+                mode: PlayMode::Original,
+                start: None,
+                rx: std::sync::Mutex::new(rx),
+            });
+        app.update();
+        assert_eq!(hint_text(&mut app), "Opening big-game.pkg…");
+
+        // Once the staged start is gone (committed or failed), the keys hint is back.
+        drop(tx);
+        app.world_mut()
+            .remove_resource::<super::super::PendingStart>();
+        app.update();
+        assert_eq!(hint_text(&mut app), HINT);
     }
 
     /// Puts `text` in the search field, as typing does.
@@ -542,6 +756,286 @@ mod tests {
             .collect();
         texts.sort_by_key(|t| t.0);
         texts.into_iter().map(|t| t.1).collect::<Vec<_>>().join("|")
+    }
+
+    /// The Practice panel lists the map's stage and rooms; a chip and Start stage a practice
+    /// run (`Practice` set, the picked `StartPoint` in `PendingStart`, #39).
+    #[test]
+    fn the_practice_pickers_stage_a_practice_start() {
+        use super::super::PendingStart;
+        use iwbtg_sim::room::StartPoint;
+        use practice::{OpenButton, OptionStart, StartButton};
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 1 };
+        app.update();
+        activate::<OpenButton>(&mut app, |_| true);
+        assert!(app.world().resource::<practice::Sheet>().open);
+        activate::<OptionStart>(&mut app, |o| matches!(o.0, StartPoint::Room { .. }));
+        assert!(app.world().resource::<practice::Pick>().start.is_some());
+        activate::<StartButton>(&mut app, |_| true);
+        assert!(!app.world().resource::<practice::Sheet>().open, "Start closes it");
+        assert!(app.world().resource::<crate::practice::Practice>().0);
+        let pending = app.world().resource::<PendingStart>();
+        assert!(
+            matches!(pending.start, Some(StartPoint::Room { .. })),
+            "the picked stage's room"
+        );
+    }
+
+    /// Enter plays the selected map in the mode picked on the main menu or in the toolbar:
+    /// Time Attack stripped from the ranked start, Classic the game as made (m5, #1608).
+    #[test]
+    fn enter_plays_the_selected_map_in_the_picked_mode() {
+        use super::super::PendingStart;
+        let mut app = screen();
+        // The hard map of the maps fixture (game 3 in the title order).
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 1 };
+        app.update();
+        tap(&mut app, KeyCode::Enter);
+        let pending = app.world().resource::<PendingStart>();
+        assert_eq!(pending.mode, PlayMode::Stripped, "Time Attack until one is picked");
+        assert_eq!(pending.map.as_deref(), Some("hard"));
+        assert!(pending.path.ends_with("maps.pkg"));
+
+        app.world_mut().insert_resource(Mode::Classic);
+        tap(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.world().resource::<PendingStart>().mode,
+            PlayMode::Original,
+            "Classic plays the game as made"
+        );
+    }
+
+    /// Escape with nothing to close or clear goes back to the main menu: there is no Home
+    /// button (m5 B8).
+    #[test]
+    fn escape_goes_back_to_the_main_menu() {
+        let mut app = screen();
+        tap(&mut app, KeyCode::Escape);
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<AppScreen>>().get(),
+            AppScreen::Menu
+        );
+        assert!(app.should_exit().is_none());
+    }
+
+    /// The main menu comes before game select: its buttons reach game select's global
+    /// `Activate` observers before there is a library, and they must skip, not panic (#1608).
+    #[test]
+    fn a_button_activated_before_game_select_opens_does_not_panic() {
+        use bevy::state::app::StatesPlugin;
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
+            .init_asset::<Image>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<bevy::input_focus::InputFocus>()
+            .init_resource::<UiScale>()
+            .init_resource::<Backdrop>()
+            .init_resource::<Collections>()
+            .init_resource::<crate::practice::Practice>()
+            .insert_state(AppScreen::Menu)
+            .add_plugins(SelectPlugin(Some(fixtures), false, false));
+        app.update();
+        assert!(!app.world().contains_resource::<Library>());
+        let entity = app.world_mut().spawn_empty().id();
+        app.world_mut().trigger(bevy::ui_widgets::Activate { entity });
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<AppScreen>>().get(),
+            AppScreen::Menu
+        );
+    }
+
+    /// Presses and releases `key` over one frame.
+    fn tap(app: &mut App, key: KeyCode) {
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+        app.update();
+        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        input.release(key);
+        input.clear();
+    }
+
+    /// Puts `name` in the new collection field, as typing does.
+    fn name_collection(app: &mut App, name: &str) {
+        let world = app.world_mut();
+        let mut fields =
+            world.query_filtered::<&mut bevy::text::EditableText, With<collections::NameField>>();
+        for mut field in fields.iter_mut(world) {
+            *field = bevy::text::EditableText::new(name);
+        }
+    }
+
+    /// The Favorite toggle, a named collection and the Collections filter (#105).
+    #[test]
+    fn favorites_and_collections_come_from_the_left_side_and_filter_the_list() {
+        use collections::{Collections, CreateButton, Favorite, FavoriteLabel, Member, Pick};
+        use crate::ui::widgets::Chip;
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 0 };
+        app.update();
+        assert_eq!(app.world().resource::<Library>().games[3].id, "demo_maps");
+
+        activate::<Favorite>(&mut app, |_| true);
+        assert!(
+            app.world().resource::<Collections>().is_favorite("demo_maps"),
+            "the toggle favorites the selected game"
+        );
+        let label = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<&Text, With<FavoriteLabel>>()
+                .iter(world)
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(label.iter().any(|l| l.contains("Favorited")), "{label:?}");
+
+        app.world_mut().resource_mut::<Filters>().collection = Some(Pick::Favorites);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the filter keeps only the favorite"
+        );
+
+        app.world_mut().resource_mut::<Filters>().collection = None;
+        app.update();
+        name_collection(&mut app, "Warmups");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert_eq!(lists.names(), ["Warmups"]);
+        assert!(
+            lists.contains(&Pick::Named("Warmups".into()), "demo_maps"),
+            "the selected game joins the new collection"
+        );
+
+        app.world_mut().resource_mut::<Filters>().collection =
+            Some(Pick::Named("Warmups".into()));
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the filter keeps the collection's games"
+        );
+
+        let on = {
+            let world = app.world_mut();
+            world
+                .query::<(&Member, &Chip)>()
+                .iter(world)
+                .find(|(m, _)| m.0 == "Warmups")
+                .map(|(_, chip)| chip.on)
+        };
+        assert_eq!(on, Some(true), "the new collection's chip is on");
+        activate::<Member>(&mut app, |m| m.0 == "Warmups");
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<Collections>()
+                .contains(&Pick::Named("Warmups".into()), "demo_maps"),
+            "the chip takes the game out"
+        );
+        app.update();
+        assert!(
+            app.world().resource::<Shown>().order().is_empty(),
+            "the filter now finds nothing"
+        );
+    }
+
+    /// The name field's text.
+    fn field_text(app: &mut App) -> String {
+        let world = app.world_mut();
+        world
+            .query_filtered::<&bevy::text::EditableText, With<collections::NameField>>()
+            .iter(world)
+            .map(|field| field.value().to_string())
+            .next()
+            .unwrap_or_default()
+    }
+
+    /// A named collection is renamed and deleted from its Collections menu, keeping its games
+    /// and the favorites (#1495).
+    #[test]
+    fn a_collection_renames_and_deletes_from_the_collections_menu() {
+        use collections::{Collections, CreateButton, CreateLabel, Pick, Renaming};
+        use controls::{Control, Pick as Option};
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 0 };
+        app.update();
+        activate::<collections::Favorite>(&mut app, |_| true);
+        name_collection(&mut app, "Warmups");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        app.world_mut().resource_mut::<Filters>().collection =
+            Some(Pick::Named("Warmups".into()));
+        app.update();
+
+        // Collections -> Rename "Warmups": the field holds the old name, the button says Rename.
+        activate::<Control>(&mut app, |c| *c == Control::Collections);
+        activate::<Option>(&mut app, |p| {
+            matches!(p, Option::Rename(name) if name == "Warmups")
+        });
+        assert_eq!(
+            app.world().resource::<Renaming>().0.as_deref(),
+            Some("Warmups")
+        );
+        assert_eq!(field_text(&mut app), "Warmups");
+        let label = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<&Text, With<CreateLabel>>()
+                .iter(world)
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(label.iter().any(|l| l == "Rename"), "{label:?}");
+
+        name_collection(&mut app, "Practice");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert_eq!(lists.names(), ["Practice"]);
+        assert!(
+            lists.contains(&Pick::Named("Practice".into()), "demo_maps"),
+            "renaming kept the game"
+        );
+        assert!(app.world().resource::<Renaming>().0.is_none());
+        assert_eq!(
+            app.world().resource::<Filters>().collection,
+            Some(Pick::Named("Practice".into())),
+            "the filter follows the new name"
+        );
+        assert_eq!(app.world().resource::<Shown>().order(), [3]);
+
+        // Collections -> Delete "Practice": the list goes, the games and the favorite stay.
+        activate::<Control>(&mut app, |c| *c == Control::Collections);
+        activate::<Option>(&mut app, |p| {
+            matches!(p, Option::Delete(name) if name == "Practice")
+        });
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert!(lists.names().is_empty());
+        assert!(lists.is_favorite("demo_maps"), "the favorite stays");
+        assert_eq!(
+            app.world().resource::<Filters>().collection,
+            None,
+            "the filter falls back to Any"
+        );
+        assert_eq!(
+            app.world().resource::<Shown>().order().len(),
+            8,
+            "the games are still in the library"
+        );
+        app.world_mut().resource_mut::<Filters>().collection = Some(Pick::Favorites);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the Favorites filter still finds the favorite"
+        );
     }
 
     /// The Mods button opens the sheet; Sudden Death and Slow motion turn the header Unranked

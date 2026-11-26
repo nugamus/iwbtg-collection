@@ -35,8 +35,8 @@ pub(crate) struct PlainBackdrop(pub Color);
 /// stand out on.
 pub(crate) const PLAIN: Color = Color::srgb_u8(0x3a, 0x3a, 0x3a);
 
-/// In front of every instance, tile and foreground layer (995 and up), behind the overlay (1000).
-const HITBOX_Z: f32 = 998.0;
+/// In front of every room layer and the HUD (`view::order::Hud`), behind the overlay (1000).
+pub(crate) const HITBOX_Z: f32 = 998.0;
 /// The kid's hitbox.
 const KID: Color = Color::srgb_u8(0x45, 0xd4, 0x83);
 /// A hazard's hitbox.
@@ -49,6 +49,21 @@ const MAX_PIXELS: i64 = 1 << 22;
 
 /// Adds the visual mods; each run shows the ones in its [`RunMods`](crate::mods::RunMods).
 pub struct VisualPlugin;
+
+/// The visual mods' place in the module list (main.rs): their plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(VisualPlugin);
+    }
+}
 
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {

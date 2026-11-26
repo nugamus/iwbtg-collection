@@ -1,5 +1,5 @@
 //! Room files: `run` expansion in row-major order, params, views, file speed, role, `on_create`
-//! (docs/plans/sim-core.md 4.1, 8.2 step 4, 8.3; docs/format/rooms.md).
+//! (docs/format/rooms.md).
 //!
 //! This module parses one `rooms/<id>.toml`; `load` resolves kinds, ranks and names. Instances
 //! stay in file order, which is creation order (Inferred, CLONE_SPEC rooms "created in the order
@@ -96,8 +96,8 @@ pub struct ViewFile {
     pub speed: Option<[Number; 2]>,
 }
 
-/// One room creation action (plan 4.2 step 6), `{ do = "...", ... }`. Every row takes an
-/// optional `when` (#629): the row runs only while its condition holds.
+/// One room creation action (docs/architecture/sim/rooms.md step 6), `{ do = "...", ... }`. Every row
+/// takes an optional `when` (#629): the row runs only while its condition holds.
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]

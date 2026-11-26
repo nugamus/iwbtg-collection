@@ -19,4 +19,4 @@ The H:MM:SS display is the client's.
 
 OPEN (#356): the original kills player2 instead of player when `global.grav` is set; the sim kills the first kid whichever kind it is.
 
-**Loading.** Tests in `crates/sim/tests/wp6c_misc_objects.rs`.
+**Loading.** Tests in `crates/sim/tests/builtins_time_limit.rs`.

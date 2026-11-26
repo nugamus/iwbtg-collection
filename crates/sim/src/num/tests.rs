@@ -4,7 +4,7 @@
 use super::trig::{DEG_TO_RAD, TRIG_TABLE};
 use super::*;
 use crate::rules::NumRules;
-use crate::rules::num::{AlarmConv, ByteConv, CompareMode, MinMaxTies, NegZero, SignMode, StrRound, Truth};
+use crate::rules::num::{ByteConv, CompareMode, NegZero, SignMode};
 
 fn r(x: f64) -> Real {
     Real::new(x)
@@ -252,18 +252,6 @@ fn min_max_clamp_lerp() {
 }
 
 #[test]
-fn min_max_ties_rule() {
-    let ge = NumRules {
-        min_max_ties: MinMaxTies::GreaterOrEqual,
-        ..d()
-    };
-    assert_eq!(gm_min(r(0.0), r(-0.0), &ge), r(-0.0));
-    assert_eq!(gm_max(r(0.0), r(-0.0), &ge), r(0.0));
-    assert_eq!(gm_min(r(1.0), r(2.0), &ge), r(1.0));
-    assert_eq!(gm_max(r(1.0), r(2.0), &ge), r(2.0));
-}
-
-#[test]
 fn repeat_count_rounds_and_stops_at_zero() {
     let d = &d();
     assert_eq!(gm_repeat_count(r(2.5), d), Ok(2));
@@ -398,6 +386,83 @@ fn gm_comparisons_exact_mode() {
     assert!(!gm_lt(nan, r(0.0), x) && !gm_ge(nan, r(0.0), x));
 }
 
+// ---- Tolerance (the standard ruleset's one mechanism) ----
+
+/// The declared tolerance uses the edge rule the recorder proves: a value inside the bound is
+/// equal, and a difference of exactly the bound is not (the same table as `gm_eq`..`gm_ge` under
+/// `CompareMode::Epsilon`, without a mode).
+#[test]
+fn tolerance_bound_matches_the_recorder_edge() {
+    let t = Tolerance::new(r(EPSILON));
+    let zero = r(0.0);
+    for v in [-1.4e-14, -5e-14, -9e-14] {
+        assert!(t.eq(r(v), zero), "|{v}| is inside the bound");
+        assert!(!t.ne(r(v), zero), "|{v}| is inside the bound");
+        assert!(!t.lt(r(v), zero) && t.le(r(v), zero));
+        assert!(!t.gt(r(v), zero) && t.ge(r(v), zero));
+    }
+    // d = -bound: equality, `<=` and `>=` all fail; `<` and `!=` hold.
+    let neg = zero - r(EPSILON);
+    assert!(!t.eq(neg, zero) && t.ne(neg, zero));
+    assert!(t.lt(neg, zero) && t.le(neg, zero));
+    assert!(!t.gt(neg, zero) && !t.ge(neg, zero));
+    // d = +bound: the mirror.
+    let pos = zero + r(EPSILON);
+    assert!(!t.eq(pos, zero) && t.ne(pos, zero));
+    assert!(!t.lt(pos, zero) && !t.le(pos, zero));
+    assert!(t.gt(pos, zero) && t.ge(pos, zero));
+    // A value just inside the bound agrees.
+    let inside = r(0.99 * EPSILON);
+    assert!(t.eq(inside, zero) && !t.ne(inside, zero));
+    assert!(!t.lt(inside, zero) && t.le(inside, zero));
+    assert!(!t.gt(inside, zero) && t.ge(inside, zero));
+}
+
+#[test]
+fn tolerance_ordering_helpers() {
+    let t = Tolerance::new(r(0.25));
+    assert!(t.lt(r(0.0), r(0.5)));
+    assert!(!t.lt(r(0.3), r(0.5)), "inside the bound is not below");
+    assert!(t.le(r(0.3), r(0.5)));
+    assert!(!t.le(r(0.75), r(0.5)), "exactly the bound is not `<=`");
+    assert!(t.gt(r(0.75), r(0.5)), "exactly the bound is `>`");
+    assert!(!t.ge(r(0.25), r(0.5)), "exactly -bound is not `>=`");
+    assert!(t.ge(r(0.26), r(0.5)));
+}
+
+/// As in `gm8`, a NaN operand makes every check false, `ne` included.
+#[test]
+fn tolerance_checks_are_false_for_nan() {
+    type Check = fn(Tolerance, Real, Real) -> bool;
+    let t = Tolerance::new(r(1.0));
+    let nan = r(f64::NAN);
+    for (name, check) in [
+        ("eq", Tolerance::eq as Check),
+        ("ne", Tolerance::ne as Check),
+        ("lt", Tolerance::lt as Check),
+        ("le", Tolerance::le as Check),
+        ("gt", Tolerance::gt as Check),
+        ("ge", Tolerance::ge as Check),
+    ] {
+        assert!(!check(t, nan, r(0.0)), "{name}(NaN, 0)");
+        assert!(!check(t, r(0.0), nan), "{name}(0, NaN)");
+        assert!(!check(t, nan, nan), "{name}(NaN, NaN)");
+    }
+}
+
+#[test]
+fn tolerance_usable_bound() {
+    assert!(Tolerance::new(r(1.0)).is_usable());
+    assert!(
+        !Tolerance::new(r(0.0)).is_usable(),
+        "a zero bound accepts nothing"
+    );
+    assert!(!Tolerance::new(r(-1.0)).is_usable());
+    assert!(!Tolerance::new(r(f64::NAN)).is_usable());
+    assert!(!Tolerance::new(r(f64::INFINITY)).is_usable());
+    assert_eq!(Tolerance::new(r(0.125)).bound(), r(0.125));
+}
+
 #[test]
 fn gm_bool_threshold() {
     let d = &d();
@@ -407,12 +472,6 @@ fn gm_bool_threshold() {
     assert!(gm_bool(r(0.5), d));
     assert!(gm_bool(r(1.0), d));
     assert!(!gm_bool(r(f64::NAN), d));
-    let gt = NumRules {
-        truth: Truth::GtHalf,
-        ..NumRules::default()
-    };
-    assert!(!gm_bool(r(0.5), &gt));
-    assert!(gm_bool(r(0.5000000000000001), &gt));
 }
 
 // ---- Conversions (R3b, N5, N6) ----
@@ -434,21 +493,6 @@ fn alarm_from_real_rounds_half_even() {
         assert_eq!(alarm_from_real(r(v), d), r(a), "alarm {v}");
     }
     assert!(alarm_from_real(r(f64::NAN), d).is_nan());
-}
-
-#[test]
-fn alarm_from_real_other_rules() {
-    let trunc = NumRules {
-        alarm_from_real: AlarmConv::Truncate,
-        ..d()
-    };
-    let keep = NumRules {
-        alarm_from_real: AlarmConv::Keep,
-        ..d()
-    };
-    assert_eq!(alarm_from_real(r(1.5), &trunc), r(1.0));
-    assert_eq!(alarm_from_real(r(-0.5), &trunc), r(0.0));
-    assert_eq!(alarm_from_real(r(1.3), &keep), r(1.3));
 }
 
 /// N5 default: round half to even, then wrap (rounding Confirmed (recorder): num-byte-save-a..d,
@@ -481,19 +525,6 @@ fn byte_from_real_rounds_half_even() {
     assert_eq!(byte_from_real(r(1e300), d), 0);
 }
 
-#[test]
-fn byte_from_real_trunc_rule() {
-    let t = NumRules {
-        byte_from_real: ByteConv::TruncWrap,
-        ..d()
-    };
-    assert_eq!(byte_from_real(r(51.59999999999991), &t), 51);
-    assert_eq!(byte_from_real(r(67.4), &t), 67);
-    assert_eq!(byte_from_real(r(48.5), &t), 48);
-    assert_eq!(byte_from_real(r(-1.5), &t), 255);
-    assert_eq!(byte_from_real(r(257.9), &t), 1);
-}
-
 /// N6: integers get no decimals, everything else two. Recorder values the default matches
 /// (num-string-save-a/b, tr-room-07-b/c), plus the two it does not (N6 OPEN).
 #[test]
@@ -524,20 +555,6 @@ fn gm_string_real_table() {
     // N6 OPEN: the recorder writes 2.68 and 1.01 for these.
     assert_eq!(gm_string_real(r(2.675), d), "2.67");
     assert_eq!(gm_string_real(r(1.005), d), "1.00");
-}
-
-#[test]
-fn gm_string_real_half_away_rule() {
-    let away = NumRules {
-        string_decimals: StrRound::HalfAway,
-        ..d()
-    };
-    assert_eq!(gm_string_real(r(0.125), &away), "0.13");
-    assert_eq!(gm_string_real(r(0.375), &away), "0.38");
-    assert_eq!(gm_string_real(r(-0.125), &away), "-0.13");
-    assert_eq!(gm_string_real(r(9.875), &away), "9.88");
-    assert_eq!(gm_string_real(r(99.995), &away), gm_string_real(r(99.995), &d()));
-    assert_eq!(gm_string_real(r(551.7), &away), "551.70");
 }
 
 // ---- GML literals (N14) ----

@@ -1,5 +1,5 @@
 //! Kid actions specific to family C (kid/C.md: `vine_probe`, the vines, the suicide press;
-//! docs/plans/sim-core.md 5.3). WP5c owns it. `slide_block` and `slope_c` are not built: no xia
+//! docs/architecture/sim/kid.md). `slide_block` and `slope_c` are not built: no xia
 //! room places a slide block or a slope (tier 3), so a profile listing them does not load.
 
 use serde::Deserialize;

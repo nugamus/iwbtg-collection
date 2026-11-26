@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toolbar states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The toolbar's states, top to bottom. There is no Home button: Back or Esc steps back towards the main menu on every screen, and the mode switch sits at the left edge where it is easiest to reach. It shows on every screen outside a run; the run screens (loading, HUD, pause, results, session summary) hide it. Left to right: the mode switch, now playing, clock and session time, notifications, settings, you. -->
+<div style="position: relative; width: 1920px; height: 680px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="680px" hue="250" blur="40" dim="0.5" tag="none" hint-size="1920px,680px"></dc-import></div>
+  <div style="position: absolute; left: 0; top: 24px; display: flex; flex-direction: column; gap: 30px">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="padding-left: 24px; font-size: 15px; font-weight: 600; color: #c9cde0">{{r.label}}</span>
+        <dc-import name="Toolbar" w="1920" mode="{{r.mode}}" user="{{r.user}}" badge="{{r.badge}}" open="{{r.open}}" pad="{{r.pad}}" crumb="{{r.crumb}}" hint-size="1920px,56px"></dc-import>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const r = (label, mode, user, badge, open, pad, crumb) => ({ label, mode, user, badge, open, pad, crumb: crumb || '' });
+    return { rows: [
+      r('Time Attack, signed in, two unread notifications', 'ta', 'in', 2, 'none', false),
+      r('Classic picked: the underline slides over and the accent turns violet', 'classic', 'in', 0, 'none', false),
+      r('Signed out: the right end is a Sign in button', 'ta', 'out', 0, 'none', false),
+      r('Session expired (amber dot), notifications open', 'ta', 'expired', 1, 'notif', false),
+      r('Offline with a clear queued; a controller is in use, so LB and RB flank the switch', 'ta', 'offline', 0, 'none', true),
+      r('Screens outside the modes (Settings, Replays, Browse) name themselves instead', 'none', 'in', 0, 'none', false, 'Replays'),
+    ] };
+  }
+}
+</script>
+</body>
+</html>

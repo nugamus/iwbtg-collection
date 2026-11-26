@@ -1,0 +1,10 @@
+#:schema ../../../../../../docs/format/schema/v0/timeline.schema.json
+# The boss's attack cadence, looping: a fan, a second fan rotated half a step, then a rest. The
+# boss's phase decides what each moment fires (the pattern table in `scripts/boss.rhai`).
+loop = true
+moments = [
+  { t = 0, call = "intro" },
+  { t = 6, call = "fan" },
+  { t = 12, call = "fan_offset" },
+  { t = 24, call = "rest" },
+]

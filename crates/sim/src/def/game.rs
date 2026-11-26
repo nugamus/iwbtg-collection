@@ -1,8 +1,7 @@
-//! The immutable game definition (docs/plans/sim-core.md 1.4, 4.3, 8.1).
+//! The immutable game definition (docs/architecture/sim/world.md, rooms.md; docs/format/game.md).
 //!
 //! `crates/format` builds a [`GameDef`] from a package; tests build one with
-//! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it. WP0 declares;
-//! WP7a owns afterwards (WP4b owns the behavior of [`RestartModel`] and [`ResetModel`]).
+//! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it.
 
 use std::collections::BTreeMap;
 
@@ -66,7 +65,7 @@ pub struct GameDef {
     pub ranks: RankTable,
     /// Kinds the sim spawns by role.
     pub engine_kinds: BTreeMap<EngineKind, KindId>,
-    /// Variable names known at load, ids assigned from the sorted list (plan 1.1).
+    /// Variable names known at load, ids assigned from the sorted list (docs/architecture/sim/world.md).
     pub var_names: BTreeMap<String, VarId>,
     /// Instance names (`NameId` index).
     pub names: Vec<String>,
@@ -91,10 +90,12 @@ pub struct GameDef {
     /// Particle system definitions (`particles/<id>.toml`), in file path order.
     pub particle_systems: Vec<PartSystemDef>,
     /// Script sources, indexed by `ScriptId` (`KindDef::script`). Compiled by the script host
-    /// (WP9) when the `Sim` is built.
+    /// when the `Sim` is built.
     pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`). A run on a map uses that map's chain ([`GameDef::maps`]);
-    /// this one only when `maps` is empty (a definition built by hand).
+    /// this one is only the fallback when `maps` is empty, as for a definition built by hand.
+    /// A loader-built def leaves it at [`TimingDef::default`] and keeps every chain in `maps`
+    /// (#1472), so after load there is no duplicate that could fall out of step.
     pub timing: TimingDef,
     /// The package's maps in `[[maps]]` order, one [`DEFAULT_MAP_ID`] map without `[[maps]]`
     /// (docs/format/game.md, Maps). A run picks one (`SimOptions::map`, #505).
@@ -141,8 +142,15 @@ impl GameDef {
             .map_or(DEFAULT_MAP_ID, |m| m.id.as_str())
     }
 
-    /// The timing chain of map `map` ([`GameDef::timing`] without maps).
+    /// The timing chain of map `map`, or [`GameDef::timing`] for a def with no maps. This is
+    /// the only correct reader of a def's chain: a loaded def keeps each map's chain in
+    /// [`GameDef::maps`] and leaves `timing` at its default (#1472).
     pub fn map_timing(&self, map: u16) -> &TimingDef {
+        debug_assert!(
+            self.maps.is_empty() || self.timing == TimingDef::default(),
+            "a def with maps keeps its chain in maps[i].timing; GameDef::timing is only the \
+             map-less fallback"
+        );
         self.maps
             .get(usize::from(map))
             .map_or(&self.timing, |m| &m.timing)
@@ -218,7 +226,7 @@ impl GameDef {
         self.scripts.get(id.index()?)
     }
 
-    /// Dispatch rank for an instance of `kind` spawned at run time (plan 1.3).
+    /// Dispatch rank for an instance of `kind` spawned at run time (docs/architecture/sim/world.md).
     pub fn rank_for(&self, kind: KindId, variant: Option<&VariantSel>) -> Option<u16> {
         self.ranks.rank_for(kind, variant)
     }
@@ -226,6 +234,28 @@ impl GameDef {
     /// The kind the sim spawns for an engine role, so built-ins never hard-code kind ids.
     pub fn engine_kind(&self, k: EngineKind) -> Option<KindId> {
         self.engine_kinds.get(&k).copied()
+    }
+
+    /// The engine's one lifecycle model over this definition (decision 0005, #1149).
+    ///
+    /// The retry and reset policies are the stored profile data; the rest is what the
+    /// definition already implies. Runtime code reads this view rather than the individual
+    /// fields.
+    pub fn lifecycle(&self) -> Lifecycle {
+        Lifecycle {
+            new_game: NewGamePolicy::default(),
+            enter_room: EnterRoomPolicy::default(),
+            death: DeathPolicy {
+                counters: DeathCounters::RunGlobals,
+                save: DeathSave::OnDeath,
+                sound: self.engine_kind(EngineKind::DeathSound),
+                auto_retry: AutoRetry::Client,
+                game_over: self.engine_kind(EngineKind::GameOver),
+            },
+            retry: self.restart.clone(),
+            quit: QuitPolicy,
+            reset: self.reset.clone(),
+        }
     }
 }
 
@@ -254,25 +284,274 @@ pub enum EngineKind {
     DeathSound,
 }
 
-/// How the game retries after R (plan 4.3). Behavior in `restart.rs` (WP4b); the `world`
-/// built-in runs it at the world's rank, in the phase `trigger` names.
+/// The sim's one lifecycle (decision 0005; #1149): the five events and the F2 reset, each with
+/// explicit policy.
+///
+/// `retry` and `reset` are stored on the definition (the format layer's `[engine] restart` and
+/// `[engine] reset`, the gm8 compatibility profile's shape); the other entries are the policies
+/// the definition already implies. Runtime code reads this view, so a lifecycle event's
+/// behavior has one description rather than one per implementation path.
+///
+/// [`RestartModel`] and [`ResetModel`] remain the names the format layer uses for the two
+/// stored policies. They are aliases of [`RetryPolicy`] and [`ResetPolicy`], not parallel models.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RestartModel {
+pub struct Lifecycle {
+    /// Start a run from the package's new-game room and `[stripped].start`.
+    pub new_game: NewGamePolicy,
+    /// Change room and run the room sequence.
+    pub enter_room: EnterRoomPolicy,
+    /// The kid dies. Not a transition: it sets the dead state and counts.
+    pub death: DeathPolicy,
+    /// R, or the client's quick retry.
+    pub retry: RetryPolicy,
+    /// The client leaves the run (client-only; the sim keeps no state).
+    pub quit: QuitPolicy,
+    /// F2.
+    pub reset: ResetPolicy,
+}
+
+/// Where a lifecycle event puts the Kid.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Spawn {
+    /// The room's own start (its `kid_start` or start marker).
+    RoomStart,
+    /// The checkpoint: its room and position.
+    Checkpoint,
+    /// The kid's start marker in the current room.
+    KidStart,
+}
+
+/// What a lifecycle event resets.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ResetScope {
+    /// The room and its placed instances.
+    Room,
+    /// The last checkpoint: room, position and the counters it holds.
+    Save,
+    /// A new run: the run counters and the save.
+    Run,
+}
+
+/// The save file's fate at a lifecycle event.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SavePolicy {
+    /// The file survives.
+    Keep,
+    /// The event deletes it (a new game).
+    Delete,
+}
+
+/// What a lifecycle event writes into the checkpoint.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CheckpointWrite {
+    /// Nothing.
+    None,
+    /// The run counters (a death-only save).
+    Counters,
+    /// The full checkpoint, through the game's save point or first-play save.
+    Full,
+}
+
+/// Whether music or effects survive a lifecycle event.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Persistence {
+    /// They keep playing.
+    Keep,
+    /// The event stops them.
+    Stop,
+}
+
+/// What `new_game` does.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct NewGamePolicy {
+    /// A new run clears the run counters and drops the save.
+    pub reset_scope: ResetScope,
+    /// A new game starts at the room's own start.
+    pub spawn: Spawn,
+    /// The save file is deleted.
+    pub save: SavePolicy,
+    /// The first checkpoint is the game's own save point or first-play save.
+    pub checkpoint: CheckpointWrite,
+}
+
+impl Default for NewGamePolicy {
+    fn default() -> NewGamePolicy {
+        NewGamePolicy {
+            reset_scope: ResetScope::Run,
+            spawn: Spawn::RoomStart,
+            save: SavePolicy::Delete,
+            checkpoint: CheckpointWrite::Full,
+        }
+    }
+}
+
+/// One stage of the engine's room transaction, in the order [`EnterRoomPolicy::stages`] names
+/// (decision 0005; #1174 A2).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RoomStage {
+    /// Room End for the old room's instances. Skipped when the transaction is the first room
+    /// of the game (`from` is `None`).
+    RoomEnd,
+    /// Read the old and new room and stage the carried instance set. The stage changes no
+    /// world state.
+    Prepare,
+    /// The transaction's single commit point: install the carried and restored instances,
+    /// set the new room's state and report the entry.
+    Commit,
+    /// Create the new room's placed instances, in room-file order on `gm8`.
+    Placed,
+    /// Game Start for the first room of the game.
+    GameStart,
+    /// The room's creation actions.
+    CreationCode,
+    /// Room Start for the new room's instances.
+    RoomStart,
+}
+
+/// The `gm8` room transaction order (CLONE_SPEC rooms, Confirmed): Room End, prepare, one
+/// commit, then the new room's build. `prepare` and `commit` split the old steps 2-3 so the
+/// instance store changes at exactly one point; the events still run in the recorded order.
+pub const GM8_ROOM_STAGES: [RoomStage; 7] = [
+    RoomStage::RoomEnd,
+    RoomStage::Prepare,
+    RoomStage::Commit,
+    RoomStage::Placed,
+    RoomStage::GameStart,
+    RoomStage::CreationCode,
+    RoomStage::RoomStart,
+];
+
+/// What `enter_room` does: the manual's 7-step room sequence (docs/architecture/sim/rooms.md),
+/// run as one transaction.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct EnterRoomPolicy {
+    /// `room_goto_next` and `room_goto_previous` skip a Boot-role room: that room is engine
+    /// init, not a stage (#1149).
+    pub skip_boot_rooms: bool,
+    /// The event rebuilds a non-persistent room's placed instances.
+    pub rebuild_placed: bool,
+    /// The event rebuilds the room.
+    pub reset_scope: ResetScope,
+    /// The declared stage order the transaction runs. `gm8` uses [`GM8_ROOM_STAGES`]; a
+    /// `standard` profile can name another order when the profile layer lands (#1160).
+    pub stages: [RoomStage; 7],
+}
+
+impl Default for EnterRoomPolicy {
+    fn default() -> EnterRoomPolicy {
+        EnterRoomPolicy {
+            skip_boot_rooms: true,
+            rebuild_placed: true,
+            reset_scope: ResetScope::Room,
+            stages: GM8_ROOM_STAGES,
+        }
+    }
+}
+
+/// How `death` counts, saves and reports. The steps are the kid profile's (`physics.death`);
+/// these are the engine values that the steps and the client act on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DeathPolicy {
+    /// The death counter (`global.death`) the death step adds to.
+    pub counters: DeathCounters,
+    /// The checkpoint write the death step performs.
+    pub save: DeathSave,
+    /// The `death_sound` engine kind, when the game has one.
+    pub sound: Option<KindId>,
+    /// Who retries: in `standard`, the client (0005, the input contract).
+    pub auto_retry: AutoRetry,
+    /// The GAMEOVER engine kind, when the game has one.
+    pub game_over: Option<KindId>,
+}
+
+/// What a death counts.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DeathCounters {
+    /// The run counter `RunGlobals::deaths`.
+    RunGlobals,
+}
+
+/// What a death writes into the checkpoint.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DeathSave {
+    /// The death-only save of the counters (`saveDeathTime`).
+    OnDeath,
+}
+
+/// Who owns auto-retry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AutoRetry {
+    /// The client, not the sim (0005: the client owns auto-retry).
+    Client,
+}
+
+/// `quit` is client-only: the client drops the run. The sim has no quit state and no
+/// transition, so this policy carries no values.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct QuitPolicy;
+
+/// How the game retries after R (docs/architecture/sim/rooms.md). Behavior in `restart.rs`;
+/// the `world` built-in runs it at the world's rank, in the phase `trigger` names.
+///
+/// This is [`Lifecycle::retry`]. The format layer still names the type `RestartModel` and fills
+/// the serialized format-0 keys; see [`RestartModel`].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct RetryPolicy {
     /// Where the retry runs (R27).
     pub trigger: RestartTrigger,
-    /// What the retry does.
+    /// The gm8 compatibility path the retry takes.
     pub kind: RestartKind,
     /// Room roles where R does nothing (menus).
     pub excluded_roles: RoleSet,
-    /// Ticks spent in a boot room on `GameRestartViaBoot` (R17, TR-ROOM-01).
+    /// Ticks of the engine-owned init phase before the player controls the checkpoint Kid
+    /// (R17, TR-ROOM-01). The serialized key stays `boot_ticks` for the format-0 profile. `0` is
+    /// permanently `Unsupported`: no game in the 20 sets it and R17 leaves the init tick's
+    /// existence UNKNOWN, so only a trace can change it (#225).
     pub boot_ticks: u8,
     /// Added to the loaded y when the saved kid was flipped (+4 in 10 Group A games).
     pub flipped_load_dy: Real,
-    /// What a retry counts.
+    /// What a retry counts and writes (the checkpoint-write policy).
     pub death_on_restart: DeathOnRestart,
     /// The kid-side steps of the retry (family B, showdown).
     pub kid_steps: RetryKidSteps,
+    /// Music keeps playing across a retry (S4).
+    pub music: Persistence,
+    /// Effects keep running across a retry.
+    pub effects: Persistence,
 }
+
+impl RetryPolicy {
+    /// The retry's control delay in ticks: the engine-owned init phase. `boot_ticks` is the
+    /// format-0 name the profile serializes.
+    pub fn delay_ticks(&self) -> u8 {
+        self.boot_ticks
+    }
+
+    /// Where the retried Kid appears: the checkpoint when one exists, else the room start.
+    pub fn spawn(&self, has_checkpoint: bool) -> Spawn {
+        if has_checkpoint {
+            Spawn::Checkpoint
+        } else {
+            Spawn::RoomStart
+        }
+    }
+
+    /// A retry returns to the checkpoint: its room, position and counters.
+    pub fn reset_scope(&self) -> ResetScope {
+        ResetScope::Save
+    }
+
+    /// What a retry writes into the checkpoint.
+    pub fn checkpoint_write(&self) -> CheckpointWrite {
+        match self.death_on_restart {
+            DeathOnRestart::Nothing => CheckpointWrite::None,
+            DeathOnRestart::SaveCounters | DeathOnRestart::SaveCountersPerKid => CheckpointWrite::Counters,
+        }
+    }
+}
+
+/// The format layer's name for [`RetryPolicy`] (`[engine] restart` in `game.toml`).
+pub type RestartModel = RetryPolicy;
 
 /// The kid-side steps of a retry that only some games have (kid/B.md "Restart", kid/A3.md
 /// showdown "Restart"). All off by default.
@@ -296,10 +575,11 @@ pub struct RetryKidSteps {
     pub clear_triggers: bool,
 }
 
-impl Default for RestartModel {
-    /// Group A: R key press event, game_restart through one boot tick, no flipped offset.
-    fn default() -> RestartModel {
-        RestartModel {
+impl Default for RetryPolicy {
+    /// Group A: R key press event, game_restart through one init tick, no flipped offset,
+    /// music and effects kept.
+    fn default() -> RetryPolicy {
+        RetryPolicy {
             trigger: RestartTrigger::KeyPressEvent,
             kind: RestartKind::GameRestartViaBoot,
             excluded_roles: RoleSet::default(),
@@ -307,6 +587,8 @@ impl Default for RestartModel {
             flipped_load_dy: Real::ZERO,
             death_on_restart: DeathOnRestart::Nothing,
             kid_steps: RetryKidSteps::default(),
+            music: Persistence::Keep,
+            effects: Persistence::Keep,
         }
     }
 }
@@ -326,7 +608,7 @@ pub enum RestartTrigger {
     },
 }
 
-/// What the retry does (plan 4.3 table).
+/// What the retry does (docs/architecture/sim/rooms.md table).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartKind {
     /// Groups A (minus showdown), B, C: game_restart through the boot room.
@@ -353,10 +635,13 @@ pub enum DeathOnRestart {
     SaveCountersPerKid,
 }
 
-/// How the game resets after F2 (plan 4.3). Mirrors [`RestartModel`]: the `world` built-in runs
-/// it at the world's rank, in the phase `trigger` names. Behavior in `restart.rs` (WP4b).
+/// How the game resets after F2 (docs/architecture/sim/rooms.md). This is
+/// [`Lifecycle::reset`]: the `world` built-in runs it at the world's rank, in the phase
+/// `trigger` names. Behavior in `restart.rs`.
+///
+/// The format layer still names the type `ResetModel`; see [`ResetModel`].
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ResetModel {
+pub struct ResetPolicy {
     /// Where the reset runs.
     pub trigger: RestartTrigger,
     /// What the reset does.
@@ -365,11 +650,37 @@ pub struct ResetModel {
     pub excluded_roles: RoleSet,
 }
 
-impl Default for ResetModel {
+impl ResetPolicy {
+    /// What the reset rebuilds.
+    pub fn reset_scope(&self) -> ResetScope {
+        match self.kind {
+            ResetKind::DeleteTempAndRestart => ResetScope::Room,
+            ResetKind::GameReset => ResetScope::Run,
+        }
+    }
+
+    /// Whether the reset stops every sound before it changes room (F2 feedback).
+    ///
+    /// The F2 handlers of Groups A, B and C, and go-the-spook-house's, delete the temp file,
+    /// stop all sounds and call `game_restart` (CLONE_SPEC rooms; kid/A4.md "F2 pressed"). The
+    /// kaenbyou / eat-the-lemon `gameReset` handler is recorded only as "resets globals and calls
+    /// room_goto(rInit)", so it keeps the sounds until a trace says otherwise (#225).
+    pub fn sounds(&self) -> Persistence {
+        match self.kind {
+            ResetKind::DeleteTempAndRestart => Persistence::Stop,
+            ResetKind::GameReset => Persistence::Keep,
+        }
+    }
+}
+
+/// The format layer's name for [`ResetPolicy`] (`[engine] reset` in `game.toml`).
+pub type ResetModel = ResetPolicy;
+
+impl Default for ResetPolicy {
     /// The world's "Key F2 pressed" event (global keys are Key press events on world, CLONE_SPEC
     /// input), delete the temp marker and game_restart, in every room.
-    fn default() -> ResetModel {
-        ResetModel {
+    fn default() -> ResetPolicy {
+        ResetPolicy {
             trigger: RestartTrigger::KeyPressEvent,
             kind: ResetKind::default(),
             excluded_roles: RoleSet::default(),

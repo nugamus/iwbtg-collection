@@ -1,7 +1,8 @@
 //! JSON Schemas for the data files (docs/format/v0.md, Common rules for data files).
 //!
 //! Every data file starts with a `#:schema` line that points at one of the files this module
-//! generates into `docs/format/schema/v0/`. Editors use them for completion and validation, and
+//! generates into `docs/format/schema/v1/` (the folder of [`crate::FORMAT_VERSION`];
+//! `docs/format/schema/v0/` is the frozen format-0 copy). Editors use them for completion and validation, and
 //! the converter checks its output against them. They are generated, never hand-written:
 //!
 //! - `game`, `room` and `sprite` come straight from the types the loader deserializes
@@ -56,6 +57,8 @@ pub enum RunnerSchema {
     Gm80,
     /// GameMaker 8.1.
     Gm81,
+    /// GameMaker Studio 1.x.
+    Gms,
 }
 
 /// One entry of `instances` in a room file. Keys other than the common ones are params of the
@@ -117,6 +120,8 @@ pub struct ObjectShape {
     pub counts_as: Option<Vec<String>>,
     /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
     pub collides_with: Option<Vec<String>>,
+    /// Timeline id (`timelines/<id>.toml`) the kind's instances start at Create.
+    pub timeline: Option<String>,
     /// Legacy converter key, read only by trace builds. Write `counts_as` instead.
     pub roles: Option<Vec<String>>,
     /// Params with defaults; instances may override.
@@ -197,6 +202,58 @@ pub struct SoundShape {
     pub kind: Option<SoundKindShape>,
 }
 
+/// The `game.toml` schema: [`Manifest`] plus the per-format required fields the struct cannot
+/// say (docs/format/v1.md): format 1 needs `ruleset` and `compat` and has no `engine_rev`;
+/// format 0 needs `engine_rev`.
+fn game_text() -> String {
+    let mut value = serde_json::to_value(schemars::schema_for!(Manifest)).expect("schema is JSON");
+    value["title"] = Value::String("IWBTG game.toml (format v1)".to_owned());
+    value["if"] = serde_json::json!({ "properties": { "format": { "const": 0 } } });
+    value["then"] = serde_json::json!({ "required": ["engine_rev"] });
+    value["else"] = serde_json::json!({
+        "required": ["ruleset", "compat"],
+        "not": { "required": ["engine_rev"] },
+        "properties": { "compat": { "required": ["profile"] } }
+    });
+    let mut s = serde_json::to_string_pretty(&value).expect("schema is JSON");
+    s.push('\n');
+    s
+}
+
+/// The physics schema with the serde aliases listed. schemars does not emit `#[serde(alias)]`, and
+/// the schema forbids unknown keys, so a standard-named profile (`[vines]`, `[platforms]`,
+/// `[ladders]`, `[slopes]`, `[numbers] max_fall`; docs/format/physics.md "Standard names and
+/// aliases") would be rejected. Each standard name gets a copy of its legacy key's schema. Keep
+/// this list equal to the `alias` attributes on `PhysicsProfileDraft` and `KidNumbersDraft`.
+fn physics_text() -> String {
+    fn add_alias(object: &mut Value, legacy: &str, standard: &str) {
+        let props = object["properties"].as_object_mut().expect("properties object");
+        let copy = props
+            .get(legacy)
+            .unwrap_or_else(|| panic!("no `{legacy}` to alias"))
+            .clone();
+        props.insert(standard.to_owned(), copy);
+    }
+    let mut value = serde_json::to_value(schemars::schema_for!(PhysicsProfileDraft)).expect("schema is JSON");
+    value["title"] = Value::String("IWBTG physics.toml (kid physics profile, format v1)".to_owned());
+    for (legacy, standard) in [
+        ("platform", "platforms"),
+        ("vine", "vines"),
+        ("slope", "slopes"),
+        ("ladder", "ladders"),
+    ] {
+        add_alias(&mut value, legacy, standard);
+    }
+    add_alias(
+        &mut value["$defs"]["KidNumbersDraft"],
+        "max_fall_speed",
+        "max_fall",
+    );
+    let mut s = serde_json::to_string_pretty(&value).expect("schema is JSON");
+    s.push('\n');
+    s
+}
+
 /// Every schema as `(file stem, pretty JSON text)`. The file is `<stem>.schema.json`.
 pub fn generate() -> Vec<(&'static str, String)> {
     fn text<T: JsonSchema>(title: &str) -> String {
@@ -207,44 +264,41 @@ pub fn generate() -> Vec<(&'static str, String)> {
         s
     }
     vec![
-        ("game", text::<Manifest>("IWBTG game.toml (format v0)")),
+        ("game", game_text()),
         (
             "engine",
-            text::<EnginePack>("IWBTG engine pack engine.toml (format v0)"),
+            text::<EnginePack>("IWBTG engine pack engine.toml (format v1)"),
         ),
         (
             "object",
-            text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),
+            text::<ObjectShape>("IWBTG objects/<id>.toml (format v1)"),
         ),
-        (
-            "physics",
-            text::<PhysicsProfileDraft>("IWBTG physics.toml (kid physics profile, format v0)"),
-        ),
-        ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
+        ("physics", physics_text()),
+        ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v1)")),
         (
             "tiles",
-            text::<TilesFile>("IWBTG rooms/<id>.tiles.toml (format v0)"),
+            text::<TilesFile>("IWBTG rooms/<id>.tiles.toml (format v1)"),
         ),
         (
             "background",
-            text::<TilesetFile>("IWBTG backgrounds/<id>.toml tileset sidecar (format v0)"),
+            text::<TilesetFile>("IWBTG backgrounds/<id>.toml tileset sidecar (format v1)"),
         ),
         (
             "sprite",
-            text::<RawSidecar>("IWBTG sprites/<id>.toml (format v0)"),
+            text::<RawSidecar>("IWBTG sprites/<id>.toml (format v1)"),
         ),
         (
             "timeline",
-            text::<TimelineShape>("IWBTG timelines/<id>.toml (format v0)"),
+            text::<TimelineShape>("IWBTG timelines/<id>.toml (format v1)"),
         ),
-        ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v0)")),
+        ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v1)")),
         (
             "particles",
-            text::<ParticleFile>("IWBTG particles/<id>.toml (format v0)"),
+            text::<ParticleFile>("IWBTG particles/<id>.toml (format v1)"),
         ),
         (
             "sound",
-            text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v0)"),
+            text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v1)"),
         ),
     ]
 }

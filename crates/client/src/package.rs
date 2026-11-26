@@ -1,6 +1,7 @@
 //! Loading a package folder or `.iwbz` file for the client: files, engine pack, the game
 //! definition and the sprite images. No Bevy in here, so it is tested like any other code.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -21,12 +22,17 @@ pub enum OpenError {
 
 /// An opened package.
 pub struct Package {
-    /// Every file, with the engine pack bundled.
-    pub files: PackageFiles,
+    /// Every file, with the engine pack bundled. Shared behind an [`Arc`]: the run's readers
+    /// (room art, the HUD, the results, the backdrop) clone this handle, not the bytes.
+    pub files: Arc<PackageFiles>,
     /// The loaded game.
     pub def: Arc<GameDef>,
     /// The package's `gameplay_hash`, for the replay header (`replays.rs`).
     pub gameplay_hash: [u8; 32],
+    /// The package's `sounds/<id>.ogg` and `music/<id>.ogg` by sound name, as shared handles.
+    /// Built once here; each run's `audio::Sounds` clones the handles instead of copying every
+    /// OGG (`crates/format` owns the `Vec<u8>`, so one copy at open is what `Arc<[u8]>` needs).
+    pub sound_bytes: HashMap<String, Arc<[u8]>>,
 }
 
 /// One decoded sprite strip.
@@ -38,15 +44,32 @@ pub struct SpriteImage {
 }
 
 /// The package command-line arguments.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct PackageArgs {
     /// Package folder (a folder with a game.toml) or `.iwbz` file. Not needed with `--select`,
-    /// `--ui-gallery`, `--bind` or `--show-bindings`.
-    #[arg(required_unless_present_any = ["select", "ui_gallery", "card_preview", "bind", "show_bindings"])]
+    /// `--ui-gallery`, `--card-preview`, `--controls`, `--bind` or `--show-bindings`.
+    #[arg(required_unless_present_any = ["select", "ui_gallery", "card_preview", "controls", "bind", "show_bindings"])]
     pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]
     pub trace_mode: bool,
+}
+
+/// The package's place in the module list (main.rs): its flags, and the "nothing to play" check
+/// once the standalone modes have had their turn.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = PackageArgs;
+
+    fn standalone(
+        _args: &PackageArgs,
+        startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
+        // `--show-bindings` is given; with only the bindings flags there is nothing to play.
+        (startup.package.is_none() && startup.library.is_none()).then_some(Ok(()))
+    }
 }
 
 /// Opens the package at `dir` and loads it. A folder is read and gets its engine pack bundled
@@ -54,15 +77,52 @@ pub struct PackageArgs {
 /// package may not hold, and already carries its pack. `trace_mode` is for research converter
 /// output.
 pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
-    let files = if is_iwbz(dir) {
-        read_iwbz(dir)?
-    } else {
-        let mut files =
-            PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
-        iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
-            .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
-        files
-    };
+    if is_iwbz(dir) {
+        let err = |e: String| OpenError::Files(format!("{}: {e}", dir.display()));
+        // Refuse an over-limit file before reading it; `from_iwbz_bytes` checks bytes that are
+        // already in memory (the browser's fetch) too.
+        let len = std::fs::metadata(dir).map_err(|e| err(e.to_string()))?.len();
+        if len > iwbtg_format::iwbz::MAX_ARCHIVE_BYTES {
+            return Err(err(format!(
+                "over {} bytes",
+                iwbtg_format::iwbz::MAX_ARCHIVE_BYTES
+            )));
+        }
+        let bytes = std::fs::read(dir).map_err(|e| err(e.to_string()))?;
+        return from_iwbz_bytes(&bytes, trace_mode, &dir.display());
+    }
+    let mut files =
+        PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+    iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
+        .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+    from_files(files, trace_mode)
+}
+
+/// Loads a package from an `.iwbz` already in memory: the browser fetches one over HTTP
+/// (docs/architecture/client/web.md). `source` names it in messages, a path or the page's URL.
+pub fn from_iwbz_bytes(
+    bytes: &[u8],
+    trace_mode: bool,
+    source: &dyn std::fmt::Display,
+) -> Result<Package, OpenError> {
+    let files = unpack_iwbz(bytes).map_err(|e| OpenError::Files(format!("{source}: {e}")))?;
+    from_files(files, trace_mode)
+}
+
+/// Unpacks an `.iwbz` already in memory, refusing one over the archive limit. [`from_iwbz_bytes`]
+/// adds the game definition; the browser times the two steps apart for its startup measurement
+/// (#1489, `crates/client/web/measure_startup.py`).
+pub fn unpack_iwbz(bytes: &[u8]) -> Result<PackageFiles, String> {
+    use iwbtg_format::iwbz;
+    if bytes.len() as u64 > iwbz::MAX_ARCHIVE_BYTES {
+        return Err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES));
+    }
+    iwbz::unpack(bytes).map_err(|e| e.to_string())
+}
+
+/// Builds a package from files already in memory: the game definition and its `gameplay_hash`.
+/// [`open`] reads them from a folder or `.iwbz`; the browser from its `fetch`.
+pub fn from_files(files: PackageFiles, trace_mode: bool) -> Result<Package, OpenError> {
     let mode = if trace_mode {
         LoadMode::Trace {
             unmapped_kinds_inert: true,
@@ -77,10 +137,13 @@ pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
             report.diagnostics.iter().map(ToString::to_string).collect(),
         ));
     };
+    // One pass over the sound files when the package opens; a run only clones the handles.
+    let sound_bytes = crate::audio::sound_bytes(&files);
     Ok(Package {
-        files,
+        files: Arc::new(files),
         def: Arc::new(def),
         gameplay_hash,
+        sound_bytes,
     })
 }
 
@@ -91,7 +154,10 @@ pub fn is_iwbz(path: &Path) -> bool {
         && !path.is_dir()
 }
 
-/// Reads and unpacks an `.iwbz` file; one over the size limit is refused before it is read.
+/// Reads what a game-select preview draws from an `.iwbz` (#1022): `game.toml`, the key art
+/// images, the first ranked room and the background images its art uses, and the `cherry`
+/// sprite. Nothing else is inflated, so a large package lists without decoding its assets;
+/// [`open`] still validates the whole package when the game starts.
 pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
     use iwbtg_format::iwbz;
     let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
@@ -100,7 +166,77 @@ pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
         return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
     }
     let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
-    iwbz::unpack(&bytes).map_err(|e| err(e.to_string()))
+    preview_from_iwbz(&bytes).map_err(|e| err(e.to_string()))
+}
+
+/// The manifest only, for game select's first pass (#1593): a folder's `game.toml`, or an
+/// archive's through the selective reader. No art or room data is read, so a large library
+/// lists from its metadata before any preview is built.
+pub fn read_manifest(path: &Path) -> Result<PackageFiles, OpenError> {
+    if is_iwbz(path) {
+        let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
+        let len = std::fs::metadata(path).map_err(|e| err(e.to_string()))?.len();
+        if len > iwbtg_format::iwbz::MAX_ARCHIVE_BYTES {
+            return Err(err(format!(
+                "over {} bytes",
+                iwbtg_format::iwbz::MAX_ARCHIVE_BYTES
+            )));
+        }
+        let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
+        return iwbtg_format::iwbz::unpack_selected(&bytes, |name| name == "game.toml")
+            .map_err(|e| err(e.to_string()));
+    }
+    let mut files = PackageFiles::new();
+    let bytes = std::fs::read(path.join("game.toml"))
+        .map_err(|e| OpenError::Files(format!("{}: {e}", path.display())))?;
+    let _ = files.insert("game.toml", bytes);
+    Ok(files)
+}
+
+/// The selective reads behind [`read_iwbz`]: the manifest, then the files its key art, first
+/// ranked room and cherry need, then the background images that room's art names. A manifest
+/// that does not parse leaves only `game.toml`, which the caller treats as unreadable.
+fn preview_from_iwbz(bytes: &[u8]) -> Result<PackageFiles, iwbtg_format::iwbz::IwbzError> {
+    use iwbtg_format::iwbz;
+    use std::collections::BTreeSet;
+
+    let mut files = iwbz::unpack_selected(bytes, |name| name == "game.toml")?;
+    let Some(manifest) = files
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| iwbtg_format::Manifest::parse(t).ok())
+    else {
+        return Ok(files);
+    };
+    let room = iwbtg_format::key_art::first_ranked_room(&manifest);
+    let mut wanted: BTreeSet<String> = ["game.toml", "sprites/cherry.toml", "sprites/cherry.png"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    if let Some(section) = &manifest.key_art {
+        wanted.extend(
+            section
+                .image
+                .iter()
+                .chain(section.maps.values())
+                .map(|path| path.get_ref().clone()),
+        );
+    }
+    wanted.insert(format!("rooms/{room}.toml"));
+    files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+    if let Ok(art) = iwbtg_format::art::load_room_art(&files, room) {
+        let before = wanted.len();
+        wanted.extend(
+            art.backgrounds
+                .iter()
+                .filter(|b| !b.foreground)
+                .map(|b| format!("backgrounds/{}.png", b.image)),
+        );
+        if wanted.len() > before {
+            files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+        }
+    }
+    Ok(files)
 }
 
 /// The image of every sprite of the game, in `SpriteId` order. A sprite without a picture (no
@@ -269,6 +405,82 @@ mod tests {
         panic!("no clear in 4000 ticks; reached room {}", rooms.len());
     }
 
+    /// #1140: R after a death goes through the empty boot room before the boot tick loads the
+    /// save, so the retry leaves one kid at the saved spot. With no boot room, the courtyard's
+    /// `kid_start` made a kid during `game_restart` and the load made a second one beside it.
+    #[test]
+    fn a_showcase_retry_leaves_one_kid() {
+        use iwbtg_sim::input::{Action, InputFrame};
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+        use iwbtg_sim::world::KindState;
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let p = open(&dir, false).unwrap();
+        let options = SimOptions {
+            start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
+        };
+        let mut sim = Sim::new(Arc::clone(&p.def), options).unwrap();
+        // The first tick runs the start room and the kid's first-play save.
+        sim.step(InputFrame::default());
+        assert!(sim.world().kid(&sim.rules().tick).is_some());
+
+        let suicide = Action::Suicide.bit();
+        sim.step(InputFrame {
+            held: suicide,
+            pressed: suicide,
+            released: 0,
+        });
+        sim.step(InputFrame {
+            held: 0,
+            pressed: 0,
+            released: suicide,
+        });
+        assert_eq!(sim.world().engine.run.deaths, 1);
+        assert!(sim.world().kid(&sim.rules().tick).is_none());
+        for _ in 0..4 {
+            sim.step(InputFrame::default());
+        }
+
+        // R: the key press event starts the retry; the next tick's boot load enters the saved
+        // room.
+        let restart = Action::Restart.bit();
+        sim.step(InputFrame {
+            held: restart,
+            pressed: restart,
+            released: 0,
+        });
+        sim.step(InputFrame {
+            held: 0,
+            pressed: 0,
+            released: restart,
+        });
+        for _ in 0..3 {
+            sim.step(InputFrame::default());
+        }
+
+        let kids: Vec<_> = sim
+            .world()
+            .iter_alive()
+            .filter(|i| matches!(i.state, KindState::Kid(_)))
+            .collect();
+        assert_eq!(kids.len(), 1, "R leaves one kid, not the start kid and the loaded one");
+        let slot = sim.world().save.clone().expect("the start room's save");
+        assert_eq!(sim.world().room, slot.room);
+        // The kid is made at the saved spot (quantized) and falls under gravity for the ticks
+        // since; x does not move.
+        let (kx, ky) = (kids[0].m.x().get(), kids[0].m.y().get());
+        let (sx, sy) = (slot.x.get(), slot.y.get());
+        assert!(
+            (kx - sx).abs() <= 1.0 && (ky - sy).abs() <= 8.0,
+            "the loaded kid at ({kx}, {ky}) is not at the save ({sx}, {sy})"
+        );
+    }
+
     #[test]
     fn an_iwbz_opens_like_its_folder_and_a_bad_one_is_refused() {
         let dir = std::env::temp_dir().join(format!("iwbtg-client-iwbz-{}", std::process::id()));
@@ -285,6 +497,79 @@ mod tests {
         std::fs::write(&bad, b"PK not really").unwrap();
         assert!(matches!(open(&bad, false), Err(OpenError::Files(_))));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_iwbz_preview_reads_the_key_art_and_room_but_not_the_sprites() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-client-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/maps.pkg");
+        let full = open(&folder, false).unwrap();
+        let file = dir.join("maps.iwbz");
+        std::fs::write(&file, iwbtg_format::iwbz::pack(&full.files).unwrap()).unwrap();
+        let preview = read_iwbz(&file).unwrap();
+        assert!(preview.contains("game.toml"));
+        assert!(preview.contains("art/key.png"), "the key art is read");
+        assert!(
+            preview.contains("rooms/goal.toml"),
+            "the first ranked room is read (the fixture's ranked start, #43)"
+        );
+        assert!(!preview.contains("sprites/kid.png"), "unrelated assets are not");
+        assert!(preview.len() < full.files.len());
+        let text = std::str::from_utf8(preview.get("game.toml").unwrap()).unwrap();
+        let manifest = iwbtg_format::Manifest::parse(text).unwrap();
+        assert_eq!(
+            iwbtg_format::key_art::resolve(&preview, &manifest, None),
+            iwbtg_format::key_art::resolve(&full.files, &manifest, None),
+            "the preview resolves the same key art as the full package"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_iwbz_preview_reads_the_first_room_backgrounds() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-client-preview-bg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let full = open(&folder, false).unwrap();
+        let file = dir.join("showcase.iwbz");
+        std::fs::write(&file, iwbtg_format::iwbz::pack(&full.files).unwrap()).unwrap();
+        let preview = read_iwbz(&file).unwrap();
+        assert!(preview.contains("rooms/courtyard.toml"), "the first ranked room is read");
+        for background in ["sky", "clouds", "hills"] {
+            assert!(
+                preview.contains(&format!("backgrounds/{background}.png")),
+                "the {background} background is read"
+            );
+        }
+        assert!(!preview.contains("music/night.ogg"), "music is not");
+        assert!(!preview.contains("objects/fireflies.toml"), "objects are not");
+        let text = std::str::from_utf8(preview.get("game.toml").unwrap()).unwrap();
+        let manifest = iwbtg_format::Manifest::parse(text).unwrap();
+        let art = iwbtg_format::key_art::resolve(&preview, &manifest, None);
+        assert_eq!(
+            art,
+            iwbtg_format::key_art::resolve(&full.files, &manifest, None),
+            "the preview resolves the same room-background key art"
+        );
+        assert!(matches!(art, iwbtg_format::key_art::KeyArt::RoomBackground(_)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fetched_iwbz_bytes_load_like_the_file() {
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let folder = open(&demo, false).unwrap();
+        let bytes = iwbtg_format::iwbz::pack(&folder.files).unwrap();
+        let fetched = from_iwbz_bytes(&bytes, false, &"demo.iwbz").unwrap();
+        assert_eq!(fetched.gameplay_hash, folder.gameplay_hash);
+        assert_eq!(fetched.files.content_hash(), folder.files.content_hash());
+        assert!(matches!(
+            from_iwbz_bytes(b"PK not really", false, &"bad.iwbz"),
+            Err(OpenError::Files(_))
+        ));
     }
 
     #[test]

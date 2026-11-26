@@ -1,0 +1,56 @@
+IWBTG Collection
+Copyright 2026 IWBTG Collection contributors
+
+IWBTG Collection is one client that plays I Wanna Be The Guy fangames. Every
+supported game is rebuilt in this repository's own documented format; the client
+never runs original games or their engines. The project is non-commercial and will
+never be monetized.
+
+Code licence
+------------
+
+The source code in this repository is licensed under the MIT license
+(LICENSE-MIT). Unless you explicitly state otherwise, any contribution
+intentionally submitted for inclusion in the work by you shall be licensed under
+the MIT license, without any additional terms or conditions.
+
+Documentation licence
+---------------------
+
+The documentation in docs/ is licensed under CC BY 4.0 (LICENSES/CC-BY-4.0.txt).
+
+Rust dependencies
+-----------------
+
+The client and its tools are built on third-party Rust crates. Their licences and
+the crates that use each one are listed in THIRD_PARTY_LICENSES, generated from
+Cargo.lock with cargo-about.
+
+Bundled fonts
+-------------
+
+The fonts in crates/client/assets/fonts/ are under the SIL Open Font License 1.1
+(LICENSES/OFL-1.1.txt); each font's licence file sits next to it.
+
+  * Barlow and Barlow Condensed: Copyright 2017 The Barlow Project Authors
+  * Inter (subset used for the arrow glyphs): Copyright 2020 The Inter Project Authors
+  * Noto Sans JP (subset): Copyright 2014-2021 Adobe, with Reserved Font Name 'Source'
+  * Noto Sans Symbols 2 (subset): Copyright 2022 The Noto Project Authors
+  * Pixelify Sans: Copyright 2021 The Pixelify Sans Project Authors
+
+Game content
+------------
+
+Game content is not covered by the code or documentation licences. Each ported game
+and its assets belong to its creators, who can have the game removed from the
+project, its builds and its download server. Game content in this repository is
+marked LicenseRef-Game-Content in REUSE.toml; see LICENSES/LicenseRef-Game-Content.txt.
+
+The showcase package (crates/client/showcase.pkg) holds five sprites from a fangame,
+credited in its CREDITS.md: the Kid is the character and sprite of I Wanna Be The Guy
+by Kayin, as shipped in the IWBTG fangame engine, taken from waka's I wanna Little
+Trap conversion. They are here, few and credited, by the user's decision of
+2026-11-11. Their owners can have them removed.
+
+Per-file licence and copyright information is in REUSE.toml and can be checked with
+`reuse lint`.

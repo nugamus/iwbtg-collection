@@ -1,0 +1,1487 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "The `[budget]` table.",
+      "properties": {
+        "ops_per_tick": {
+          "default": null,
+          "description": "Script budget units per tick; [`DEFAULT_OPS_PER_TICK`] if absent, at most\n[`MAX_OPS_PER_TICK`].",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CompatDeviation": {
+      "additionalProperties": false,
+      "description": "One `[[compat.deviation]]` entry. Every field is provenance: a deviation says what it selects,\nwhy, its feel tier, its evidence and the issue that tracks it.",
+      "properties": {
+        "evidence": {
+          "description": "The trace, feel contract or test that proves it.",
+          "type": "string"
+        },
+        "id": {
+          "description": "A catalogue id (`save.position`).",
+          "type": "string"
+        },
+        "impact": {
+          "description": "The feel tier, `F1`, `F2` or `F3`.",
+          "type": "string"
+        },
+        "issue": {
+          "description": "The issue that tracks the deviation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/$defs/DeviationValue",
+          "description": "The value the deviation selects, with the catalogue entry's type."
+        },
+        "why": {
+          "description": "Why the package keeps this behavior.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "value",
+        "why",
+        "impact",
+        "evidence",
+        "issue"
+      ],
+      "type": "object"
+    },
+    "CompatSection": {
+      "additionalProperties": false,
+      "description": "`[compat]`: the ruleset's compatibility profile and the deviations the package declares\n(decision 0005, docs/format/game.md).",
+      "properties": {
+        "deviation": {
+          "description": "`[[compat.deviation]]` entries. Each names one id of the ruleset's closed catalogue.",
+          "items": {
+            "$ref": "#/$defs/CompatDeviation"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "default": null,
+          "description": "`profile = \"<ruleset>/<family>@<n>\"` (`gm8/a1@1`). Absent: inferred from the physics\npreset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Controls": {
+      "additionalProperties": false,
+      "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/game.md).\nOnly the player-facing words; which key the player binds is the client's.",
+      "properties": {
+        "extra1": {
+          "default": null,
+          "description": "What `extra1` does in this game (\"Teleport\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra2": {
+          "default": null,
+          "description": "What `extra2` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra3": {
+          "default": null,
+          "description": "What `extra3` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra4": {
+          "default": null,
+          "description": "What `extra4` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Creator": {
+      "additionalProperties": false,
+      "description": "One `[[creators]]` entry.",
+      "properties": {
+        "name": {
+          "description": "Name as the creator wants it shown.",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CreatorRole",
+          "description": "What they did."
+        }
+      },
+      "required": [
+        "name",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CreatorRole": {
+      "description": "A creator's role.",
+      "oneOf": [
+        {
+          "const": "author",
+          "description": "Made the game.",
+          "type": "string"
+        },
+        {
+          "const": "co-author",
+          "description": "Made the game with others.",
+          "type": "string"
+        },
+        {
+          "const": "music",
+          "description": "Made the music.",
+          "type": "string"
+        },
+        {
+          "const": "art",
+          "description": "Made the art.",
+          "type": "string"
+        },
+        {
+          "const": "tester",
+          "description": "Tested the game.",
+          "type": "string"
+        },
+        {
+          "const": "other",
+          "description": "Anything else.",
+          "type": "string"
+        }
+      ]
+    },
+    "CutInstance": {
+      "additionalProperties": false,
+      "description": "`{ room = \"stage1\", name = \"tutorial_sign\" }`.",
+      "properties": {
+        "name": {
+          "description": "The instance's `name` in that room.",
+          "type": "string"
+        },
+        "room": {
+          "description": "The room the instance is placed in.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "room",
+        "name"
+      ],
+      "type": "object"
+    },
+    "CutRoom": {
+      "additionalProperties": false,
+      "description": "`{ room = \"intro\", to = \"stage1\" }`.",
+      "properties": {
+        "room": {
+          "description": "The room that is skipped.",
+          "type": "string"
+        },
+        "to": {
+          "description": "Where a room change to `room` goes instead.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "room",
+        "to"
+      ],
+      "type": "object"
+    },
+    "CutsceneRegion": {
+      "additionalProperties": false,
+      "description": "A cutscene: the ranked timer is frozen while it holds. Exactly one of `kind` and `room`.",
+      "properties": {
+        "id": {
+          "description": "Region id, unique among cutscenes and dialogues.",
+          "type": "string"
+        },
+        "kind": {
+          "default": null,
+          "description": "Holds while an instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "room": {
+          "default": null,
+          "description": "Holds while the kid's world is in this room.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "DeathName": {
+      "description": "`death_on_restart` values.",
+      "oneOf": [
+        {
+          "const": "nothing",
+          "description": "Nothing.",
+          "type": "string"
+        },
+        {
+          "const": "save_counters",
+          "description": "A death-only save of the counters.",
+          "type": "string"
+        },
+        {
+          "const": "save_counters_per_kid",
+          "description": "One death per live kid, then the death-only save (showdown).",
+          "type": "string"
+        }
+      ]
+    },
+    "DeviationValue": {
+      "anyOf": [
+        {
+          "description": "A flag.",
+          "type": "boolean"
+        },
+        {
+          "description": "An integer.",
+          "format": "int64",
+          "type": "integer"
+        },
+        {
+          "description": "A real.",
+          "format": "double",
+          "type": "number"
+        },
+        {
+          "description": "An enum value, by its package name.",
+          "type": "string"
+        }
+      ],
+      "description": "A deviation's value, as written in `game.toml`. The catalogue decides which shape is allowed."
+    },
+    "DialogueRegion": {
+      "additionalProperties": false,
+      "description": "Dialogue that waits for a press: a cutscene region that also advances on its own.",
+      "properties": {
+        "advance": {
+          "description": "The action the original reads to advance the text (`jump`, `shoot`, `accept`, ...).",
+          "type": "string"
+        },
+        "id": {
+          "description": "Region id, unique among cutscenes and dialogues.",
+          "type": "string"
+        },
+        "kind": {
+          "default": null,
+          "description": "Holds while an instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "room": {
+          "default": null,
+          "description": "Holds while the kid's world is in this room.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeout_ticks": {
+          "description": "Ticks without a press of `advance` before the sim presses it; at least 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "advance",
+        "timeout_ticks"
+      ],
+      "type": "object"
+    },
+    "EngineSection": {
+      "additionalProperties": false,
+      "description": "The `[engine]` table (docs/format/game.md; CR7 in docs/format/converter-requests.md).",
+      "properties": {
+        "boot": {
+          "default": null,
+          "description": "Persistent kinds created before the first room; default: the `world` engine kind.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "first_runtime_id": {
+          "default": null,
+          "description": "The GM8 instance id of the first instance created at run time: the game file's\nlast-instance-id + 1 (#680). Above every `gm_id` of the package.",
+          "format": "uint32",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "float_model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FloatModelName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Runner FPU model (N3); default `f64`."
+        },
+        "new_game_room": {
+          "default": null,
+          "description": "Where `StartPoint::NewGame` starts (CR7). Defaults to `start_room` with a warning.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The reset path (F2)."
+        },
+        "restart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The retry path (R)."
+        },
+        "roles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Engine roles: which kind the sim spawns as `kid_bullet`, `bow`, ... (`\"none\"`: the game\nnever spawns one). Keys: [`ENGINE_ROLES`].",
+          "type": "object"
+        },
+        "uninit_reads_zero": {
+          "default": null,
+          "description": "GM \"treat uninitialized variables as 0\"; default true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FloatModelName": {
+      "description": "`float_model` values.",
+      "oneOf": [
+        {
+          "const": "f64",
+          "description": "IEEE binary64.",
+          "type": "string"
+        }
+      ]
+    },
+    "KeyArtSection": {
+      "additionalProperties": false,
+      "description": "The `[key_art]` table (docs/format/game.md, Key art).",
+      "properties": {
+        "image": {
+          "default": null,
+          "description": "The game's key art: a PNG inside the package, 1920 x 1080 recommended.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maps": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Per-map overrides, keyed by map id: a PNG for that map instead of `image`.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "KidStepsSection": {
+      "additionalProperties": false,
+      "description": "`restart = { kid_steps = { ... } }`; absent keys are off.",
+      "properties": {
+        "add_time": {
+          "default": null,
+          "description": "Ticks added to the play timer first (B: 2).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "clear_frozen": {
+          "default": null,
+          "description": "Clear `frozen` and `frozen2`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "clear_triggers": {
+          "default": null,
+          "description": "Clear the trigger arrays and `global.triggered` after the load (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "release_death_sound": {
+          "default": null,
+          "description": "Stop the death sound and restore the music volume before the retry (B).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reset_jump_values": {
+          "default": null,
+          "description": "Reset the new kid's jump values (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "save_death_time": {
+          "default": null,
+          "description": "Death-only save after `add_time`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KindDefaults": {
+      "additionalProperties": false,
+      "description": "`[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant\n(docs/format/game.md).",
+      "properties": {
+        "mask": {
+          "default": null,
+          "description": "Default object-level mask sprite.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sprite": {
+          "default": null,
+          "description": "Default sprite.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variants": {
+          "default": [],
+          "description": "Per-variant sprites: each table has param keys to match (`dir = \"up\"`) plus `sprite`\nand/or `mask`.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "MapEntry": {
+      "additionalProperties": false,
+      "description": "One `[[maps]]` entry (docs/format/game.md, Maps). Timing keys it leaves out come from\n`[timing]`.",
+      "properties": {
+        "category": {
+          "default": null,
+          "description": "The run category (\"Any%\", \"100%\", \"True Ending\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "difficulty": {
+          "default": null,
+          "description": "The original's built-in difficulty this map plays, as the game names it (\"Medium\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run ends at this trigger; default `[timing].end`."
+        },
+        "id": {
+          "description": "Map id, unique within the package. Stable forever; leaderboards key on it.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name in game select.",
+          "type": "string"
+        },
+        "stages": {
+          "description": "Stages in order; default `[timing].stages`. `[]` is a single-stage map.",
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run starts at this trigger; default `[timing].start`."
+        },
+        "stripped_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RankedStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The map's ranked start point; keys it leaves out come from `[stripped].start`, globals\nmerged by name."
+        },
+        "version": {
+          "default": null,
+          "description": "The original's version this map plays; default `source_version`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "MusicSettings": {
+      "additionalProperties": false,
+      "description": "One `[music.<id>]` table.",
+      "properties": {
+        "volume": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Playback volume, 1.0 is unchanged."
+        }
+      },
+      "type": "object"
+    },
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "OrderItem": {
+      "anyOf": [
+        {
+          "description": "`\"spike\"`, `\"@world\"`.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": true,
+          "description": "`{ kind = \"spike\", dir = \"up\" }`.",
+          "type": "object"
+        }
+      ],
+      "description": "One `object_order` entry as written: a kind name, or a selector table\n`{ kind = \"spike\", dir = \"up\" }` with exactly one param key besides `kind`."
+    },
+    "Permission": {
+      "description": "Permission to port the game.",
+      "oneOf": [
+        {
+          "const": "granted",
+          "description": "The creator said yes.",
+          "type": "string"
+        },
+        {
+          "const": "community-assumed",
+          "description": "Covered by the community's standing assumption.",
+          "type": "string"
+        },
+        {
+          "const": "pending",
+          "description": "Asked, no answer yet.",
+          "type": "string"
+        },
+        {
+          "const": "revoked",
+          "description": "The creator said no. A revoked package is never loaded, built or served.",
+          "type": "string"
+        }
+      ]
+    },
+    "RankedStart": {
+      "additionalProperties": false,
+      "description": "`{ room = \"stage1\", globals = { difficulty = 1 } }`: the ranked start point.",
+      "properties": {
+        "globals": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Globals set before the first room, in place of the skipped menus (a number, string or\nboolean, as `set_global`).",
+          "type": "object"
+        },
+        "room": {
+          "default": null,
+          "description": "The room a ranked run starts in; default `[engine].new_game_room`, then `start_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ResetKindName": {
+      "description": "Reset kinds.",
+      "oneOf": [
+        {
+          "const": "delete_temp_and_restart",
+          "description": "`DeleteTempAndRestart`.",
+          "type": "string"
+        },
+        {
+          "const": "game_reset",
+          "description": "`GameReset`.",
+          "type": "string"
+        }
+      ]
+    },
+    "ResetSection": {
+      "additionalProperties": false,
+      "description": "`[engine] reset = { ... }`; absent keys keep `ResetModel::default()`.",
+      "properties": {
+        "excluded_roles": {
+          "description": "Roles where F2 does nothing.",
+          "items": {
+            "$ref": "#/$defs/RoleName"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetKindName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What F2 does."
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where it runs."
+        }
+      },
+      "type": "object"
+    },
+    "RestartKindName": {
+      "description": "Restart kinds (docs/architecture/sim/rooms.md).",
+      "oneOf": [
+        {
+          "const": "game_restart_via_boot",
+          "description": "`GameRestartViaBoot`.",
+          "type": "string"
+        },
+        {
+          "const": "room_goto_saved",
+          "description": "`RoomGotoSaved`.",
+          "type": "string"
+        },
+        {
+          "const": "showdown_load",
+          "description": "`ShowdownLoad`.",
+          "type": "string"
+        },
+        {
+          "const": "recreate_in_place",
+          "description": "`RecreateInPlace`.",
+          "type": "string"
+        }
+      ]
+    },
+    "RestartSection": {
+      "additionalProperties": false,
+      "description": "`[engine] restart = { ... }`; absent keys keep `RestartModel::default()`.",
+      "properties": {
+        "boot_ticks": {
+          "default": null,
+          "description": "Boot ticks of `game_restart_via_boot`.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "death_on_restart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeathName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What a retry counts."
+        },
+        "excluded_roles": {
+          "description": "Roles where R does nothing.",
+          "items": {
+            "$ref": "#/$defs/RoleName"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "flipped_load_dy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "y offset when the saved kid was flipped."
+        },
+        "kid_steps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KidStepsSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The kid-side steps of the retry (family B, showdown)."
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartKindName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the retry does."
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where it runs."
+        }
+      },
+      "type": "object"
+    },
+    "RoleName": {
+      "description": "A room role (`role` in room files, `excluded_roles` here).",
+      "oneOf": [
+        {
+          "const": "boot",
+          "description": "Boot room.",
+          "type": "string"
+        },
+        {
+          "const": "title",
+          "description": "Title.",
+          "type": "string"
+        },
+        {
+          "const": "menu",
+          "description": "Menu.",
+          "type": "string"
+        },
+        {
+          "const": "select",
+          "description": "Difficulty or stage select.",
+          "type": "string"
+        },
+        {
+          "const": "play",
+          "description": "Gameplay.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunnerSchema": {
+      "description": "The `runner` values (`iwbtg_sim::rules::Runner`, which lives in the sim crate and has no\nschema). `tests/schemas.rs` fails to compile when a runner is added there without a variant\nhere.",
+      "oneOf": [
+        {
+          "const": "gm80",
+          "description": "GameMaker 8.0.",
+          "type": "string"
+        },
+        {
+          "const": "gm81",
+          "description": "GameMaker 8.1.",
+          "type": "string"
+        },
+        {
+          "const": "gms",
+          "description": "GameMaker Studio 1.x.",
+          "type": "string"
+        }
+      ]
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "The `[source]` table.",
+      "properties": {
+        "permission": {
+          "$ref": "#/$defs/Permission",
+          "description": "Permission status."
+        },
+        "permission_date": {
+          "default": null,
+          "description": "When the status was last set (a local date).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "permission_note": {
+          "default": null,
+          "description": "Where the permission came from, or why it is pending.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Original game page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "permission"
+      ],
+      "type": "object"
+    },
+    "Stage": {
+      "additionalProperties": false,
+      "description": "One split stage.",
+      "properties": {
+        "id": {
+          "description": "Stage id, unique within the package.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "room": {
+          "default": null,
+          "description": "The room, for `enter_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "description": "The stage ends at this trigger.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "trigger"
+      ],
+      "type": "object"
+    },
+    "StrippedCut": {
+      "additionalProperties": false,
+      "description": "`[stripped.cut]`: what stripped mode leaves out.",
+      "properties": {
+        "instances": {
+          "description": "Single placed instances left out, by room and instance name.",
+          "items": {
+            "$ref": "#/$defs/CutInstance"
+          },
+          "type": "array"
+        },
+        "kinds": {
+          "default": [],
+          "description": "Kinds whose placed instances and room `spawn` actions are left out.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rooms": {
+          "description": "Rooms skipped: going to `room` goes to `to` instead.",
+          "items": {
+            "$ref": "#/$defs/CutRoom"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "StrippedSection": {
+      "additionalProperties": false,
+      "description": "The `[stripped]` table: what ranked (stripped) mode changes (docs/format/game.md, Stripped\nmode; docs/product.md, Two ways to play each game). Play original ignores it.",
+      "properties": {
+        "cut": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrippedCut"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rooms, kinds and placed instances stripped mode leaves out."
+        },
+        "cutscenes": {
+          "description": "Regions that freeze the ranked timer.",
+          "items": {
+            "$ref": "#/$defs/CutsceneRegion"
+          },
+          "type": "array"
+        },
+        "dialogues": {
+          "description": "Text that waits for a press: freezes the timer and advances on its own after a timeout.",
+          "items": {
+            "$ref": "#/$defs/DialogueRegion"
+          },
+          "type": "array"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RankedStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where a ranked run starts; a map's `stripped_start` overrides it key by key."
+        }
+      },
+      "type": "object"
+    },
+    "ThirdParty": {
+      "additionalProperties": false,
+      "description": "One `[[third_party]]` entry.",
+      "properties": {
+        "license": {
+          "description": "SPDX id, or `unknown`.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Rights holder.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Package path of the file.",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ThirdPartyStatus",
+          "description": "Clearance status."
+        },
+        "what": {
+          "description": "What it is.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "what",
+        "owner",
+        "license",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ThirdPartyStatus": {
+      "description": "Clearance status of a third-party file.",
+      "oneOf": [
+        {
+          "const": "cleared",
+          "description": "Cleared for public release.",
+          "type": "string"
+        },
+        {
+          "const": "to-clear",
+          "description": "Not cleared yet.",
+          "type": "string"
+        },
+        {
+          "const": "excluded-from-public",
+          "description": "Never shipped in public builds.",
+          "type": "string"
+        }
+      ]
+    },
+    "Timing": {
+      "additionalProperties": false,
+      "description": "The `[timing]` table.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/TriggerRef",
+          "description": "The run ends at this trigger."
+        },
+        "stages": {
+          "description": "Stages in order; each ends at its trigger. May be absent for a single-stage game.",
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": "array"
+        },
+        "start": {
+          "$ref": "#/$defs/TriggerRef",
+          "description": "The run starts at this trigger."
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "TrickSetting": {
+      "description": "A `[tricks]` value. On an `emergent` key it is only a label, and `off` is an error.",
+      "oneOf": [
+        {
+          "const": "on",
+          "description": "The trick works (a switch is on; an emergent trick is used).",
+          "type": "string"
+        },
+        {
+          "const": "off",
+          "description": "The switch is off. Not allowed on an emergent trick.",
+          "type": "string"
+        },
+        {
+          "const": "required",
+          "description": "The trick works and the game needs it; a switch must be on in the physics profile.",
+          "type": "string"
+        }
+      ]
+    },
+    "TriggerName": {
+      "description": "Restart and reset triggers.",
+      "oneOf": [
+        {
+          "const": "key_press_event",
+          "description": "The world's Key press event.",
+          "type": "string"
+        },
+        {
+          "const": "step_held",
+          "description": "The world's Step, every tick while held.",
+          "type": "string"
+        },
+        {
+          "const": "step_pressed",
+          "description": "The world's Step, on the press.",
+          "type": "string"
+        },
+        {
+          "const": "step_pressed_unless_paused",
+          "description": "The world's Step, on the press, skipped while paused.",
+          "type": "string"
+        }
+      ]
+    },
+    "TriggerRef": {
+      "additionalProperties": false,
+      "description": "`{ trigger = \"name\" }`, or `{ trigger = \"enter_room\", room = \"stage1_01\" }`.\n\nThe loader accepts the `[timing]` vocabulary of `iwbtg_sim::timing::TimingTrigger`:\n`run_start`, `run_end` and `enter_room` (with `room`) ([`TIMING_TRIGGERS`]).",
+      "properties": {
+        "room": {
+          "default": null,
+          "description": "The room, for `enter_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "description": "A trigger name from the vocabulary.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trigger"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The parsed `game.toml`.",
+  "else": {
+    "not": {
+      "required": [
+        "engine_rev"
+      ]
+    },
+    "properties": {
+      "compat": {
+        "required": [
+          "profile"
+        ]
+      }
+    },
+    "required": [
+      "ruleset",
+      "compat"
+    ]
+  },
+  "if": {
+    "properties": {
+      "format": {
+        "const": 0
+      }
+    }
+  },
+  "properties": {
+    "budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Budget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Script budget."
+    },
+    "compat": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompatSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The compatibility profile and its declared deviations (decision 0005). Format 1 requires\n`[compat] profile`."
+    },
+    "controls": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Controls"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the game's extra actions do (`[controls]`, #33): labels for `extra1` to `extra4`,\nshown where the player binds keys and in the HUD's input display. Absent: the game uses\nno extra action."
+    },
+    "creators": {
+      "description": "At least one creator.",
+      "items": {
+        "$ref": "#/$defs/Creator"
+      },
+      "type": "array"
+    },
+    "defaults": {
+      "additionalProperties": {
+        "$ref": "#/$defs/KindDefaults"
+      },
+      "description": "Default sprite and mask of bare built-in kinds, per variant (`[defaults.spike]`).",
+      "type": "object"
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EngineSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Engine settings: restart and reset models, boot kinds, number model, new-game room, engine\nroles (docs/format/game.md)."
+    },
+    "engine_pack": {
+      "default": null,
+      "description": "Engine pack id in `games/_engines/` (`engine_pack`; `[engine]` is the engine settings\ntable).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "engine_rev": {
+      "default": null,
+      "description": "Built-in behavior revision this package was verified against. Format 0 only, and\nrequired there; format 1 names the revision in `ruleset` (docs/format/v1.md).",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "format": {
+      "description": "Format major version. The client reads every version up to [`FORMAT_VERSION`].",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "description": "Package id, snake_case. Stable forever; leaderboards key on it.",
+      "type": "string"
+    },
+    "key_art": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KeyArtSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Art for the background system and the game select list; absent: the first ranked\nroom's background ([`crate::key_art`])."
+    },
+    "maps": {
+      "description": "Maps: each built-in difficulty, category and version, with its own timing and board.\nAbsent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.",
+      "items": {
+        "$ref": "#/$defs/MapEntry"
+      },
+      "type": "array"
+    },
+    "max_ticks": {
+      "description": "Upper bound for a replay, in ticks. The server rejects longer replays.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "music": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MusicSettings"
+      },
+      "description": "Optional per-track settings, keyed by music id.",
+      "type": "object"
+    },
+    "object_order": {
+      "description": "Event and collision rank order of every kind used: kind names and selectors.",
+      "items": {
+        "$ref": "#/$defs/OrderItem"
+      },
+      "type": "array"
+    },
+    "physics": {
+      "description": "Path to the physics profile.",
+      "type": "string"
+    },
+    "room_order": {
+      "default": null,
+      "description": "GM room order (`room_goto_next`, `room_goto_previous`); rooms not listed follow in path\norder.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "ruleset": {
+      "default": null,
+      "description": "Named, versioned semantic contract (`gm8@<rev>`). Required in format 1; absent in format 0\nmeans `gm8` at `engine_rev` (decision 0005, docs/format/game.md).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "runner": {
+      "$ref": "#/$defs/RunnerSchema",
+      "description": "The original runner (GameMaker 8.0, 8.1 or Studio), recorded for provenance. GM 8.0 and\n8.1 share the same simulation rules (research#15); GMS uses the GM8 defaults until\nresearch#179."
+    },
+    "source": {
+      "$ref": "#/$defs/Source",
+      "description": "Where the original comes from and its permission status."
+    },
+    "source_version": {
+      "default": null,
+      "description": "Version of the original we ported.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "start_room": {
+      "description": "First room.",
+      "type": "string"
+    },
+    "stripped": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StrippedSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Ranked (stripped) mode: start point, cuts, cutscene and dialogue regions. Absent: the\nrun starts at the new-game room and nothing is cut or frozen."
+    },
+    "third_party": {
+      "description": "One entry per file that is not the creator's own work or ours.",
+      "items": {
+        "$ref": "#/$defs/ThirdParty"
+      },
+      "type": "array"
+    },
+    "tick_rate": {
+      "default": null,
+      "description": "Default room speed; [`DEFAULT_TICK_RATE`] if absent. Rooms may override.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "timing": {
+      "$ref": "#/$defs/Timing",
+      "description": "Run timing: start and end triggers and stages."
+    },
+    "title": {
+      "description": "Display title.",
+      "type": "string"
+    },
+    "tricks": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TrickSetting"
+      },
+      "description": "Trick switches and labels; keys from `research/specs/tricks.md`, Format keys.",
+      "type": "object"
+    },
+    "version": {
+      "description": "Semver of our port. For humans.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format",
+    "id",
+    "title",
+    "version",
+    "runner",
+    "physics",
+    "start_room",
+    "max_ticks",
+    "object_order",
+    "creators",
+    "source",
+    "timing"
+  ],
+  "then": {
+    "required": [
+      "engine_rev"
+    ]
+  },
+  "title": "IWBTG game.toml (format v1)",
+  "type": "object"
+}

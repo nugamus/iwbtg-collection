@@ -7,7 +7,7 @@ Looks like a block but is not solid, or vanishes. Source: `crates/sim/src/builti
 | `solid`, `visible` | bool | kind data | Applied in Create when given. |
 | `vanish_on` | `touch`, `approach`, `group_fade`, `never`, `tile_delete` | `approach` | When it goes (below). |
 | `approach_distance` | real | 2 | `approach` distance. |
-| `blood_solid_when_no_kid` | bool | false | While no kid exists it is solid, so blood sticks (KOT niseblock, blockVis). |
+| `blood_solid_when_no_kid` | bool | false | While no kid exists it is solid, so blood sticks (KOT niseblock, blockVis). Format-0 legacy alias (`deride-kotaro-from-aslant`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `stops_bullets` | bool | false | A kid bullet that touches it is destroyed. |
 | `reverses_platforms` | bool | false | The loader gives it the `fake_block` class; `moving_platform` then handles the collision (`marker_reverse`). |
 | `sound` | sound | none | The client's. |

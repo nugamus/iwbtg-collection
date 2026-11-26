@@ -6,7 +6,7 @@ An object whose code builds a particle system: rely objEffect, keep-celebrating 
 |---|---|---|---|
 | `system` | particles, or a list of them | required | The `particles/<id>` file, or the files, built in list order. |
 | `on_room_start` | `none`, `clear`, `destroy_emitters`, `destroy` | `none` | The call the instance's Room Start makes. |
-| `on_room_start_except` | list of rooms | none | Rooms where Room Start does nothing at all: no call and no destroy (go-the-spook-house oRainSys). |
+| `on_room_start_except` | list of rooms | none | Rooms where Room Start does nothing at all: no call and no destroy (go-the-spook-house oRainSys). Format-0 legacy alias (`go-the-spook-house`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `on_room_start_destroys_instance` | bool | false | Room Start destroys the instance after its call; its Destroy runs, so `on_destroy`'s call too, and it gets no later Room Start. |
 | `on_room_end` | same | `none` | The call the instance's Room End makes. |
 | `on_destroy` | same | `none` | The call the instance's Destroy makes. |

@@ -1,8 +1,8 @@
 //! Collision: placed masks, overlap, queries, contact moves, the solid put-back, the broadphase
-//! grid (docs/plans/sim-core.md 3.4, register C1-C15).
+//! grid (docs/architecture/sim/collision.md, register C1-C15).
 //!
 //! `bbox.rs` is the only place that rounds. The grid never decides order: results are re-sorted
-//! by `World::first_of` order. WP0 declares; WP3 owns.
+//! by `World::first_of` order.
 
 pub mod bbox;
 pub mod bounce;
@@ -16,7 +16,9 @@ pub mod xform;
 
 pub use bbox::{PlacedMask, instance_box, place_at, place_origin, reported_box};
 pub use bounce::{move_bounce_all, move_bounce_solid};
-pub use contact::{move_contact_solid, move_outside_solid};
+pub use contact::{
+    ContactFace, ContactMove, ContactStop, move_contact_solid, move_outside_solid, resolve_contact_move,
+};
 pub use query::{
     Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
     instance_position, place_empty, place_free, place_meeting,

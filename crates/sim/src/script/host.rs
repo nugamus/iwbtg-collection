@@ -1,6 +1,6 @@
 //! The Rhai host (`Engine::new_raw()`, our packages only, `eval`, `**`, `**=` disabled;
-//! docs/plans/sim-core.md 11, decision 0001). [`Iws`] is the engine; [`ScriptRuntime`] is the
-//! game's compiled scripts on top of it, and runs the script part of an event (WP9.2).
+//! docs/architecture/sim/scripts.md, decision 0001). [`Iws`] is the engine; [`ScriptRuntime`] is the
+//! game's compiled scripts on top of it, and runs the script part of an event.
 //!
 //! World access without unsafe code: while a script runs, `on_event` parks the live `World` in
 //! [`Shared`] (swapping a placeholder into `ctx.w`) and the registered functions work on the
@@ -8,16 +8,19 @@
 //! builds a `Ctx` for the call and puts the world back, so a nested script (a spawned
 //! instance Create) parks it again. The world is always restored, also on errors.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use super::inst::Inst;
 use super::{ScriptError, ScriptHost};
-use crate::def::{GameDef, KindId, ScriptId};
+use crate::def::script::ScriptRules;
+use crate::def::{Builtin, ClassMask, GameDef, KindId, ScriptId};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::rules::RunnerRules;
 use crate::sound::DllMode;
-use crate::world::{Ctx, Flow, InstId, World};
+use crate::world::{Ctx, Flow, InstId, Instance, World};
 
 /// Deepest nesting of script events (a Create that spawns an instance whose Create spawns...).
 const MAX_DEPTH: u32 = 8;
@@ -31,7 +34,52 @@ struct Compiled {
 
 pub(crate) struct Inner {
     iws: Iws,
-    scripts: Vec<Compiled>,
+    /// Shared with the [`PreparedScripts`] this run came from (#1093). `Rc`: the compiled ASTs
+    /// are not `Send` under the sim's no-`sync` Rhai profile and never leave this thread.
+    scripts: Rc<Vec<Compiled>>,
+}
+
+impl Inner {
+    /// Calls the package script function `name` with `args` from inside a running script
+    /// (#1533): `this` stays the calling instance, and the same engine means the same step
+    /// budget, RNG and lent world as the caller. Returns the function's value.
+    fn execute(&self, name: &str, args: Vec<Dynamic>) -> Result<Dynamic, ScriptError> {
+        let shared = &self.iws.shared;
+        let Some(this_inst) = shared.this_inst.get() else {
+            return Err(plain("script_execute is only available inside a script call"));
+        };
+        if shared.depth.get() >= MAX_DEPTH {
+            return Err(plain(
+                "scripts nest too deeply (script_execute inside script_execute ...)",
+            ));
+        }
+        let arity = args.len();
+        let Some(script) = self
+            .scripts
+            .iter()
+            .find(|s| s.fns.contains(&(name.to_owned(), arity)))
+        else {
+            return Err(plain(format!(
+                "script_execute: no script function `{name}` taking {arity} argument{}",
+                if arity == 1 { "" } else { "s" }
+            )));
+        };
+        shared.depth.set(shared.depth.get() + 1);
+        let mut this = Dynamic::from(Inst(this_inst));
+        let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
+        let mut scope = Scope::new();
+        let result = self
+            .iws
+            .engine
+            .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, name, args)
+            .map_err(|e| {
+                let mut d = script_error(&e);
+                d.message = format!("{}: {} [script_execute `{name}`]", script.name, d.message);
+                d
+            });
+        shared.depth.set(shared.depth.get() - 1);
+        result
+    }
 }
 
 /// The game's compiled scripts and the engine that runs them. Built once per `Sim` from
@@ -73,14 +121,76 @@ pub(crate) fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic
     })
 }
 
-impl ScriptRuntime {
-    /// Compiles `def.scripts` (index = `ScriptId`). A compile error is a load-time `SimError`.
-    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<ScriptRuntime, SimError> {
+/// The script function a moment calls: the running timeline's `call` for `step` becomes
+/// `moment_<call>`. Moments are not in [`event_call`] because the name lives in the timeline.
+fn moment_call(def: &GameDef, inst: &Instance, step: u32) -> Option<String> {
+    let run = inst.timeline.as_ref()?;
+    let timeline = def.timelines.get(run.timeline.index()?)?;
+    let index = timeline.moments.iter().position(|m| *m == step)?;
+    timeline.calls.get(index).map(|call| format!("moment_{call}"))
+}
+
+/// The name a trigger-based kind's kid collision passes to `trigger(name)` (decision 0001).
+///
+/// The trigger built-in handles the kid classes itself (its event set), so that collision is
+/// where the script's `trigger` event runs. The name is the instance's room-file name
+/// (`PlacedInstance::name`, documented "for triggers and scripts"); an unnamed trigger keeps
+/// the ordinary `collide` mapping because there is no name to pass.
+fn trigger_name(
+    def: &GameDef,
+    inst: &Instance,
+    with: ClassMask,
+    fns: &BTreeSet<(String, usize)>,
+) -> Option<String> {
+    let kd = def.kind(inst.kind)?;
+    if kd.base != Builtin::Trigger
+        || !with.intersects(crate::builtins::warp::KIDS)
+        || !fns.contains(&("trigger".to_owned(), 1))
+    {
+        return None;
+    }
+    def.names.get(inst.name?.index()?).cloned()
+}
+
+/// The package's compiled scripts and kind-name map, prepared once and reused across runs
+/// (#1021, #1093).
+///
+/// It holds only immutable data. Each run builds its own [`Iws`] and per-run `Shared` state, so
+/// two runs from the same artifact share no RNG, budget, log or parked world. The Rhai types
+/// stay inside this module: `GameDef` never holds one.
+#[derive(Clone)]
+pub struct PreparedScripts {
+    /// The package the scripts were compiled from; an artifact is not interchangeable.
+    package: String,
+    /// Compiled scripts, indexed by `ScriptId`. `Rc`: the ASTs are not `Send` and stay on the
+    /// sim's thread (the client cache is a `NonSend` resource, #1093B).
+    scripts: Rc<Vec<Compiled>>,
+    /// Kind names for the API's kind arguments.
+    kinds: Arc<BTreeMap<String, KindId>>,
+}
+
+impl std::fmt::Debug for PreparedScripts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedScripts")
+            .field("package", &self.package)
+            .field("scripts", &self.scripts.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl PreparedScripts {
+    /// Compiles every script of `def` under `rules`. A compile error is a load-time
+    /// `SimError::Script` with the file and position, as before.
+    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<PreparedScripts, SimError> {
         if def.scripts.is_empty() {
-            return Ok(ScriptRuntime::default());
+            return Ok(PreparedScripts {
+                package: def.id.clone(),
+                scripts: Rc::new(Vec::new()),
+                kinds: Arc::new(BTreeMap::new()),
+            });
         }
         let iws = Iws::new(rules.num.clone());
-        let mut scripts = Vec::new();
+        let mut scripts = Vec::with_capacity(def.scripts.len());
         for s in &def.scripts {
             let ast = iws.compile(&s.source).map_err(|e| SimError::Script {
                 message: format!("{}: {}", s.name, e.message),
@@ -101,10 +211,73 @@ impl ScriptRuntime {
             .zip(0u32..)
             .map(|(k, i)| (k.name.clone(), KindId(i)))
             .collect();
+        Ok(PreparedScripts {
+            package: def.id.clone(),
+            scripts: Rc::new(scripts),
+            kinds: Arc::new(kinds),
+        })
+    }
+
+    /// How many scripts the artifact holds.
+    pub fn script_count(&self) -> usize {
+        self.scripts.len()
+    }
+}
+
+impl ScriptRuntime {
+    /// Compiles `def.scripts` (index = `ScriptId`) under the compatibility script model that
+    /// `def` already selects. A compile error is a load-time `SimError`.
+    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<ScriptRuntime, SimError> {
+        ScriptRuntime::new_with_script_rules(def, rules, ScriptRules::gm8(def.uninit_reads_zero))
+    }
+
+    /// Compiles `def.scripts` under `script_rules` (decision 0005). `new` is this with the
+    /// package's compatibility pair; a `standard` ruleset passes [`ScriptRules::standard`].
+    pub fn new_with_script_rules(
+        def: &GameDef,
+        rules: &RunnerRules,
+        script_rules: ScriptRules,
+    ) -> Result<ScriptRuntime, SimError> {
+        let prepared = PreparedScripts::new(def, rules)?;
+        ScriptRuntime::new_run_with_script_rules(Arc::new(def.clone()), rules, script_rules, &prepared)
+    }
+
+    /// A run from a prepared artifact: a fresh [`Iws`] and per-run state, reusing only the
+    /// compiled scripts (#1093). `new` is prepare-plus-run for callers without a cache.
+    pub fn new_run(
+        def: Arc<GameDef>,
+        rules: &RunnerRules,
+        prepared: &PreparedScripts,
+    ) -> Result<ScriptRuntime, SimError> {
+        let script_rules = ScriptRules::gm8(def.uninit_reads_zero);
+        ScriptRuntime::new_run_with_script_rules(def, rules, script_rules, prepared)
+    }
+
+    /// [`ScriptRuntime::new_run`] under an explicit script model (decision 0005).
+    pub fn new_run_with_script_rules(
+        def: Arc<GameDef>,
+        rules: &RunnerRules,
+        script_rules: ScriptRules,
+        prepared: &PreparedScripts,
+    ) -> Result<ScriptRuntime, SimError> {
+        if prepared.scripts.is_empty() {
+            // No scripts means no kind has one, so there is no host to lend.
+            return Ok(ScriptRuntime::default());
+        }
+        if prepared.package != def.id || prepared.scripts.len() != def.scripts.len() {
+            return Err(SimError::invariant(format!(
+                "prepared scripts for package `{}` cannot run package `{}`",
+                prepared.package, def.id
+            )));
+        }
+        let iws = Iws::new(rules.num.clone());
+        let scripts = Rc::clone(&prepared.scripts);
+        let kinds = Arc::clone(&prepared.kinds);
         let inner = Rc::new_cyclic(|weak| {
             let host = Host {
-                def: def.clone(),
+                def,
                 rules: rules.clone(),
+                script_rules,
                 inner: weak.clone(),
                 kinds,
             };
@@ -129,7 +302,7 @@ impl ScriptRuntime {
 
     /// The events script `id` handles, from the functions it defines (`create` always runs and is
     /// not part of an event set). Collision handlers are not included: which classes a
-    /// `collide(other)` listens to is up to the kind (WP6c.4).
+    /// `collide(other)` listens to is up to the kind.
     pub fn event_set(&self, id: ScriptId) -> EventSet {
         let mut set = EventSet::default();
         let Some(script) = self
@@ -151,6 +324,16 @@ impl ScriptRuntime {
         set.animation_end = has("animation_end", 0);
         set.room_start = has("room_start", 0);
         set.room_end = has("room_end", 0);
+        set.moments = script
+            .fns
+            .iter()
+            .filter_map(|(name, arity)| {
+                (*arity == 0)
+                    .then_some(name.as_str())
+                    .and_then(|n| n.strip_prefix("moment_"))
+                    .map(str::to_owned)
+            })
+            .collect();
         set
     }
 }
@@ -158,6 +341,95 @@ impl ScriptRuntime {
 fn plain(message: impl Into<String>) -> ScriptError {
     ScriptError {
         message: message.into(),
+    }
+}
+
+impl ScriptRuntime {
+    /// Runs the script function `fname` of script `sid` on `me`, with `this` bound to `me` and
+    /// `arg` as the one argument if there is one. `where_` names the call in an error.
+    fn invoke(
+        &self,
+        ctx: &mut Ctx,
+        sid: ScriptId,
+        me: InstId,
+        fname: &str,
+        arg: Option<Dynamic>,
+        where_: &str,
+    ) -> Result<Flow, ScriptError> {
+        let Some(inner) = &self.inner else {
+            return Err(plain("a scripted kind ran but the game has no script host"));
+        };
+        let Some(script) = sid.index().and_then(|n| inner.scripts.get(n)) else {
+            return Err(plain(format!("kind has unknown script {}", sid.0)));
+        };
+        let arity = usize::from(arg.is_some());
+        if !script.fns.contains(&(fname.to_owned(), arity)) {
+            return Err(plain(format!(
+                "script `{}` has no function `{fname}` taking {arity} argument{}",
+                script.name,
+                if arity == 1 { "" } else { "s" }
+            )));
+        }
+        let shared = &inner.iws.shared;
+        if shared.depth.get() >= MAX_DEPTH {
+            return Err(plain(
+                "scripts nest too deeply (spawn inside Create inside spawn ...)",
+            ));
+        }
+        if shared.depth.get() == 0 {
+            shared.budget.begin_call();
+        }
+        shared.depth.set(shared.depth.get() + 1);
+        shared.dll_mode.set(ctx.dll_mode);
+        // `script_execute` binds its callee's `this` to the instance of the call running now.
+        let prev_this = shared.this_inst.replace(Some(me));
+        let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
+        let prev = shared.world.borrow_mut().replace(live);
+        let result = if prev.is_some() {
+            Err(plain("script events re-entered with the world already lent"))
+        } else {
+            let mut this = Dynamic::from(Inst(me));
+            let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
+            let mut scope = Scope::new();
+            let args: Vec<Dynamic> = arg.into_iter().collect();
+            inner
+                .iws
+                .engine
+                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname, args)
+                .map(|_| Flow::Continue)
+                .map_err(|e| {
+                    let mut d = script_error(&e);
+                    d.message = format!("{}: {} [{where_}]", script.name, d.message);
+                    d
+                })
+        };
+        let back = shared.world.borrow_mut().take();
+        shared.this_inst.set(prev_this);
+        shared.depth.set(shared.depth.get() - 1);
+        match back {
+            Some(w) => *ctx.w = w,
+            None => return Err(plain("the lent world was lost during a script event")),
+        }
+        result
+    }
+
+    /// Runs the kid slot function `fname` of script `sid` for the kid `me` (decision 0004):
+    /// `this` is bound to the kid and `other`, for a collision slot, is the one argument. The
+    /// caller (`kid::run_script_slot`) checks the room request. A missing function is an error
+    /// here even though the loader checks it, so a definition built by hand cannot skip it.
+    pub fn call_slot(
+        &self,
+        ctx: &mut Ctx,
+        sid: ScriptId,
+        me: InstId,
+        fname: &str,
+        other: Option<InstId>,
+    ) -> Result<Flow, SimError> {
+        let tick = ctx.w.tick;
+        let where_ = format!("kid slot `{fname}`, instance {}, tick {tick}", me.0);
+        let arg = other.map(|o| Dynamic::from(Inst(o)));
+        self.invoke(ctx, sid, me, fname, arg, &where_)
+            .map_err(SimError::from)
     }
 }
 
@@ -176,60 +448,42 @@ impl ScriptHost for ScriptRuntime {
         let Some(script) = sid.index().and_then(|n| inner.scripts.get(n)) else {
             return Err(plain(format!("kind has unknown script {}", sid.0)));
         };
-        let Some((fname, arg)) = event_call(ev) else {
-            return Ok(Flow::Continue);
+        let (fname, arg): (Cow<'_, str>, Option<Dynamic>) = match ev {
+            EventKind::Collision { with, .. } => {
+                if let Some(name) = trigger_name(ctx.def, inst, *with, &script.fns) {
+                    (Cow::Borrowed("trigger"), Some(Dynamic::from(name)))
+                } else {
+                    let Some((name, arg)) = event_call(ev) else {
+                        return Ok(Flow::Continue);
+                    };
+                    (Cow::Borrowed(name), arg)
+                }
+            }
+            EventKind::Moment(step) => {
+                let Some(name) = moment_call(ctx.def, inst, *step) else {
+                    return Ok(Flow::Continue);
+                };
+                (Cow::Owned(name), None)
+            }
+            _ => {
+                let Some((name, arg)) = event_call(ev) else {
+                    return Ok(Flow::Continue);
+                };
+                (Cow::Borrowed(name), arg)
+            }
         };
         let arity = usize::from(arg.is_some());
-        if !script.fns.contains(&(fname.to_owned(), arity)) {
+        if !script.fns.contains(&(fname.to_string(), arity)) {
             return Ok(Flow::Continue);
-        }
-        let shared = &inner.iws.shared;
-        if shared.depth.get() >= MAX_DEPTH {
-            return Err(plain(
-                "scripts nest too deeply (spawn inside Create inside spawn ...)",
-            ));
         }
         let kind_name = ctx.def.kind(kind).map_or("?", |k| k.name.as_str()).to_owned();
         let tick = ctx.w.tick;
-        if shared.depth.get() == 0 {
-            shared.budget.begin_call();
-        }
-        shared.depth.set(shared.depth.get() + 1);
-        shared.dll_mode.set(ctx.dll_mode);
-        let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
-        let prev = shared.world.borrow_mut().replace(live);
-        let result = if prev.is_some() {
-            Err(plain("script events re-entered with the world already lent"))
-        } else {
-            let mut this = Dynamic::from(Inst(me));
-            let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
-            let mut scope = Scope::new();
-            let args: Vec<Dynamic> = arg.into_iter().collect();
-            inner
-                .iws
-                .engine
-                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname, args)
-                .map(|_| Flow::Continue)
-                .map_err(|e| {
-                    let mut d = script_error(&e);
-                    d.message = format!(
-                        "{}: {} [kind {kind_name}, instance {}, {ev:?}, tick {tick}]",
-                        script.name, d.message, me.0
-                    );
-                    d
-                })
-        };
-        let back = shared.world.borrow_mut().take();
-        shared.depth.set(shared.depth.get() - 1);
-        match back {
-            Some(w) => *ctx.w = w,
-            None => return Err(plain("the lent world was lost during a script event")),
-        }
-        result
+        let where_ = format!("kind {kind_name}, instance {}, {ev:?}, tick {tick}", me.0);
+        self.invoke(ctx, sid, me, fname.as_ref(), arg, &where_)
     }
 }
 
-// ---- The IWS engine (WP9.1) ----
+// ---- The IWS engine ----
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};
@@ -241,7 +495,7 @@ use rhai::packages::{
 use rhai::{AST, CallFnOptions, Dynamic, Engine, EvalAltResult, FuncArgs, OptimizationLevel, Scope};
 
 use super::budget::Budget;
-use crate::rng::Rng;
+use crate::rng::{Rng, Stream};
 use crate::rules::num::NumRules;
 
 /// The most lines the script log keeps (the log is not part of the state hash).
@@ -263,6 +517,8 @@ pub struct Shared {
     pub(crate) host: OnceCell<Host>,
     pub(crate) dll_mode: Cell<DllMode>,
     pub(crate) depth: Cell<u32>,
+    /// The instance `this` is bound to in the script call running now (`script_execute`, #1533).
+    pub(crate) this_inst: Cell<Option<InstId>>,
     /// Top-level consts seen while a script is lexed (`consts.rs`).
     consts: RefCell<super::consts::ConstScan>,
 }
@@ -270,10 +526,14 @@ pub struct Shared {
 /// What the registered functions need beyond the world: the game, the rules, the way back to
 /// the runtime and the kind names.
 pub(crate) struct Host {
-    pub(crate) def: GameDef,
+    /// Shared with the `Sim`, not deep-copied per run (#1093).
+    pub(crate) def: Arc<GameDef>,
     pub(crate) rules: RunnerRules,
+    /// The script-semantics pair this run selected (decision 0005).
+    pub(crate) script_rules: ScriptRules,
     pub(crate) inner: Weak<Inner>,
-    pub(crate) kinds: BTreeMap<String, KindId>,
+    /// Shared with the prepared artifact (#1093).
+    pub(crate) kinds: Arc<BTreeMap<String, KindId>>,
 }
 
 impl std::fmt::Debug for Host {
@@ -282,15 +542,27 @@ impl std::fmt::Debug for Host {
     }
 }
 
+impl Host {
+    /// Runs `script_execute`'s call from a registered function (#1533).
+    pub(crate) fn script_execute(&self, name: &str, args: Vec<Dynamic>) -> Result<Dynamic, ScriptError> {
+        let inner = self
+            .inner
+            .upgrade()
+            .ok_or_else(|| plain("the script host is gone"))?;
+        inner.execute(name, args)
+    }
+}
+
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
 impl Shared {
-    /// Runs `f` on the RNG: the live world's when a script runs inside a tick, else the lent one.
+    /// Runs `f` on the script's RNG: the live world's `script` stream when a script runs inside a
+    /// tick (the shared gameplay generator under `gm8`), else the lent one.
     pub(crate) fn with_rng<R>(&self, f: impl FnOnce(&mut Rng) -> R) -> R {
         if let Ok(mut w) = self.world.try_borrow_mut()
             && let Some(w) = w.as_mut()
         {
-            return f(&mut w.rng);
+            return f(w.stream_mut(Stream::Script));
         }
         f(&mut self.rng.borrow_mut())
     }
@@ -344,7 +616,7 @@ impl Shared {
             .ok_or_else(|| super::api::runtime_error("no world: the call is outside a tick"))?;
         let r = {
             let mut ctx = Ctx {
-                def: &host.def,
+                def: host.def.as_ref(),
                 rules: &host.rules,
                 w: &mut w,
                 scripts: &rt,
@@ -404,6 +676,7 @@ impl Iws {
             host: OnceCell::new(),
             dll_mode: Cell::new(DllMode::Stub),
             depth: Cell::new(0),
+            this_inst: Cell::new(None),
             consts: RefCell::default(),
         });
         let mut engine = Engine::new_raw();
@@ -419,6 +692,8 @@ impl Iws {
         let mut docs = super::docs::Docs::default();
         super::api::register_numeric(&mut engine, &shared, &mut docs);
         super::inst::register_instance_api(&mut engine, &shared, &mut docs);
+        super::inst::register_kid_api(&mut engine, &shared, &mut docs);
+        super::array::register_array_api(&mut engine, &shared, &mut docs);
         super::collide::register_collision_api(&mut engine, &shared, &mut docs);
 
         {
@@ -439,7 +714,8 @@ impl Iws {
         engine.set_max_call_levels(32);
         engine.set_max_expr_depths(64, 32);
         engine.set_max_string_size(4096);
-        engine.set_max_array_size(10_000);
+        // One cap for stored and script arrays (#984).
+        engine.set_max_array_size(crate::world::MAX_ARRAY_SIZE);
         engine.set_max_map_size(1024);
         engine.set_max_variables(256);
         engine.set_max_functions(512);
@@ -506,7 +782,11 @@ impl Iws {
     /// Compiles `source`, keeping Rhai's parse error (the validator reports its position).
     pub(crate) fn compile_ast(&self, source: &str) -> Result<AST, rhai::ParseError> {
         self.reset_consts();
-        self.engine.compile(source)
+        // `global` is a constant of the compile scope, so strict variables accept it; the
+        // engine's variable resolver gives its value at run time (`array.rs`, #997).
+        let mut scope = Scope::new();
+        scope.push_constant(super::array::GLOBAL, super::array::Globals);
+        self.engine.compile_with_scope(&scope, source)
     }
 
     /// Evaluates one expression (tests, the validator's constant checks).

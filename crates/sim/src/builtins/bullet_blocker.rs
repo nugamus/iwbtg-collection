@@ -1,5 +1,5 @@
-//! Built-in `bullet_blocker` (mechanics `bullet_blocker`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/bullet_blocker.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `bullet_blocker` (mechanics `bullet_blocker`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/bullet_blocker.md). Tier 2.
 //!
 //! Collision with a kid bullet destroys the bullet. With `except_when_overlapping_kid` (WAN
 //! bulletBlocker) it does nothing while it overlaps a kid.
@@ -17,6 +17,11 @@ const SPECS: &[ParamSpec] = &[ParamSpec {
     name: "except_when_overlapping_kid",
     ty: ParamType::Bool,
     required: false,
+
+    legacy: Some(super::LegacyParam {
+        games: &["wanna"],
+        issue: 1269,
+    }),
 }];
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).

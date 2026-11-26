@@ -1,11 +1,10 @@
-//! The kid built-in (docs/plans/sim-core.md 5).
+//! The kid built-in (docs/architecture/sim/kid.md).
 //!
 //! The kid's events run ordered lists of named actions read from `physics.toml`; every spec rule
 //! is a field value or a named action in `actions/`. Nothing family-specific hides in an
-//! `if family == B`. WP0 declares the module tree, the cross-WP signatures and the action
-//! routing ([`KidAction`], [`run_action`], [`KidCollisionRun`], [`run_collision`]); WP5a owns
-//! this file. WP5b and WP5c own their files under `actions/`, `collisions/` and `state_*.rs` and
-//! add their actions as variants of the enums there, so they never edit this file.
+//! `if family == B`. This file declares the module tree and the action routing ([`KidAction`],
+//! [`run_action`], [`KidCollisionRun`], [`run_collision`]); the families add their actions as
+//! variants of the enums in their own files under `actions/`, `collisions/` and `state_*.rs`.
 
 pub mod api;
 pub mod boundary;
@@ -46,16 +45,16 @@ use smallvec::SmallVec;
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
-use crate::def::physics::{BoundaryModel, KeyOn};
+use crate::def::physics::{BoundaryModel, KeyOn, KidScriptSlot};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
-/// Kid effects for the client (death, blood). WP5a adds the variants.
+/// Kid effects for the client (death, blood).
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct KidOutput {}
 
-/// One named action in a `physics.toml` event list (`step = ["walk", "jump", ...]`, plan 5.2).
+/// One named action in a `physics.toml` event list (`step = ["walk", "jump", ...]`, docs/architecture/sim/kid.md).
 ///
 /// Split by owner like `KindState`: each part is the enum of one file under `actions/`, and the
 /// name in the file picks the part whose enum has that name (`untagged`). Names must be unique
@@ -64,30 +63,32 @@ pub struct KidOutput {}
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidAction {
-    /// Every family (WP5a).
+    /// Every family.
     Common(actions::common::CommonAction),
-    /// Family A1 (WP5a).
+    /// Family A1.
     A1(actions::a1::A1Action),
-    /// Family A2 (WP5c).
+    /// Family A2.
     A2(actions::a2::A2Action),
-    /// Family A3 (WP5c).
+    /// Family A3.
     A3(actions::a3::A3Action),
-    /// Family A4 (WP5c).
+    /// Family A4.
     A4(actions::a4::A4Action),
-    /// Family A5 (WP5c).
+    /// Family A5.
     A5(actions::a5::A5Action),
-    /// Family B (WP5b).
+    /// Family B.
     B(actions::b::BAction),
-    /// Family C (WP5c).
+    /// Family C.
     C(actions::c::CAction),
-    /// Gravity flips (WP5c).
+    /// Gravity flips.
     Flip(actions::flip::FlipAction),
-    /// Slip blocks and ice (WP5c).
+    /// Slip blocks and ice.
     Ice(actions::ice::IceAction),
-    /// Ladders (WP5c).
+    /// Ladders.
     Ladder(actions::ladder::LadderAction),
-    /// Slopes (WP5c).
+    /// Slopes.
     Slope(actions::slope::SlopeAction),
+    /// A script slot (`{ do = "script", fn = "dash" }`, decision 0004).
+    Script(KidScriptSlot),
 }
 
 /// Runs one named action on the kid `me`, in the file that owns it.
@@ -105,27 +106,57 @@ pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow,
         KidAction::Ice(a) => actions::ice::run(ctx, me, a),
         KidAction::Ladder(a) => actions::ladder::run(ctx, me, a),
         KidAction::Slope(a) => actions::slope::run(ctx, me, a),
+        KidAction::Script(a) => run_script_slot(ctx, me, a, None),
     }
 }
 
+/// Runs a script slot on the kid `me` (decision 0004). `other` is the collision slot's argument.
+/// The function lives in the current room profile's `[script] file`; `this` is bound to the kid.
+/// A room request from the slot stops the rest of the event list, as a built-in's request does.
+fn run_script_slot(
+    ctx: &mut Ctx,
+    me: InstId,
+    slot: &KidScriptSlot,
+    other: Option<InstId>,
+) -> Result<Flow, SimError> {
+    let Some(sid) = ctx.physics().script.file else {
+        return Err(SimError::invariant(format!(
+            "kid slot `{}` runs but the profile names no `[script] file`",
+            slot.function
+        )));
+    };
+    let before = ctx.w.room_requests;
+    let flow = ctx.scripts.call_slot(ctx, sid, me, &slot.function, other)?;
+    if flow.is_halt() {
+        return Ok(flow);
+    }
+    if ctx.w.room_requests != before {
+        return Ok(Flow::AbortTick);
+    }
+    Ok(Flow::Continue)
+}
+
 /// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
-/// plan 5.2). Split by owner like [`KidAction`].
+/// docs/architecture/sim/kid.md). Split by owner like [`KidAction`].
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidCollisionRun {
-    /// `block_standard` and friends (WP5a).
+    /// `block_standard` and friends.
     Block(collisions::block::BlockRun),
-    /// `platform_standard` (WP5a).
+    /// `platform_standard`.
     Platform(collisions::platform::PlatformRun),
-    /// Family B runs (WP5b).
+    /// Family B runs.
     B(collisions::b::BRun),
-    /// `kill` (WP5a).
+    /// `kill`.
     Death(death::DeathRun),
-    /// Slope runs (WP5c).
+    /// Slope runs.
     Slope(collisions::slope::SlopeRun),
-    /// poronkusema `moving_block_por` (WP5c).
+    /// poronkusema `moving_block_por`.
     MovingBlock(collisions::moving_block::MovingBlockRun),
+    /// A script collision slot (`{ do = "script", fn = "dash_touch" }`), called with `other`
+    /// (decision 0004).
+    Script(KidScriptSlot),
 }
 
 /// Runs one named collision run for the kid `me` against `other`, in the file that owns it.
@@ -142,6 +173,7 @@ pub fn run_collision(
         KidCollisionRun::Death(r) => death::run(ctx, me, other, r),
         KidCollisionRun::Slope(r) => collisions::slope::run(ctx, me, other, r),
         KidCollisionRun::MovingBlock(r) => collisions::moving_block::run(ctx, me, other, r),
+        KidCollisionRun::Script(s) => run_script_slot(ctx, me, s, Some(other)),
     }
 }
 
@@ -170,7 +202,7 @@ fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimEr
 
 /// Runs one event on a kid instance: the profile's action list for that event, through
 /// [`run_action`]. Create, Room Start, Step and End Step are wired; keys, alarms, collisions and
-/// the boundary arrive with WP5a.3 and WP5a.4 and handle nothing until then.
+/// the boundary are not wired yet.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     let phys = ctx.physics();
     let e = &phys.events;

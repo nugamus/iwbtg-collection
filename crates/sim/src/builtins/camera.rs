@@ -1,5 +1,6 @@
-//! Built-in `camera` (mechanics `camera`; CLONE_SPEC rooms "Views"; docs/plans/sim-core.md 4.5,
-//! 6.1; docs/format/builtins/camera.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `camera` (mechanics `camera`; CLONE_SPEC rooms "Views";
+//! docs/architecture/sim/rooms.md (views); docs/architecture/sim/builtins.md;
+//! docs/format/builtins/camera.md). Tier 1.
 //!
 //! Camera objects write view 0. Their Step placement gives the 1-tick lag the spec infers: the
 //! camera's Step reads the kid before this tick's motion (Confirmed (recorder) little-runner
@@ -14,7 +15,7 @@
 //!   (`border_x`, `border_y`: 400, 304) and jumps to the kid. Each Step with a kid, its hspeed
 //!   is the x distance over `h_div` (16) and its vspeed the y distance over `v_div` (12), each
 //!   zeroed when the kid is within `tolerance` (2, inclusive) on that axis; with no kid both are
-//!   0. Automatic motion and the runner's view follow (WP4b) do the rest.
+//!   0. Automatic motion and the runner's view follow do the rest.
 //! - `end_step_clamp` (keep-celebrating-for-xia objCamera): like `screen_snap` with the view's
 //!   own size, after clamping the followed point to the room (0 to size - 1), in Create and End
 //!   Step.
@@ -39,61 +40,82 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "screen_w",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["poronkusema"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "screen_h",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["poronkusema"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "y_offset",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["machinary"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "on_step",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_start",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_end",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "h_div",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "v_div",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "border_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "border_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "tolerance",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

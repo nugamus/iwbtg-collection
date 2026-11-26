@@ -8,7 +8,7 @@ pub mod unlock;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use bevy::audio::{
     AudioPlayer, AudioSink, AudioSinkPlayback, AudioSource, GlobalVolume, PlaybackMode, PlaybackSettings,
@@ -29,7 +29,7 @@ use crate::view::{Game, GameCamera};
 pub const MAX_OFFSET_MS: u32 = 500;
 
 /// The audio command-line flags.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct AudioArgs {
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
     /// a slow audio device. It moves playback only, never the sim. Saved in the settings file, so
@@ -49,6 +49,29 @@ pub struct AudioArgs {
     /// click; any key or mouse button opens it (audio/unlock.rs).
     #[arg(long, hide = true)]
     pub audio_locked: bool,
+}
+
+/// The audio's place in the module list (main.rs): its flags and plugin. The plugin is built in
+/// `prepare`, so `--audio-offset` and `--volume` are saved even when the package then fails to open.
+pub struct Registration;
+
+static AUDIO: std::sync::OnceLock<AudioPlugin> = std::sync::OnceLock::new();
+
+impl crate::registration::ClientModule for Registration {
+    type Args = AudioArgs;
+
+    fn prepare(args: &mut AudioArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        let _ = AUDIO.set(AudioPlugin::new(args));
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: AudioArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(AUDIO.get().expect("audio prepare ran").clone());
+    }
 }
 
 /// The environment variable that mutes every run when set to anything but empty or `0`
@@ -104,6 +127,7 @@ fn is_music(def: &GameDef, sound: SoundId, looping: bool) -> bool {
 }
 
 /// Sound, music and screen shake for each run (the loaded package's sounds, `shell`).
+#[derive(Clone)]
 pub struct AudioPlugin {
     offset_ms: u32,
     levels: Levels,
@@ -166,7 +190,7 @@ impl Plugin for AudioPlugin {
         let (offset_ms, levels) = (self.offset_ms, self.levels);
         shell::run_resource(app, move |_| Queue::new(offset_ms));
         shell::run_resource(app, move |w| {
-            Sounds::new(&w.resource::<LoadedPackage>().pkg.files, levels)
+            Sounds::new(&w.resource::<LoadedPackage>().pkg, levels)
         });
         shell::run_resource(app, |_| Shake::default());
         app.add_systems(
@@ -210,6 +234,8 @@ pub enum Cmd {
         target: SoundTarget,
         sound: SoundId,
         looping: bool,
+        /// The sound's length in ticks from the sim event (0 = unknown), for music sync.
+        length_ticks: u32,
         volume: f32,
         speed: f32,
     },
@@ -302,6 +328,8 @@ impl Mixer {
                     target: SoundTarget::Builtin(SoundId(i as u32)),
                     sound: SoundId(i as u32),
                     looping: false,
+                    // A script `emit` is a one-shot; it never carries music sync.
+                    length_ticks: 0,
                     volume: 1.0,
                     speed: 1.0,
                 })
@@ -319,7 +347,12 @@ impl Mixer {
                 }
                 vec![]
             }
-            SoundOutput::Play { target, looping } => {
+            SoundOutput::Play {
+                target,
+                looping,
+                length_ticks,
+                ..
+            } => {
                 let sound = match target {
                     SoundTarget::Builtin(id) => Some(*id),
                     SoundTarget::FmodGroup(_) => None,
@@ -330,6 +363,9 @@ impl Mixer {
                     target: *target,
                     sound,
                     looping: *looping,
+                    // The sim sends the duration with the event; the client never reads it back
+                    // out of the package's sound table.
+                    length_ticks: *length_ticks,
                     volume: self.volume.get(target).unwrap_or_else(|| {
                         // A built-in sound starts at the volume its package gives it.
                         def.sounds
@@ -339,13 +375,15 @@ impl Mixer {
                     speed: self.speed.get(target).unwrap_or(1.0),
                 }]
             }
-            SoundOutput::Stop { target } => vec![Cmd::Stop(*target)],
-            SoundOutput::StopAll { adapter } => vec![Cmd::StopAll { adapter: *adapter }],
-            SoundOutput::Pause { target, paused } => vec![Cmd::Pause {
+            SoundOutput::Stop { target, .. } => vec![Cmd::Stop(*target)],
+            SoundOutput::StopAll { adapter, .. } => vec![Cmd::StopAll { adapter: *adapter }],
+            SoundOutput::Pause {
+                target, paused, ..
+            } => vec![Cmd::Pause {
                 target: *target,
                 paused: *paused,
             }],
-            SoundOutput::Volume { target, value } => {
+            SoundOutput::Volume { target, value, .. } => {
                 let volume = linear(*target, value.get());
                 self.volume.insert(*target, volume);
                 vec![Cmd::Volume {
@@ -353,7 +391,7 @@ impl Mixer {
                     volume,
                 }]
             }
-            SoundOutput::Pitch { target, value } => {
+            SoundOutput::Pitch { target, value, .. } => {
                 let speed = value.get().max(0.01) as f32;
                 self.speed.insert(*target, speed);
                 vec![Cmd::Speed {
@@ -367,6 +405,9 @@ impl Mixer {
 
 /// Every sound file of the package by sound name: `sounds/<id>.ogg`, `music/<id>.ogg`, and the
 /// engine pack's `engine/<pack>/...` as `engine:<pack>/<id>`.
+///
+/// Runs once when the package opens (`package::Package::sound_bytes`): the `Vec<u8>` the format
+/// crate owns is copied into an `Arc<[u8]>` here, and each run's [`Sounds`] clones those handles.
 pub fn sound_bytes(files: &PackageFiles) -> HashMap<String, Arc<[u8]>> {
     let mut out = HashMap::new();
     for (path, bytes) in files.iter() {
@@ -425,6 +466,7 @@ impl Queue {
 /// The sound files and the mixer's memory.
 #[derive(Resource)]
 pub struct Sounds {
+    /// The package's shared handles, cloned per run (`Package::sound_bytes`), never re-copied.
     bytes: HashMap<String, Arc<[u8]>>,
     handles: HashMap<SoundId, Handle<AudioSource>>,
     mixer: Mixer,
@@ -432,9 +474,9 @@ pub struct Sounds {
 }
 
 impl Sounds {
-    pub fn new(files: &PackageFiles, levels: Levels) -> Sounds {
+    pub fn new(pkg: &crate::package::Package, levels: Levels) -> Sounds {
         Sounds {
-            bytes: sound_bytes(files),
+            bytes: pkg.sound_bytes.clone(),
             handles: HashMap::new(),
             mixer: Mixer::default(),
             levels,
@@ -603,6 +645,7 @@ pub fn play(
                     target,
                     sound,
                     looping,
+                    length_ticks,
                     volume,
                     speed,
                 } => {
@@ -631,11 +674,9 @@ pub fn play(
                             h
                         }
                     };
-                    // A looping tune with a known length follows the tick clock.
-                    let length = def
-                        .sounds
-                        .get(sound.0 as usize)
-                        .map_or(0.0, |d| f64::from(d.length_ticks) / tick_rate);
+                    // A looping tune with a known length follows the tick clock. The length comes
+                    // with the sim's event, not from the package's sound table.
+                    let length = f64::from(length_ticks) / tick_rate;
                     let settings = PlaybackSettings {
                         mode: if looping {
                             PlaybackMode::Loop
@@ -732,14 +773,24 @@ pub fn play(
     }
 }
 
+/// Whether a tune may follow `Game.sim`'s tick. While the replay viewer shows, that sim is the
+/// replayed run (#1463): syncing would seek the music around as the player scrubs, so leave it.
+fn follows_live_tick(viewer: Option<&crate::viewer::Viewer>) -> bool {
+    !viewer.is_some_and(crate::viewer::Viewer::is_open)
+}
+
 /// Keeps looping tunes on the tick clock: a tune that has drifted more than two ticks (40 ms at
 /// 50 Hz) from where the sim tick count says it should be is seeked back to that position;
 /// smaller drift is left alone, so normal play has no audible skips.
 pub fn sync_music(
     game: NonSend<Game>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
     fixed: Res<Time<Fixed>>,
     mut tunes: Query<(&AudioSink, &mut MusicSync)>,
 ) {
+    if !follows_live_tick(viewer.as_deref()) {
+        return;
+    }
     let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
     let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
     for (sink, mut sync) in &mut tunes {
@@ -808,9 +859,22 @@ mod tests {
         vec![OutputEvent::Sound(s)]
     }
 
+    /// #1463: music follows the live run's tick normally and is left alone while the replay
+    /// viewer shows, so scrubbing does not seek it.
+    #[test]
+    fn music_sync_follows_the_live_run_but_not_the_viewer() {
+        assert!(follows_live_tick(None));
+        assert!(follows_live_tick(Some(&crate::viewer::Viewer::default())));
+        let opened = crate::viewer::opened_for_test();
+        assert!(!follows_live_tick(Some(&opened)));
+    }
+
     #[test]
     fn only_sound_and_emit_events_are_cues() {
-        let mut o = out(SoundOutput::StopAll { adapter: false });
+        let mut o = out(SoundOutput::StopAll {
+            adapter: false,
+            tick: 0,
+        });
         o.push(OutputEvent::Script(ScriptOutput::Emit { name: "ding".into() }));
         o.push(OutputEvent::Script(ScriptOutput::Shake {
             ticks: 3,
@@ -823,10 +887,19 @@ mod tests {
     fn the_offset_holds_cues_back_and_keeps_their_order() {
         let mut q = Queue::new(100);
         let t0 = Instant::now();
-        q.push(t0, &out(SoundOutput::StopAll { adapter: false }));
+        q.push(
+            t0,
+            &out(SoundOutput::StopAll {
+                adapter: false,
+                tick: 0,
+            }),
+        );
         q.push(
             t0 + Duration::from_millis(20),
-            &out(SoundOutput::StopAll { adapter: true }),
+            &out(SoundOutput::StopAll {
+                adapter: true,
+                tick: 0,
+            }),
         );
         assert!(q.due(t0 + Duration::from_millis(99)).is_empty());
         assert_eq!(q.due(t0 + Duration::from_millis(100)).len(), 1);
@@ -877,6 +950,30 @@ mod tests {
         assert!((linear(SoundTarget::Super(1), -2000.0) - 0.1).abs() < 1e-6);
         assert_eq!(linear(SoundTarget::Builtin(SoundId(0)), 0.5), 0.5);
         assert_eq!(linear(SoundTarget::FmodGroup(1), -1.0), 0.0);
+    }
+
+    #[test]
+    fn a_play_takes_its_duration_from_the_sim_event() {
+        use iwbtg_sim::def::RoomDef;
+        use iwbtg_sim::def::testing::GameDefBuilder;
+        let mut b = GameDefBuilder::new("audio-duration");
+        let room = b.room(RoomDef::new("r", 800, 608));
+        b.start_room(room);
+        let def = b.build().expect("a def");
+        let mut mixer = Mixer::default();
+        let cmds = mixer.handle(
+            &def,
+            &Cue::Sound(SoundOutput::Play {
+                target: SoundTarget::Builtin(SoundId(0)),
+                looping: true,
+                length_ticks: 250,
+                tick: 9,
+            }),
+        );
+        assert!(
+            matches!(cmds.as_slice(), [Cmd::Start { length_ticks: 250, .. }]),
+            "{cmds:?}"
+        );
     }
 
     const RATE: f64 = 50.0;
@@ -945,6 +1042,82 @@ mod tests {
     }
 
     #[test]
+    fn the_showcase_starts_its_night_loop_on_the_first_tick() {
+        // The F2 contract `sound/event_model` asserts exactly this shape.
+        use iwbtg_sim::def::SoundId;
+        use iwbtg_sim::input::InputFrame;
+        use iwbtg_sim::room::StartPoint;
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let night = pkg
+            .def
+            .sounds
+            .iter()
+            .position(|s| s.name == "night")
+            .expect("showcase has the night track");
+        let night = SoundId(night as u32);
+        let mut sim = Sim::new(
+            pkg.def.clone(),
+            SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 7,
+                dll_mode: DllMode::Model,
+                mode: iwbtg_sim::stripped::PlayMode::Original,
+                map: None,
+            },
+        )
+        .unwrap();
+        // The courtyard's music object runs `every_step_if_not_playing`, so its first Step
+        // (sim tick 0) stops every built-in sound and starts the loop.
+        sim.step(InputFrame::EMPTY);
+        let plays: Vec<SoundOutput> = sim
+            .world()
+            .output
+            .iter()
+            .filter_map(|e| match e {
+                OutputEvent::Sound(s @ SoundOutput::Play { .. }) => Some(s.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            plays.iter().any(|e| matches!(
+                e,
+                SoundOutput::Play {
+                    target: SoundTarget::Builtin(s),
+                    looping: true,
+                    tick: 0,
+                    ..
+                } if *s == night
+            )),
+            "the night loop starts at tick 0: {plays:?}"
+        );
+    }
+
+    /// Two runs of one package clone the same sound handles: the OGG bytes are copied once when
+    /// the package opens, never per run.
+    #[test]
+    fn two_runs_sounds_share_the_packages_handles() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        assert!(!pkg.sound_bytes.is_empty(), "the fixture has sound files");
+        let levels = Levels {
+            music: 1.0,
+            sound: 1.0,
+        };
+        let a = Sounds::new(&pkg, levels);
+        let b = Sounds::new(&pkg, levels);
+        assert_eq!(a.bytes.len(), pkg.sound_bytes.len());
+        assert_eq!(b.bytes.len(), pkg.sound_bytes.len());
+        for (name, bytes) in &pkg.sound_bytes {
+            assert!(Arc::ptr_eq(bytes, a.bytes.get(name).unwrap()), "{name}");
+            assert!(Arc::ptr_eq(bytes, b.bytes.get(name).unwrap()), "{name}");
+        }
+    }
+
+    #[test]
     fn the_demo_package_starts_its_music_and_has_every_sound_file() {
         use iwbtg_sim::input::InputFrame;
         use iwbtg_sim::room::StartPoint;
@@ -953,9 +1126,8 @@ mod tests {
 
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        let files = sound_bytes(&pkg.files);
         for s in &pkg.def.sounds {
-            assert!(files.contains_key(&s.name), "no file for {}", s.name);
+            assert!(pkg.sound_bytes.contains_key(&s.name), "no file for {}", s.name);
         }
         let options = SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
@@ -978,9 +1150,14 @@ mod tests {
             }
         }
         let theme = pkg.def.sounds.iter().position(|s| s.name == "theme").unwrap();
+        let theme_length = pkg.def.sounds[theme].length_ticks;
         assert!(
-            cmds.iter()
-                .any(|c| matches!(c, Cmd::Start { sound, looping: true, .. } if sound.0 as usize == theme))
+            cmds.iter().any(|c| matches!(
+                c,
+                Cmd::Start { sound, looping: true, length_ticks, .. }
+                    if sound.0 as usize == theme && *length_ticks == theme_length
+            )),
+            "the music start carries the sim event's duration: {cmds:?}"
         );
     }
 }

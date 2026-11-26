@@ -1,5 +1,5 @@
-//! Built-in `hidden_block` (mechanics `hidden_block`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/hidden_block.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `hidden_block` (mechanics `hidden_block`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/hidden_block.md). Tier 2.
 //!
 //! A solid block that is invisible until a kid comes near (KOT blockNotVis, WAN blockInvisible,
 //! XIA objBlockInvis). Create makes it invisible. While invisible, each Step: when the distance
@@ -28,31 +28,49 @@ const SPECS: &[ParamSpec] = &[
         name: "reveal_distance",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "stops_bullets",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["wanna"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "destroy_when_no_kid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroyed_by_bullet",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "destroyed_by_blood",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
 ];
 

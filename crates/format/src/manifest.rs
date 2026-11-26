@@ -26,8 +26,10 @@ use crate::tricks::TrickType;
 /// Path of the manifest inside a package.
 pub const MANIFEST_PATH: &str = "game.toml";
 
-/// Newest format major version this build reads. Format 0 is the v0 draft.
-pub const FORMAT_VERSION: u32 = 0;
+/// Newest format major version this build reads and `iwbtg pkg upgrade` writes. Format 0 is the
+/// v0 draft; format 1 (docs/format/v1.md) names the ruleset and the `[compat]` profile instead of
+/// `engine_rev`. Every older format still loads into the same `GameDef` (principle 7).
+pub const FORMAT_VERSION: u32 = 1;
 
 /// Default room speed when `tick_rate` is absent.
 pub const DEFAULT_TICK_RATE: u32 = 50;
@@ -65,10 +67,24 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub engine_pack: Option<Spanned<String>>,
-    /// Built-in behavior revision this package was verified against.
-    #[cfg_attr(feature = "schema", schemars(with = "u16"))]
-    pub engine_rev: Spanned<u16>,
-    /// Original runner; selects event-order differences.
+    /// Built-in behavior revision this package was verified against. Format 0 only, and
+    /// required there; format 1 names the revision in `ruleset` (docs/format/v1.md).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u16>"))]
+    pub engine_rev: Option<Spanned<u16>>,
+    /// Named, versioned semantic contract (`gm8@<rev>`). Required in format 1; absent in format 0
+    /// means `gm8` at `engine_rev` (decision 0005, docs/format/game.md).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub ruleset: Option<Spanned<String>>,
+    /// The compatibility profile and its declared deviations (decision 0005). Format 1 requires
+    /// `[compat] profile`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<CompatSection>"))]
+    pub compat: Option<Spanned<CompatSection>>,
+    /// The original runner (GameMaker 8.0, 8.1 or Studio), recorded for provenance. GM 8.0 and
+    /// 8.1 share the same simulation rules (research#15); GMS uses the GM8 defaults until
+    /// research#179.
     #[cfg_attr(feature = "schema", schemars(with = "crate::schema::RunnerSchema"))]
     pub runner: Spanned<Runner>,
     /// Path to the physics profile.
@@ -93,7 +109,7 @@ pub struct Manifest {
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub room_order: Option<Spanned<Vec<Spanned<String>>>>,
     /// Engine settings: restart and reset models, boot kinds, number model, new-game room, engine
-    /// roles (docs/plans/sim-core.md 8.3).
+    /// roles (docs/format/game.md).
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<EngineSection>"))]
     pub engine: Option<Spanned<EngineSection>>,
@@ -141,6 +157,48 @@ pub struct Manifest {
     /// no extra action.
     #[serde(default)]
     pub controls: Option<Controls>,
+}
+
+/// `[compat]`: the ruleset's compatibility profile and the deviations the package declares
+/// (decision 0005, docs/format/game.md).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CompatSection {
+    /// `profile = "<ruleset>/<family>@<n>"` (`gm8/a1@1`). Absent: inferred from the physics
+    /// preset.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub profile: Option<Spanned<String>>,
+    /// `[[compat.deviation]]` entries. Each names one id of the ruleset's closed catalogue.
+    #[serde(default)]
+    pub deviation: Vec<CompatDeviation>,
+}
+
+/// One `[[compat.deviation]]` entry. Every field is provenance: a deviation says what it selects,
+/// why, its feel tier, its evidence and the issue that tracks it.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CompatDeviation {
+    /// A catalogue id (`save.position`).
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// The value the deviation selects, with the catalogue entry's type.
+    #[cfg_attr(feature = "schema", schemars(with = "crate::compat::DeviationValue"))]
+    pub value: Spanned<crate::compat::DeviationValue>,
+    /// Why the package keeps this behavior.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub why: Spanned<String>,
+    /// The feel tier, `F1`, `F2` or `F3`.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub impact: Spanned<String>,
+    /// The trace, feel contract or test that proves it.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub evidence: Spanned<String>,
+    /// The issue that tracks the deviation.
+    #[cfg_attr(feature = "schema", schemars(with = "u64"))]
+    pub issue: Spanned<u64>,
 }
 
 /// Longest `[controls]` label, in characters: it has to fit a key binding row and the HUD.
@@ -417,7 +475,7 @@ pub struct Stage {
     pub room: Option<Spanned<String>>,
 }
 
-/// The `[timing]` trigger vocabulary (WP8b, `iwbtg_sim::timing::TimingTrigger`).
+/// The `[timing]` trigger vocabulary (`iwbtg_sim::timing::TimingTrigger`).
 pub const TIMING_TRIGGERS: [&str; 3] = ["run_start", "run_end", "enter_room"];
 
 /// One `object_order` entry as written: a kind name, or a selector table
@@ -472,7 +530,7 @@ impl OrderItem {
     }
 }
 
-/// The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).
+/// The `[engine]` table (docs/format/game.md; CR7 in docs/format/converter-requests.md).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -650,7 +708,7 @@ pub struct KidStepsSection {
     pub clear_triggers: Option<bool>,
 }
 
-/// Restart kinds (plan 4.3).
+/// Restart kinds (docs/architecture/sim/rooms.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -774,7 +832,7 @@ impl ResetSection {
 }
 
 /// `[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant
-/// (docs/plans/sim-core.md 8.3, "Kind default sprites per variant").
+/// (docs/format/game.md).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1098,8 +1156,8 @@ impl Manifest {
         {
             crate::engine_pack::validate(v.files, engine.get_ref(), v.out);
         }
-        // TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to
-        // check yet; the sim will read `runner` once the differences are known.
+        self.validate_ruleset(&mut v);
+        self.validate_compat(&mut v);
         self.validate_physics(&mut v);
         if v.id(&self.start_room) {
             let room = format!("rooms/{}.toml", self.start_room.get_ref());
@@ -1186,6 +1244,199 @@ impl Manifest {
         }
     }
 
+    /// The built-in behavior revision: `engine_rev` in format 0, the revision of `ruleset` in
+    /// format 1 (docs/format/v1.md). `None` when the field the format needs is missing or does
+    /// not parse; [`Manifest::validate`] reports that.
+    #[must_use]
+    pub fn engine_rev(&self) -> Option<u16> {
+        if *self.format.get_ref() == 0 {
+            return self.engine_rev.as_ref().map(|r| *r.get_ref());
+        }
+        let ruleset = self.ruleset.as_ref()?;
+        crate::compat::Ruleset::parse(ruleset.get_ref())
+            .ok()
+            .map(|r| r.rev)
+    }
+
+    /// `ruleset = "<name>@<rev>"` (decision 0005). In format 0 the revision is `engine_rev` and
+    /// `ruleset` is optional; format 1 requires `ruleset` and has no `engine_rev`
+    /// (docs/format/v1.md). `gm8` is the only ruleset this build implements.
+    fn validate_ruleset(&self, v: &mut Validator<'_>) {
+        let format = *self.format.get_ref();
+        let rev = if format == 0 {
+            let Some(rev) = &self.engine_rev else {
+                v.error(
+                    0..0,
+                    "missing field `engine_rev`: format 0 names the built-in revision there \
+                     (format 1 names it in `ruleset`, docs/format/v1.md)",
+                );
+                return;
+            };
+            Some(*rev.get_ref())
+        } else {
+            if let Some(rev) = &self.engine_rev {
+                v.error(
+                    rev.span(),
+                    format!(
+                        "`engine_rev` is the format-0 spelling; format {format} names the revision \
+                         in `ruleset = \"{}@{}\"` (`iwbtg pkg upgrade` rewrites a format-0 package)",
+                        crate::compat::GM8,
+                        rev.get_ref()
+                    ),
+                );
+            }
+            None
+        };
+        let Some(ruleset) = &self.ruleset else {
+            if format > 0 {
+                v.error(
+                    0..0,
+                    format!(
+                        "missing field `ruleset`: format {format} names the ruleset and its \
+                         revision (`ruleset = \"{}@0\"`, docs/format/v1.md)",
+                        crate::compat::GM8
+                    ),
+                );
+            }
+            return;
+        };
+        match crate::compat::Ruleset::parse(ruleset.get_ref()) {
+            Err(e) => v.error(ruleset.span(), e),
+            Ok(r) if r.name != crate::compat::GM8 => v.error(
+                ruleset.span(),
+                format!(
+                    "ruleset `{}` is not implemented by this build; `{}` is the only ruleset \
+                     (decision 0005)",
+                    r.name,
+                    crate::compat::GM8
+                ),
+            ),
+            Ok(r) if rev.is_some_and(|rev| r.rev != rev) => v.error(
+                ruleset.span(),
+                format!(
+                    "ruleset revision {} disagrees with `engine_rev` {}; in format 0 \
+                     `engine_rev` is the ruleset revision",
+                    r.rev,
+                    rev.unwrap_or_default()
+                ),
+            ),
+            Ok(_) => {}
+        }
+    }
+
+    /// `[compat] profile` and `[[compat.deviation]]`: the profile is one of the engine's
+    /// bundles, and a deviation names one id of the closed catalogue with its type and
+    /// provenance (decision 0005). The loader compares both with the resolved physics. Format 1
+    /// requires the profile.
+    fn validate_compat(&self, v: &mut Validator<'_>) {
+        let format = *self.format.get_ref();
+        let missing_profile = |v: &mut Validator<'_>, at: usize| {
+            v.error(
+                at..at,
+                format!(
+                    "missing `[compat] profile`: format {format} names the compatibility profile \
+                     (`profile = \"{}/<family>@{}\"`, docs/format/v1.md)",
+                    crate::compat::GM8,
+                    crate::compat::PROFILE_REV
+                ),
+            );
+        };
+        let Some(compat) = &self.compat else {
+            if format > 0 {
+                missing_profile(v, 0);
+            }
+            return;
+        };
+        let c = compat.get_ref();
+        if format > 0 && c.profile.is_none() {
+            missing_profile(v, compat.span().start);
+        }
+        if let Some(profile) = &c.profile {
+            match crate::compat::Profile::parse(profile.get_ref()) {
+                Err(e) => v.error(profile.span(), e),
+                Ok(p) if p.ruleset != crate::compat::GM8 => v.error(
+                    profile.span(),
+                    format!(
+                        "profile ruleset `{}` is not implemented by this build; only `{}` is",
+                        p.ruleset,
+                        crate::compat::GM8
+                    ),
+                ),
+                Ok(_) => {}
+            }
+        }
+        let mut seen = BTreeSet::new();
+        for dev in &c.deviation {
+            let id = dev.id.get_ref();
+            let Some(spec) = crate::compat::spec(id) else {
+                let ids: Vec<&str> = crate::compat::DEVIATIONS.iter().map(|d| d.id).collect();
+                v.error(
+                    dev.id.span(),
+                    format!(
+                        "unknown deviation `{id}`: the ids are the ruleset's closed catalogue \
+                         (decision 0005): {}",
+                        ids.join(", ")
+                    ),
+                );
+                continue;
+            };
+            match spec.kind {
+                crate::compat::Kind::Enum(values) => match dev.value.get_ref().as_str() {
+                    None => v.error(
+                        dev.value.span(),
+                        format!("deviation `{id}` takes one of {} as a string", values.join(", ")),
+                    ),
+                    Some(value) if !values.contains(&value) => v.error(
+                        dev.value.span(),
+                        format!(
+                            "deviation `{id}` is one of {}; `{value}` is not",
+                            values.join(", ")
+                        ),
+                    ),
+                    Some(_) => {}
+                },
+                crate::compat::Kind::Bool => {
+                    if !matches!(dev.value.get_ref(), crate::compat::DeviationValue::Bool(_)) {
+                        v.error(
+                            dev.value.span(),
+                            format!("deviation `{id}` takes `true` or `false`"),
+                        );
+                    }
+                }
+            }
+            for (field, value) in [
+                ("why", &dev.why),
+                ("impact", &dev.impact),
+                ("evidence", &dev.evidence),
+            ] {
+                if value.get_ref().trim().is_empty() {
+                    v.error(
+                        value.span(),
+                        format!("deviation `{id}` needs `{field}` (provenance)"),
+                    );
+                }
+            }
+            if !matches!(dev.impact.get_ref().as_str(), "F1" | "F2" | "F3") {
+                v.error(
+                    dev.impact.span(),
+                    format!(
+                        "deviation `{id}` impact `{}` is not a feel tier (F1, F2 or F3)",
+                        dev.impact.get_ref()
+                    ),
+                );
+            }
+            if *dev.issue.get_ref() == 0 {
+                v.error(
+                    dev.issue.span(),
+                    format!("deviation `{id}` needs the issue number that tracks it"),
+                );
+            }
+            if !seen.insert(id.to_owned()) {
+                v.error(dev.id.span(), format!("deviation `{id}` is declared twice"));
+            }
+        }
+    }
+
     fn validate_controls(&self, v: &mut Validator<'_>) {
         let Some(c) = &self.controls else { return };
         for (n, label) in [&c.extra1, &c.extra2, &c.extra3, &c.extra4]
@@ -1264,8 +1515,8 @@ impl Manifest {
                         v.error(entry.span(), format!("`{shown}` is listed twice in object_order"));
                     }
                     match kind {
-                        // TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check
-                        // bare kinds against the built-in list.
+                        // A bare kind is checked against the package's kinds, which hold every
+                        // built-in (`order::resolve_ranks`); this pass only validates the syntax.
                         KindRef::BuiltIn(_) => {}
                         KindRef::Package(id) => {
                             let file = format!("objects/{id}.toml");
@@ -1658,7 +1909,7 @@ format = 0
 id = "minimal"
 title = "Minimal"
 version = "0.1.0"
-engine_rev = 1
+engine_rev = 0
 runner = "gm80"
 physics = "physics.toml"
 start_room = "title"
@@ -1887,5 +2138,31 @@ end = {{ trigger = \"run_end\" }}
 "
         ));
         assert!(run(&text, &[]).is_empty());
+    }
+
+    /// The `game.md` manifest example is the current format and names the revision this build
+    /// knows (#1077), so a package
+    /// copied from the docs loads and runs instead of failing at `Sim::new`. (`tests/schemas.rs`
+    /// checks the same block against the schema; this pins the one value a schema cannot.)
+    #[test]
+    fn the_game_md_example_uses_the_current_ruleset() {
+        let doc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/format/game.md"))
+            .expect("docs/format/game.md");
+        let block = doc
+            .split("```toml")
+            .nth(1)
+            .and_then(|rest| rest.split("```").next())
+            .expect("the manifest example TOML block");
+        let example: toml::Value = toml::from_str(block).expect("the example is TOML");
+        assert_eq!(
+            example["format"].as_integer(),
+            Some(i64::from(super::FORMAT_VERSION)),
+            "the game.md example is the current format"
+        );
+        assert_eq!(
+            example["ruleset"].as_str(),
+            Some(format!("{}@{}", crate::compat::GM8, iwbtg_sim::rules::MAX_ENGINE_REV).as_str()),
+            "the game.md example must use the ruleset and revision the build knows"
+        );
     }
 }

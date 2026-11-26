@@ -1,4 +1,4 @@
-//! The golden corpus against its pinned lines (docs/plans/sim-core.md 10.6). Runs on every CI
+//! The golden corpus against its pinned lines (docs/architecture/sim/determinism.md). Runs on every CI
 //! target, wasm32-unknown-unknown included. `UPDATE_GOLDEN=1` rewrites `golden/expected.txt`.
 
 #[path = "golden/mod.rs"]
@@ -10,17 +10,24 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 /// The pinned lines, compiled in so that every target reads the same bytes without a file system.
 const EXPECTED: &str = include_str!("golden/expected.txt");
 
+// Hash and coverage assertions inspect the same run. The repeatability test below still
+// executes a second independent run: caching both sides would hide nondeterminism.
+fn report() -> &'static str {
+    static REPORT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    REPORT.get_or_init(golden::report)
+}
+
 #[test]
 #[allow(
     clippy::disallowed_methods,
     reason = "the test, not the sim, reads UPDATE_GOLDEN and rewrites the pinned file"
 )]
 fn golden_corpus_matches_the_pinned_hashes() {
-    let report = golden::report();
+    let report = report();
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/expected.txt");
-        std::fs::write(path, &report).expect("write expected.txt");
+        std::fs::write(path, report).expect("write expected.txt");
         return;
     }
     assert_eq!(
@@ -32,7 +39,7 @@ fn golden_corpus_matches_the_pinned_hashes() {
 
 #[test]
 fn golden_corpus_is_run_to_run_identical() {
-    assert_eq!(golden::report(), golden::report());
+    assert_eq!(report(), golden::report());
 }
 
 #[test]
@@ -91,7 +98,7 @@ const UNCOVERED_BUILTINS: &[(&str, &str)] = &[(
 #[test]
 fn every_builtin_and_kid_family_runs_in_a_golden_case() {
     use iwbtg_sim::def::Builtin;
-    let report = golden::report();
+    let report = report();
     let mut missing = Vec::new();
     for b in Builtin::ALL {
         let line = report
@@ -117,7 +124,7 @@ fn every_builtin_and_kid_family_runs_in_a_golden_case() {
         missing.is_empty(),
         "add a golden case (tests/golden/courses.rs) or fix the allow-list: {missing:?}"
     );
-    every_builtin_with_a_kid_collision_is_touched(&report);
+    every_builtin_with_a_kid_collision_is_touched(report);
     for case in golden::cases()
         .iter()
         .filter(|c| c.name.starts_with("kid_") || c.name == "script_api")

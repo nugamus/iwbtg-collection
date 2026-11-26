@@ -1,5 +1,5 @@
 //! Kid death per family: sound, blood emitter, destroy, deaths +1, death-only save, GAMEOVER
-//! (docs/plans/sim-core.md 5.3 "Death"). Called through `kid::api::kill`. WP5a owns it.
+//! (docs/architecture/sim/kid.md "Death"). Called through `kid::api::kill`.
 //!
 //! Spec: kid/A1.md "Death (killPlayer)".
 //!

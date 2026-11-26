@@ -54,6 +54,8 @@ fn ceil(_: ?) -> float;
 
 fn choose(_: array) -> ?;
 
+fn chr(_: ?) -> string;
+
 fn clamp(_: ?, _: ?, _: ?) -> float;
 
 fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
@@ -92,15 +94,29 @@ fn floor(_: ?) -> float;
 
 fn frac(_: ?) -> float;
 
+fn get curJumps(_: Instance) -> float;
+
 fn get depth(_: Instance) -> float;
 
 fn get direction(_: Instance) -> float;
 
+fn get djump(_: Instance) -> bool;
+
+fn get facing(_: Instance) -> float;
+
+fn get flipped(_: Instance) -> bool;
+
 fn get friction(_: Instance) -> float;
+
+fn get frozen(_: Instance) -> bool;
+
+fn get frozen2(_: Instance) -> bool;
 
 fn get gravity(_: Instance) -> float;
 
 fn get gravity_direction(_: Instance) -> float;
+
+fn get group(_: Instance) -> ?;
 
 fn get hspeed(_: Instance) -> float;
 
@@ -118,15 +134,71 @@ fn get image_xscale(_: Instance) -> float;
 
 fn get image_yscale(_: Instance) -> float;
 
+fn get jump(_: Instance) -> float;
+
+fn get jump2(_: Instance) -> float;
+
+fn get jump3(_: Instance) -> float;
+
 fn get kind(_: Instance) -> string;
+
+fn get ladder(_: Instance) -> bool;
+
+fn get ladderjump(_: Instance) -> bool;
+
+fn get ladderud(_: Instance) -> bool;
+
+fn get maxFallSpeed(_: Instance) -> float;
+
+fn get maxSpeed(_: Instance) -> float;
+
+fn get maxVspeed(_: Instance) -> float;
+
+fn get muteki(_: Instance) -> bool;
+
+fn get name(_: Instance) -> ?;
+
+fn get onPlatform(_: Instance) -> bool;
+
+fn get onVineL(_: Instance) -> bool;
+
+fn get onVineR(_: Instance) -> bool;
+
+fn get on_slope_last(_: Instance) -> bool;
+
+fn get path_endaction(_: Instance) -> float;
+
+fn get path_index(_: Instance) -> float;
+
+fn get path_orientation(_: Instance) -> float;
+
+fn get path_position(_: Instance) -> float;
+
+fn get path_positionprevious(_: Instance) -> float;
+
+fn get path_scale(_: Instance) -> float;
+
+fn get path_speed(_: Instance) -> float;
+
+fn get path_x(_: Instance) -> float;
+
+fn get path_y(_: Instance) -> float;
+
+fn get scale(_: Instance) -> float;
 
 fn get solid(_: Instance) -> bool;
 
 fn get speed(_: Instance) -> float;
 
+fn get tempHspeed(_: Instance) -> float;
+
+fn get tjump(_: Instance) -> bool;
+
 fn get visible(_: Instance) -> bool;
 
 fn get vspeed(_: Instance) -> float;
+
+fn get walk_h(_: Instance) -> float;
 
 fn get x(_: Instance) -> float;
 
@@ -135,6 +207,8 @@ fn get xprevious(_: Instance) -> float;
 fn get xstart(_: Instance) -> float;
 
 fn get y(_: Instance) -> float;
+
+fn get yflag(_: Instance) -> float;
 
 fn get yprevious(_: Instance) -> float;
 
@@ -158,9 +232,17 @@ fn gm_ne(_: ?, _: ?) -> bool;
 
 fn gm_repeat(_: ?) -> int;
 
+fn index$get$(_: Globals, _: string) -> ?;
+
 fn index$get$(_: Instance, _: string) -> ?;
 
+fn index$get$(_: VarArray, _: ?) -> ?;
+
+fn index$set$(_: Globals, _: string, _: ?) -> ();
+
 fn index$set$(_: Instance, _: string, _: ?) -> ();
+
+fn index$set$(_: VarArray, _: ?, _: ?) -> ();
 
 fn instance_create(_: string, _: ?, _: ?) -> Instance;
 
@@ -177,6 +259,8 @@ fn irandom_range(_: ?, _: ?) -> float;
 fn kid() -> ?;
 
 fn kill_kid() -> ();
+
+fn len(_: VarArray) -> int;
 
 fn lengthdir_x(_: ?, _: ?) -> float;
 
@@ -200,6 +284,12 @@ fn move_bounce_all(_: Instance, _: bool) -> ();
 
 fn move_bounce_solid(_: Instance, _: bool) -> ();
 
+fn ord(_: ?) -> float;
+
+fn path_end(_: Instance) -> ();
+
+fn path_start(_: Instance, _: string, _: ?, _: string, _: ?) -> ();
+
 fn place_free(_: Instance, _: ?, _: ?) -> bool;
 
 fn place_meeting(_: Instance, _: ?, _: ?, _: ?) -> bool;
@@ -212,7 +302,11 @@ fn point_direction(_: ?, _: ?, _: ?, _: ?) -> float;
 
 fn point_distance(_: ?, _: ?, _: ?, _: ?) -> float;
 
+fn pop(_: VarArray) -> ?;
+
 fn pow(_: ?, _: ?) -> float;
+
+fn push(_: VarArray, _: ?) -> ();
 
 fn radtodeg(_: ?) -> float;
 
@@ -232,11 +326,37 @@ fn room_tick() -> float;
 
 fn round(_: ?) -> float;
 
+fn script_execute(_: string) -> ?;
+
+fn script_execute(_: string, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn set curJumps(_: Instance, _: ?) -> ();
+
 fn set depth(_: Instance, _: ?) -> ();
 
 fn set direction(_: Instance, _: ?) -> ();
 
+fn set djump(_: Instance, _: bool) -> ();
+
 fn set friction(_: Instance, _: ?) -> ();
+
+fn set frozen(_: Instance, _: bool) -> ();
+
+fn set frozen2(_: Instance, _: bool) -> ();
 
 fn set gravity(_: Instance, _: ?) -> ();
 
@@ -256,9 +376,37 @@ fn set image_xscale(_: Instance, _: ?) -> ();
 
 fn set image_yscale(_: Instance, _: ?) -> ();
 
+fn set ladder(_: Instance, _: bool) -> ();
+
+fn set maxFallSpeed(_: Instance, _: ?) -> ();
+
+fn set maxSpeed(_: Instance, _: ?) -> ();
+
+fn set maxVspeed(_: Instance, _: ?) -> ();
+
+fn set muteki(_: Instance, _: bool) -> ();
+
+fn set onPlatform(_: Instance, _: bool) -> ();
+
+fn set path_endaction(_: Instance, _: ?) -> ();
+
+fn set path_orientation(_: Instance, _: ?) -> ();
+
+fn set path_position(_: Instance, _: ?) -> ();
+
+fn set path_scale(_: Instance, _: ?) -> ();
+
+fn set path_speed(_: Instance, _: ?) -> ();
+
+fn set scale(_: Instance, _: ?) -> ();
+
 fn set solid(_: Instance, _: bool) -> ();
 
 fn set speed(_: Instance, _: ?) -> ();
+
+fn set tempHspeed(_: Instance, _: ?) -> ();
+
+fn set tjump(_: Instance, _: bool) -> ();
 
 fn set visible(_: Instance, _: bool) -> ();
 
@@ -269,6 +417,30 @@ fn set x(_: Instance, _: ?) -> ();
 fn set y(_: Instance, _: ?) -> ();
 
 fn set_alarm(_: Instance, _: ?, _: ?) -> ();
+
+fn set_view_angle(_: ?, _: ?) -> ();
+
+fn set_view_enabled(_: ?, _: ?) -> ();
+
+fn set_view_hborder(_: ?, _: ?) -> ();
+
+fn set_view_hspeed(_: ?, _: ?) -> ();
+
+fn set_view_hview(_: ?, _: ?) -> ();
+
+fn set_view_object(_: ?, _: ?) -> ();
+
+fn set_view_vborder(_: ?, _: ?) -> ();
+
+fn set_view_visible(_: ?, _: ?) -> ();
+
+fn set_view_vspeed(_: ?, _: ?) -> ();
+
+fn set_view_wview(_: ?, _: ?) -> ();
+
+fn set_view_xview(_: ?, _: ?) -> ();
+
+fn set_view_yview(_: ?, _: ?) -> ();
 
 fn shake(_: ?, _: ?) -> ();
 
@@ -286,6 +458,38 @@ fn sqrt(_: ?) -> float;
 
 fn stop_music() -> ();
 
+fn string(_: ?) -> string;
+
+fn string_char_at(_: ?, _: ?) -> string;
+
+fn string_copy(_: ?, _: ?, _: ?) -> string;
+
+fn string_count(_: ?, _: ?) -> float;
+
+fn string_delete(_: ?, _: ?, _: ?) -> string;
+
+fn string_digits(_: ?) -> string;
+
+fn string_format(_: ?, _: ?, _: ?) -> string;
+
+fn string_insert(_: ?, _: ?, _: ?) -> string;
+
+fn string_length(_: ?) -> float;
+
+fn string_letters(_: ?) -> string;
+
+fn string_lettersdigits(_: ?) -> string;
+
+fn string_lower(_: ?) -> string;
+
+fn string_pos(_: ?, _: ?) -> float;
+
+fn string_replace(_: ?, _: ?, _: ?) -> string;
+
+fn string_replace_all(_: ?, _: ?, _: ?) -> string;
+
+fn string_upper(_: ?) -> string;
+
 fn tan(_: ?) -> float;
 
 fn tick() -> float;
@@ -293,3 +497,29 @@ fn tick() -> float;
 fn to_float(_: int) -> float;
 
 fn to_int(_: ?) -> int;
+
+fn view_angle(_: ?) -> float;
+
+fn view_current() -> float;
+
+fn view_enabled(_: ?) -> bool;
+
+fn view_hborder(_: ?) -> float;
+
+fn view_hspeed(_: ?) -> float;
+
+fn view_hview(_: ?) -> float;
+
+fn view_object(_: ?) -> ?;
+
+fn view_vborder(_: ?) -> float;
+
+fn view_visible(_: ?) -> bool;
+
+fn view_vspeed(_: ?) -> float;
+
+fn view_wview(_: ?) -> float;
+
+fn view_xview(_: ?) -> float;
+
+fn view_yview(_: ?) -> float;

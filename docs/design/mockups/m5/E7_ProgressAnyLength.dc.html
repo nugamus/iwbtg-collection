@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Progress at any game length</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The route line (Route component) at four game lengths and its three readings. It replaces every fixed row of stage tiles: the shelf's progress, the Time Attack stage strip, the pause splits, the session's deaths chart and the results breakdown. Rules: sections come only from the package (a porter declares stages, chapters and landmarks); width is fixed, so a long game never scrolls or wraps; past 12 sections only landmarks are named; a game with no sections shows facts, not an empty bar. Where a screen needs detail on a long game (results, practice), it lists the few sections that matter (most time lost, most deaths) instead of all of them. -->
+<div style="position: relative; width: 1920px; height: 900px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; left: 330px; top: 40px; display: grid; grid-template-columns: repeat(3, 480px); gap: 70px">
+    <sc-for list="{{cols}}" as="c" hint-placeholder-count="3">
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 20px; font-weight: 700">{{c.t}}</span><span style="font-size: 14px; color: #a2a8bc">{{c.d}}</span></div>
+    </sc-for>
+  </div>
+  <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+    <div style="position: absolute; left: 60px; top: {{r.y}}px; width: 230px; display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 20px; font-weight: 700">{{r.t}}</span>
+      <span style="font-size: 14px; line-height: 1.45; color: #a2a8bc">{{r.d}}</span>
+    </div>
+    <div style="position: absolute; left: 330px; top: {{r.y}}px; display: grid; grid-template-columns: repeat(3, 480px); gap: 70px">
+      <dc-import name="Route" len="{{r.len}}" variant="progress" mode="classic" w="480" hint-size="480px,96px"></dc-import>
+      <dc-import name="Route" len="{{r.len}}" variant="splits" mode="ta" w="480" hint-size="480px,96px"></dc-import>
+      <dc-import name="Route" len="{{r.len}}" variant="deaths" mode="classic" w="480" hint-size="480px,96px"></dc-import>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      cols: [
+        { t: 'Progress', d: 'Classic: the shelf, the loading card, the session panel' },
+        { t: 'Splits', d: 'Time Attack: the stage strip, the pause, results' },
+        { t: 'Deaths', d: 'Session summary, profile, the death map’s overview' },
+      ],
+      rows: [
+        { y: 150, len: 'short', t: 'Short game', d: '3 sections, one screen or a few. Every part is a block and has a name.' },
+        { y: 330, len: 'standard', t: 'Standard game', d: '7 sections. Blocks, each named, deltas under each.' },
+        { y: 510, len: 'long', t: 'Long game', d: '48 sections in 6 chapters. Thin ticks; only the chapter bosses (landmarks) are named.' },
+        { y: 700, len: 'none', t: 'No sections', d: 'The porter declared none (a single gauntlet). No bar: facts only.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

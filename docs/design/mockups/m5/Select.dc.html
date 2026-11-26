@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game select</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Game select from m4 (Main.dc.html) under the new toolbar. Direction A: this screen is Time Attack only and the toolbar switches to the Classic shelf. Everything m4 approved stays: panel art, wedge, stats, stage strip, Details / Ranking, footer, player card. -->
+<div style="position: relative; width: {{ow}}px; height: {{oh}}px; overflow: hidden; background: #0b0d14">
+<div style="position: absolute; left: 0; top: 0; width: {{W}}px; height: {{H}}px; transform: scale({{zoom}}); transform-origin: 0 0; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="{{W}}px" h="{{H}}px" hue="250" scene="castle" blur="14" dim="0.38" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 60%; background: linear-gradient(90deg, rgba(0,0,0,.3), rgba(0,0,0,0))"></div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0))"></div>
+
+  <!-- right: search and controls -->
+  <div style="position: absolute; left: {{ctlX}}px; top: {{ctlY}}px; width: {{ctlW}}px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; gap: 10px">
+      <label for="sel-search" style="flex: 1; height: 48px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg)">
+        <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px; padding: 0 18px; width: 100%">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>
+          <input id="sel-search" type="search" placeholder="{{t.search}}" value="{{query}}" style="all: unset; flex: 1; font-size: 16px; color: #f3f4f8">
+        </span>
+      </label>
+      <button type="button" style="all: unset; height: 48px; padding: 0 18px; border-radius: 10px; background: {{collBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer">
+        <span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 600; white-space: nowrap">{{collLabel}}</span>
+      </button>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+      <sc-for list="{{controls}}" as="c" hint-placeholder-count="6">
+        <button type="button" style="all: unset; height: 34px; padding: 0 14px; border-radius: 10px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{c.ring}}; opacity: {{c.op}}">
+          <span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px; white-space: nowrap"><span style="color: #a2a8bc">{{c.k}}</span><span style="font-weight: 600; color: {{c.color}}">{{c.v}}</span></span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- right: the list -->
+  <div style="position: absolute; left: 0; top: {{listY}}px; width: {{W}}px; height: {{listH}}px; overflow: hidden; padding-top: 4px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; opacity: {{listOp}}; -webkit-mask-image: linear-gradient(180deg, #000 88%, transparent); mask-image: linear-gradient(180deg, #000 88%, transparent)">
+    <sc-for list="{{panels}}" as="p" hint-placeholder-count="10">
+      <sc-if value="{{p.isHead}}" hint-placeholder-val="{{ false }}">
+        <div style="margin-left: {{p.x}}px; height: 34px; display: flex; align-items: flex-end; gap: 10px; padding: 0 0 6px 26px; box-sizing: border-box">
+          <span style="width: 10px; height: 10px; border-radius: 3px; background: {{p.dot}}"></span>
+          <span style="font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #e3e5ee">{{p.title}}</span>
+          <span style="font-size: 13px; font-weight: 600; color: #a2a8bc">{{p.count}}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{p.isGame}}" hint-placeholder-val="{{ true }}">
+        <div style="position: relative; margin-left: {{p.x}}px; width: 1000px; height: {{p.h}}px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); background: #0b0d14; box-shadow: {{p.shadow}}">
+          <div style="position: absolute; left: -30px; top: 0; width: 1060px; height: {{p.h}}px; transform: skewX(11.31deg)">
+            <dc-import name="Backdrop" w="1060px" h="{{p.h}}px" hue="{{p.hue}}" scene="{{p.scene}}" blur="0" dim="0" tag="none" hint-size="1060px,72px"></dc-import>
+          </div>
+          <div style="position: absolute; inset: 0; background: {{p.veil}}"></div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 16px; padding: 0 26px; transform: skewX(11.31deg)">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; width: {{titleW}}px; text-shadow: 0 1px 8px rgba(0,0,0,.6)">
+              <span style="display: flex; align-items: center; gap: 10px; min-width: 0"><span style="font-size: 23px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.title}}</span>
+                <sc-if value="{{p.fav}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" aria-label="{{t.fav}}" role="img" style="flex: none"><path d="M8 13.5S2 10 2 6a3 3 0 0 1 6-1 3 3 0 0 1 6 1c0 4-6 7.5-6 7.5z" fill="{{accent}}"></path></svg></sc-if>
+              </span>
+              <span style="font-size: 14px; color: #dfe2ec; white-space: nowrap">{{p.creator}}</span>
+            </div>
+            <sc-if value="{{p.showStatus}}" hint-placeholder-val="{{ true }}">
+              <span style="height: 22px; padding: 0 9px; border-radius: 8px; background: {{p.stBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); box-shadow: {{p.stRing}}"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{p.stInk}}">{{p.status}}</span></span>
+            </sc-if>
+            <sc-if value="{{p.showDots}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; gap: 5px; align-items: center">
+                <sc-for list="{{p.dots}}" as="d" hint-placeholder-count="4">
+                  <span style="width: 10px; height: 10px; border-radius: 3px; background: {{d}}; box-shadow: 0 0 0 2px rgba(0,0,0,.35)"></span>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{p.save}}" hint-placeholder-val="{{ false }}">
+              <span style="font-size: 14px; font-weight: 600; color: #e3e5ee; white-space: nowrap; text-shadow: 0 1px 6px rgba(0,0,0,.6)">{{p.save}}</span>
+            </sc-if>
+            <sc-if value="{{p.cleared}}" hint-placeholder-val="{{ false }}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #ffffff; text-shadow: 0 1px 6px rgba(0,0,0,.6); white-space: nowrap">
+                <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="14" height="16" style="image-rendering: pixelated">{{p.clearWord}}
+              </span>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{p.isEntry}}" hint-placeholder-val="{{ false }}">
+        <div style="position: relative; margin-left: {{p.x}}px; width: 1000px; height: 45px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); background: {{p.bg}}; box-shadow: {{p.shadow}}">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: {{p.starBg}}"></div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 16px; padding: 0 22px 0 26px; transform: skewX(11.31deg)">
+            <div style="height: 24px; min-width: 64px; padding: 0 9px; box-sizing: border-box; border-radius: 8px; background: {{p.starBg}}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #10121a">★ {{p.stars}}</div>
+            <span style="width: {{entryW}}px; font-size: 17px; font-weight: {{p.weight}}; white-space: nowrap">{{p.title}}</span>
+            <span style="font-size: 15px; font-weight: 600; color: {{p.pbColor}}; white-space: nowrap">{{p.pb}}</span>
+          </div>
+        </div>
+      </sc-if>
+    </sc-for>
+  </div>
+  <sc-if value="{{dimNote}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: {{ctlX}}px; top: {{dimY}}px; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; background: rgba(12,14,22,.86); transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; color: #e3e5ee">{{t.dimNote}}</span></div>
+  </sc-if>
+
+
+  <!-- left: title wedge -->
+  <div style="position: absolute; left: -48px; top: {{wedgeY}}px; width: {{wedgeW}}px; height: {{wedgeH}}px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); box-shadow: 0 24px 60px rgba(0,0,0,.45)">
+    <div style="position: absolute; left: -40px; top: 0; width: {{wedgeArtW}}px; height: {{wedgeH}}px; transform: skewX(11.31deg)">
+      <dc-import name="Backdrop" w="{{wedgeArtW}}px" h="{{wedgeH}}px" hue="250" scene="castle" blur="0" dim="0.05" tag="none" hint-size="1060px,300px"></dc-import>
+    </div>
+    <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.9) 0%, rgba(8,9,14,.62) 55%, rgba(8,9,14,.12) 100%)"></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, {{accent}}, {{accent0}} 70%)"></div>
+    <div style="position: absolute; inset: 0; transform: skewX(11.31deg); padding: 26px 40px 24px 112px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; gap: 8px; align-items: center">
+        <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #8ecbff; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b1a2a">{{t.ranked}}</span></div>
+        <sc-if value="{{ta}}" hint-placeholder-val="{{ true }}">
+          <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #ff6070; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700; color: #10121a">★ 6.84</span></div>
+          <span style="padding-left: 6px; font-size: 16px; font-weight: 600; color: #e3e5ee">Very Hard · Any%</span>
+        </sc-if>
+        <sc-if value="{{classic}}" hint-placeholder-val="{{ false }}">
+          <span style="padding-left: 6px; font-size: 16px; font-weight: 600; color: #e3e5ee">{{t.fourDiffs}}</span>
+        </sc-if>
+        <span style="flex: 1"></span>
+        <button type="button" aria-pressed="true" style="all: unset; height: 30px; padding: 0 12px; border-radius: 10px; background: {{favBg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{favRing}}">
+          <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5S2 10 2 6a3 3 0 0 1 6-1 3 3 0 0 1 6 1c0 4-6 7.5-6 7.5z" fill="{{accent}}"></path></svg>{{t.favourite}}</span>
+        </button>
+      </div>
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{titleSize}}px; font-weight: 700; font-style: italic; line-height: .92; letter-spacing: -.01em; text-shadow: 0 4px 28px rgba(0,0,0,.55); white-space: nowrap">I wanna be the Kaenbyou</span>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 18px; color: #dfe2ec">
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: hsl(48 70% 52%); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #10121a">K</div>
+        <span>{{t.by}} <span style="font-weight: 700; color: #ffffff">Kira☆~Kira☆~</span> · [year]</span>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: auto">
+        <sc-for list="{{tags}}" as="tg" hint-placeholder-count="4">
+          <span style="height: 26px; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.14); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 500">{{tg}}</span></span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- left: stats and the route line (deaths per section, any game length: E7) -->
+  <div style="position: absolute; left: 64px; top: {{statsY}}px; width: {{statsW}}px; display: grid; grid-template-columns: repeat({{statCols}}, minmax(0, 1fr)); gap: 18px">
+    <sc-for list="{{stats}}" as="s" hint-placeholder-count="6">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc; white-space: nowrap">{{s.k}}</span>
+        <span style="font-size: 22px; font-weight: 600; white-space: nowrap; color: {{s.color}}">{{s.v}}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="position: absolute; left: 58px; top: {{stagesY}}px"><dc-import name="Route" len="standard" variant="deaths" mode="ta" w="{{routeW}}" head="{{ false }}" hint-size="880px,72px"></dc-import></div>
+
+  <!-- left, below: tabs -->
+  <div style="position: absolute; left: 54px; top: {{tabsY}}px; width: {{panelW}}px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: flex-end; gap: 28px; padding-left: 10px">
+      <sc-for list="{{tabs}}" as="b" hint-placeholder-count="2">
+        <button type="button" aria-pressed="{{b.sel}}" style="all: unset; display: flex; flex-direction: column; gap: 6px; cursor: pointer"><span style="font-size: 17px; font-weight: {{b.weight}}; color: {{b.ink}}">{{b.label}}</span><span style="height: 2px; border-radius: 1px; background: {{b.line}}"></span></button>
+      </sc-for>
+      <span style="flex: 1"></span>
+      <sc-if value="{{showScope}}" hint-placeholder-val="{{ true }}">
+        <button type="button" style="all: unset; height: 32px; padding: 0 14px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; margin-bottom: 2px">
+          <span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px"><span style="color: #a2a8bc">{{t.scope}}</span><span style="font-weight: 600">{{t.global}} ▾</span></span>
+        </button>
+      </sc-if>
+    </div>
+    <sc-if value="{{showRanking}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <sc-for list="{{ranking}}" as="r" hint-placeholder-count="4">
+          <div style="position: relative; margin-left: 10px; width: {{rowW}}px; height: 50px; border-radius: 10px; background: {{r.bg}}; transform: skewX(-11.31deg); box-shadow: {{r.ring}}">
+            <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 52px 36px minmax(0, 1fr) 120px 100px 90px; gap: 12px; align-items: center; padding: 0 20px 0 16px; transform: skewX(11.31deg)">
+              <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; color: {{r.rankColor}}">{{r.rank}}</span>
+              <div style="width: 34px; height: 34px; border-radius: 8px; background: {{r.avBg}}; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: rgba(255,255,255,.88)">{{r.initial}}</div>
+              <span style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+              <span style="font-size: 18px; font-weight: 700; text-align: right">{{r.time}}</span>
+              <span style="font-size: 15px; color: #c9cde0; text-align: right">{{r.deaths}}</span>
+              <span style="font-size: 14px; color: #a2a8bc; text-align: right">{{r.date}}</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="position: relative; margin: 8px 0 0 10px; width: {{pinW}}px; height: 50px; border-radius: 10px; background: rgba(255,255,255,.22); box-shadow: 0 6px 18px rgba(0,0,0,.35); transform: skewX(-11.31deg)">
+          <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 52px 36px minmax(0, 1fr) 120px 100px 90px; gap: 12px; align-items: center; padding: 0 20px 0 16px; transform: skewX(11.31deg)">
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700">#25</span>
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: hsl(352 58% 46%); display: grid; place-items: center; font-size: 15px; font-weight: 700">N</div>
+            <span style="display: flex; align-items: baseline; gap: 10px; white-space: nowrap"><span style="font-size: 17px; font-weight: 700">nugamus</span><span style="font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #e3e5ee">{{t.yourPb}}</span></span>
+            <span style="font-size: 18px; font-weight: 700; text-align: right">38:12.46</span>
+            <span style="font-size: 15px; color: #e3e5ee; text-align: right">1,284</span>
+            <span style="font-size: 14px; color: #e3e5ee; text-align: right">3 Nov</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{showDetails}}" hint-placeholder-val="{{ false }}">
+      <dc-import name="Details" w="{{panelW}}" lang="{{lang}}" hint-size="860px,380px"></dc-import>
+    </sc-if>
+  </div>
+
+  <!-- footer -->
+  <div style="position: absolute; left: 64px; right: 64px; bottom: 26px; display: flex; align-items: flex-end; gap: 12px">
+    <button type="button" style="all: unset; height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2L4 7l5 5" stroke="#f3f4f8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>{{t.back}}</span></button>
+    <button type="button" style="all: unset; height: 52px; padding: 0 24px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 600">{{t.options}}</span></button>
+    <span style="flex: 1"></span>
+    <sc-if value="{{pad}}" hint-placeholder-val="{{ false }}">
+      <div style="align-self: center"><dc-import name="Hints" items="{{hints}}" hint-size="600px,40px"></dc-import></div>
+      <span style="flex: 1"></span>
+    </sc-if>
+    <sc-for list="{{footBtns}}" as="f" hint-placeholder-count="3">
+      <button type="button" style="all: unset; height: 52px; padding: 0 24px; border-radius: 10px; background: {{f.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{f.shadow}}"><span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; font-size: {{f.size}}px; font-weight: 700; white-space: nowrap">{{f.label}}<span style="font-size: 13px; font-weight: 600; opacity: .85">{{f.sub}}</span></span></button>
+    </sc-for>
+    <sc-if value="{{showCard}}" hint-placeholder-val="{{ true }}">
+      <div style="width: 420px; height: 108px; margin-left: 18px"><dc-import name="ProfileCard" variant="footer" mode="{{mode}}" hint-size="420px,108px"></dc-import></div>
+    </sc-if>
+  </div>
+
+  <!-- open menus -->
+  <sc-if value="{{menu}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: {{menu.x}}px; top: {{menu.y}}px; width: {{menu.w}}px; padding: 10px; box-sizing: border-box; border-radius: 10px; background: #12141d; box-shadow: 0 18px 48px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 4px">
+      <sc-if value="{{menu.title}}" hint-placeholder-val="{{ true }}"><span style="padding: 4px 10px 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{menu.title}}</span></sc-if>
+      <sc-for list="{{menu.items}}" as="o" hint-placeholder-count="5">
+        <button type="button" style="all: unset; height: 38px; padding: 0 12px; border-radius: 8px; background: {{o.bg}}; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: {{o.ring}}">
+          <span style="width: 16px; font-size: 14px; font-weight: 700; color: {{accent}}">{{o.check}}</span>
+          <sc-if value="{{o.dot}}" hint-placeholder-val="{{ false }}"><span style="width: 10px; height: 10px; border-radius: 3px; background: {{o.dot}}"></span></sc-if>
+          <span style="flex: 1; font-size: 15px; font-weight: {{o.weight}}; color: {{o.ink}}; white-space: nowrap">{{o.label}}</span>
+          <span style="font-size: 13px; color: #a2a8bc">{{o.count}}</span>
+        </button>
+      </sc-for>
+      <sc-if value="{{menu.foot}}" hint-placeholder-val="{{ false }}">
+        <div style="height: 1px; margin: 4px 6px; background: rgba(255,255,255,.08)"></div>
+        <div style="display: flex; gap: 8px; padding: 4px 4px 2px">
+          <label for="coll-new" style="flex: 1; height: 36px; border-radius: 8px; background: rgba(255,255,255,.08); display: flex; align-items: center; padding: 0 12px"><input id="coll-new" type="text" placeholder="{{t.newColl}}" style="all: unset; flex: 1; font-size: 14px; color: #f3f4f8"></label>
+          <button type="button" style="all: unset; height: 36px; padding: 0 14px; border-radius: 8px; background: rgba(255,255,255,.14); display: flex; align-items: center; font-size: 14px; font-weight: 700; cursor: pointer">{{t.add}}</button>
+        </div>
+        <span style="padding: 6px 10px 2px; font-size: 13px; color: #a2a8bc">{{menu.foot}}</span>
+      </sc-if>
+    </div>
+  </sc-if>
+  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="{{W}}" mode="{{tbMode}}" crumb="{{crumb}}" lang="{{lang}}" pad="{{pad}}" hint-size="1920px,56px"></dc-import></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["ranking","details"],"default":"ranking"},"state":{"editor":"enum","options":["normal","sort","dim","collections","filters"],"default":"normal"},"deck":{"editor":"boolean","default":false},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = 'ta';
+    const dirB = false;
+    const state = this.props.state ?? 'normal';
+    const deck = this.props.deck === true || this.props.deck === 'true';
+    const lang = this.props.lang ?? 'en';
+    const ja = lang === 'ja';
+    const classic = mode === 'classic', ta = !classic;
+    const tab = this.props.tab ?? (classic ? 'saves' : 'ranking');
+    const W = deck ? 1600 : 1920, H = deck ? 1000 : 1080;
+    const accent = classic ? '#8f7bff' : '#ff3d55', accent0 = classic ? 'rgba(143,123,255,0)' : 'rgba(255,61,85,0)';
+    const T = ja ? {
+      search: '20作品を検索: タイトル、作者、タグ', fav: 'お気に入り', favourite: 'お気に入り', ranked: 'ランク', by: '作者', deaths: 'デス',
+      scope: '範囲', global: 'グローバル', yourPb: '自己ベスト', back: '戻る', options: 'オプション', random: 'ランダム', mods: 'Mods', none: 'なし',
+      ranking: 'ランキング', details: '詳細', saves: 'セーブ', fourDiffs: '難易度4つ · ゲーム内で選択', mode: 'モード', newColl: '新しいコレクション', add: '追加', dimNote: '',
+      practice: '練習', cont: '続きから', newGame: '新しく始める',
+    } : {
+      search: 'Search 20 games: title, creator, tag', fav: 'Favourite', favourite: 'Favourite', ranked: 'Ranked', by: 'by', deaths: 'deaths',
+      scope: 'Scope', global: 'Global', yourPb: 'Your PB', back: 'Back', options: 'Options', random: 'Random', mods: 'Mods', none: 'none',
+      ranking: 'Ranking', details: 'Details', saves: 'Saves', fourDiffs: '4 difficulties · picked in the game', mode: 'Mode', newColl: 'New collection name', add: 'Add',
+      dimNote: 'The left side has the focus: the list dims to 50% until you move back to it (→ or RB).',
+      practice: 'Practice', cont: 'Continue', newGame: 'New game',
+    };
+    const ramp = [[0, '#7fc8ff'], [2, '#6fe0c0'], [3, '#a9e266'], [4, '#f2d55a'], [5, '#ff9f55'], [6, '#ff6070'], [7, '#d457ad'], [8, '#9a6cf5']];
+    const starColor = (s) => { let c = ramp[0][1]; for (const [kk, v] of ramp) if (s >= kk) c = v; return c; };
+    const ST = {
+      Ranked: { bg: '#8ecbff', ink: '#0b1a2a', ring: 'none' }, Loved: { bg: '#ff8fc7', ink: '#2a0b1c', ring: 'none' },
+      Beta: { bg: 'rgba(10,12,18,.6)', ink: '#f3f4f8', ring: 'inset 0 0 0 1.5px rgba(255,255,255,.7)' }, Unranked: { bg: '#ffc46b', ink: '#2a1d05', ring: 'none' },
+    };
+    const STJ = { Ranked: 'ランク', Loved: 'ラブド', Beta: 'ベータ', Unranked: 'ランクなし' };
+    const G = [
+      { title: 'I wanna eat the lemon', creator: 'AutumnWater', hue: 52, scene: 'forest', stars: [2.4, 3.9, 5.1], cleared: true, status: 'Ranked', save: 'Finished · 3h 12m', fav: true },
+      { title: 'I wanna be the Little runner', creator: 'ヨーヨー', hue: 140, scene: 'forest', stars: [3.3, 4.6], cleared: true, status: 'Ranked', save: '' },
+      { title: 'I wanna help the Fairy tale', creator: 'れおちゅー', hue: 300, scene: 'city', stars: [3.8, 5.2, 6.1], cleared: false, status: 'Loved', save: 'Stage 2 · 41m' },
+      { title: 'I wanna be the Kaenbyou', creator: 'Kira☆~Kira☆~', hue: 250, scene: 'castle', stars: [3.12, 4.87, 6.84, 8.21, 5.63], cleared: true, status: 'Ranked', save: 'Stage 4 · 6h 12m', sel: true, fav: true },
+      { title: 'I wanna be the Machinary', creator: 'メガビリー', hue: 190, scene: 'cave', stars: [4.1, 5.9, 7.2], cleared: false, status: 'Beta', save: '' },
+      { title: 'I wanna go the Spook House', creator: 'Sephalos, Patrickgh3', hue: 20, scene: 'sea', stars: [5.4, 7.0], cleared: true, status: 'Ranked', save: '' },
+      { title: 'I Wanna Rely The Needle 4.2', creator: 'NineightA', hue: 330, scene: 'city', stars: [6.2, 7.9], cleared: false, status: 'Unranked', save: '' },
+    ];
+    const entries = [['Medium · Any%', 3.12, '24:51.30'], ['Hard · Any%', 4.87, '31:08.94'], ['Very Hard · Any%', 6.84, '38:12.46'], ['Impossible · Any%', 8.21, null], ['Hard · 100%', 5.63, null]];
+    const listX = deck ? W - 820 : W - 860;
+    const groups = state === 'sort';
+    let order = G;
+    if (groups) order = ['Ranked', 'Loved', 'Beta', 'Unranked'].flatMap((s) => [{ head: s }].concat(G.filter((g) => g.status === s)));
+    const panels = [];
+    for (const g of order) {
+      if (g.head) { panels.push({ isHead: true, isGame: false, isEntry: false, x: listX + 10, title: ja ? STJ[g.head] : g.head, count: G.filter((x) => x.status === g.head).length, dot: ST[g.head].bg }); continue; }
+      const sel = !!g.sel;
+      const st = ST[g.status];
+      panels.push({
+        isHead: false, isGame: true, isEntry: false, title: g.title, creator: g.creator, hue: g.hue, scene: g.scene, fav: !!g.fav,
+        x: sel ? listX - 25 : listX, h: 72,
+        veil: sel ? 'linear-gradient(90deg, rgba(8,9,14,.82) 0%, rgba(8,9,14,.45) 45%, rgba(8,9,14,0) 100%)' : 'linear-gradient(90deg, rgba(8,9,14,.9) 0%, rgba(8,9,14,.6) 45%, rgba(8,9,14,.2) 100%)',
+        shadow: sel ? '0 0 0 2px rgba(255,255,255,.55), 0 10px 30px rgba(0,0,0,.5)' : '0 4px 12px rgba(0,0,0,.25)',
+        showStatus: g.status !== 'Ranked' || groups ? !groups : false, status: ja ? STJ[g.status] : g.status, stBg: st.bg, stInk: st.ink, stRing: st.ring,
+        showDots: ta, dots: g.stars.map(starColor), cleared: classic ? g.save.startsWith('Finished') : g.cleared,
+        clearWord: classic ? (ja ? 'クリア' : 'Finished') : (ja ? 'クリア' : 'Cleared'),
+        save: classic && !g.save.startsWith('Finished') ? g.save : '',
+      });
+      if (sel && ta) {
+        entries.forEach(([name, s, pb], i) => {
+          const on = i === 2;
+          panels.push({ isHead: false, isGame: false, isEntry: true, title: name, stars: s.toFixed(2), starBg: starColor(s), pb: pb || 'No PB', pbColor: pb ? '#f3f4f8' : '#a2a8bc', weight: on ? 700 : 500, x: on ? listX + 5 : listX + 30, bg: on ? 'rgba(255,255,255,.26)' : 'rgba(14,16,24,.82)', shadow: on ? '0 6px 18px rgba(0,0,0,.4)' : 'none' });
+        });
+      }
+    }
+    // vertical rhythm, direction A vs B
+    const top = dirB ? 140 : 96;
+    const wedgeH = deck ? 260 : 290;
+    const statsY = top + wedgeH + 22, stagesY = statsY + 72, tabsY = stagesY + 80;
+    const panelW = deck ? 680 : 860;
+    const NAMES = ['tsukimi', 'bluespike', 'kestrel', 'mochi_dash'];
+    const times = ['31:42.18', '31:54.44', '32:07.46', '32:21.04'];
+    const ranking = NAMES.map((name, k) => ({
+      rank: '#' + (k + 1), name, initial: name[0].toUpperCase(), avBg: `hsl(${((k + 1) * 47) % 360} 42% 36%)`, time: times[k],
+      deaths: ['1,261', '2,102', '1,043', '1,884'][k], date: ['12 Sep', '30 Oct', '2 Nov', '18 Aug'][k],
+      bg: k === 0 ? 'rgba(255,201,60,.16)' : 'rgba(12,14,22,.62)', rankColor: k === 0 ? '#ffc93c' : '#a2a8bc',
+      ring: state === 'dim' && k === 1 ? '0 0 0 2px #ffffff' : 'none',
+    }));
+    const slots = (ja ? [
+      ['1', 'ステージ4 · 霧の森 3', 'Very Hard', '6:12:40', '1,284 デス', '2日前'], ['2', 'ステージ7 · ボス', 'Hard', '9:48:02', '3,910 デス', '9月14日'], ['3', '空き', '新しく始める', '', '', ''],
+    ] : [
+      ['Slot 1', 'Stage 4 · Misty forest 3', 'Very Hard', '6:12:40', '1,284 deaths', '2 days ago'], ['Slot 2', 'Stage 7 · the boss', 'Hard', '9:48:02', '3,910 deaths', '14 Sep'], ['Slot 3', 'Empty', 'New game starts here', '', '', ''],
+    ]).map((s, i) => ({ slot: s[0], where: s[1], diff: s[2], time: s[3], deaths: s[4], when: s[5], bg: i === 0 ? 'rgba(143,123,255,.26)' : 'rgba(12,14,22,.62)', ring: i === 0 ? '0 0 0 2px rgba(143,123,255,.9)' : 'none', ink: i === 2 ? '#a2a8bc' : '#ffffff' }));
+    const sd = classic ? [380, 611, 1040, 1520, 0, 0, 0] : [380, 611, 1040, 1520, 2880, 1972, 1009];
+    const smax = Math.max(...sd);
+    const stages = sd.map((n, i) => ({
+      name: i === 6 ? 'Boss' : String(i + 1), deaths: n ? n.toLocaleString('en-US') : '—', ink: n ? '#f3f4f8' : '#6a7088',
+      fill: classic && i === 3 ? 'rgba(143,123,255,.28)' : 'transparent',
+      heat: n === smax ? accent : `rgba(255,255,255,${(0.12 + 0.5 * n / smax).toFixed(2)})`,
+    }));
+    const statsTA = ja ? [['ステージ', '7'], ['平均クリア', '54:20.36'], ['クリア率', '3.8%'], ['自己ベスト', '38:12.46'], ['自分のデス', '9,412'], ['世界記録', '31:42.18']]
+      : [['Stages', '7'], ['Avg clear', '54:20.36'], ['Clear rate', '3.8%'], ['Your PB', '38:12.46'], ['Your deaths', '9,412'], ['World record', '31:42.18']];
+    const statsCl = ja ? [['ステージ', '7'], ['プレイ時間', '15:59:12'], ['デス', '5,194'], ['クリア', '1回'], ['進行度', '4 / 7'], ['最後のプレイ', '2日前']]
+      : [['Stages', '7'], ['Time played', '15:59:12'], ['Deaths', '5,194'], ['Finished', 'Once'], ['Furthest', 'Stage 4'], ['Last played', '2 days ago']];
+    const stats = (classic ? statsCl : statsTA).slice(0, deck ? 4 : 6).map(([k, v]) => ({ k, v, color: '#f3f4f8' }));
+    const tabs = (classic ? [['saves', T.saves], ['details', T.details]] : [['details', T.details], ['ranking', T.ranking]]).map(([k, label]) => ({
+      label, sel: k === tab ? 'true' : 'false', weight: k === tab ? 700 : 600, ink: k === tab ? '#ffffff' : '#a2a8bc', line: k === tab ? accent : 'transparent',
+    }));
+    const ctl = (k, v, on, opt) => Object.assign({ k, v, bg: on ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.72)', color: on ? '#ffffff' : '#f3f4f8', ring: 'none', op: 1 }, opt || {});
+    const open = '0 0 0 2px #ffffff';
+    let controls = ja ? [ctl('グループ', groups ? '状態 ▾' : 'ゲーム ▾'), ctl('並び', 'スター ▾', false, groups ? { ring: open } : {}), ctl('', 'クリア済み', false), ctl('', '未クリア', false), ctl('状態', 'すべて ▾'), ctl('作者', 'すべて ▾'), ctl('年', 'すべて ▾')]
+      : [ctl('Group', groups ? 'Status ▾' : 'Game ▾'), ctl('Sort', 'Stars ▾', false, groups ? { ring: open } : {}), ctl('', 'Cleared', false), ctl('', 'Uncleared', false), ctl('Status', 'Any ▾'), ctl('Creator', 'Any ▾'), ctl('Year', 'Any ▾')];
+    if (state === 'filters') controls = [ctl('Group', 'Game ▾'), ctl('Sort', 'Stars ▾'), ctl('', 'Cleared'), ctl('', 'Uncleared'), ctl('Status', 'Ranked, Loved ▾', true), ctl('Year', '2012–2016 ▾', true), ctl('Tags', 'Needle ▾', true, { ring: open })];
+    if (deck) controls = controls.slice(0, 5);
+    const ctlX = W - 880, ctlW = deck ? 840 : 840;
+    let menu = null;
+    const mi = (label, on, count, dot) => ({ label, check: on ? '✓' : '', count: count || '', dot: dot || '', bg: on ? 'rgba(255,255,255,.1)' : 'transparent', weight: on ? 700 : 500, ink: on ? '#ffffff' : '#e3e5ee', ring: 'none' });
+    if (state === 'sort') menu = { x: ctlX + 96, y: 186, w: 230, title: ja ? '並び替え' : 'Sort by', items: [mi('Stars', true), mi('Title'), mi('Creator'), mi('Cleared first'), mi('Last played'), mi('Date added')], foot: '' };
+    if (state === 'collections') menu = { x: W - 300, y: 128, w: 300, title: 'Collections', items: [mi('Any', false, '20'), mi('Favourites', true, '2'), mi('Needle practice', false, '4'), mi('Played with friends', false, '3'), mi('Rename “Favourites”…'), mi('Delete collection…')], foot: 'Kaenbyou is in Favourites. Its heart above the title adds or removes it.' };
+    if (state === 'filters') menu = { x: ctlX + 520, y: 186, w: 300, title: 'Tags · any of', items: [mi('Needle', true, '9'), mi('Avoidance', false, '6'), mi('Adventure', false, '7'), mi('Boss rush', false, '3'), mi('Gimmick', false, '4'), mi('Trap', false, '5'), mi('Puzzle', false, '2'), mi('Medley', false, '1')], foot: '' };
+    const footBtns = classic ? [
+      { label: T.newGame, sub: '', bg: 'rgba(255,255,255,.12)', shadow: 'none', size: 17 },
+      { label: T.cont, sub: ja ? 'スロット1' : 'Slot 1', bg: accent, shadow: '0 8px 24px rgba(143,123,255,.35)', size: 19 },
+    ] : [
+      { label: T.random, sub: '', bg: 'rgba(255,255,255,.12)', shadow: 'none', size: 17 },
+      { label: T.practice, sub: '', bg: 'rgba(255,255,255,.12)', shadow: 'none', size: 17 },
+      { label: T.mods, sub: T.none, bg: accent, shadow: '0 8px 24px rgba(255,61,85,.35)', size: 19 },
+    ];
+    const tabsB = [['ta', ja ? 'タイムアタック' : 'Time Attack', ja ? '20作品 · 52マップ' : '20 games · 52 maps'], ['classic', ja ? 'クラシック' : 'Classic', ja ? 'セーブ 3' : 'saves in 3']].map(([k, label, hint]) => {
+      const on = k === mode, c = k === 'ta' ? '#ff3d55' : '#8f7bff';
+      return { label, hint, sel: on ? 'true' : 'false', bg: on ? c : 'rgba(12,14,22,.72)', ink: '#ffffff', sub: on ? 'rgba(255,255,255,.85)' : '#a2a8bc', shadow: on ? `0 8px 24px ${k === 'ta' ? 'rgba(255,61,85,.35)' : 'rgba(143,123,255,.35)'}` : 'none' };
+    });
+    return {
+      ow: deck ? 1280 : 1920, oh: deck ? 800 : 1080, W, H, zoom: deck ? 0.8 : 1, lang, t: T, mode, accent, accent0, ta, classic, dirB, tabsB,
+      tbMode: dirB ? 'none' : mode, crumb: dirB ? (ja ? 'プレイ' : 'Play') : '', pad: deck,
+      hints: classic ? 'A:Continue|X:New game|Y:Favourite|B:Back' : 'A:Play|X:Mods|Y:Favourite|LB:Classic|B:Back',
+      query: '', collBg: state === 'collections' ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.72)', collLabel: state === 'collections' ? 'Favourites ▾' : (ja ? 'コレクション ▾' : 'Collections ▾'),
+      controls, ctlX, ctlY: 72, ctlW,
+      listY: 192, listH: H - 192 - 140, listOp: state === 'dim' ? 0.5 : 1, panels, titleW: deck ? 420 : 520, entryW: 300,
+      dimNote: state === 'dim', dimY: 920,
+      wedgeY: top, wedgeH, wedgeW: deck ? 760 : 980, wedgeArtW: deck ? 840 : 1060, titleSize: deck ? 58 : 72,
+      favBg: state === 'collections' ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.1)', favRing: state === 'collections' ? open : 'none',
+      tags: ['Needle', 'Avoidance', 'Adventure', 'Gimmick'],
+      statsY, routeW: deck ? 640 : 880, statsW: deck ? 640 : 880, statCols: deck ? 4 : 6, stats, stagesY, stages, stageW: deck ? 80 : 112,
+      tabsY, panelW, tabs, showScope: ta && tab === 'ranking', showRanking: ta && tab === 'ranking', showSaves: classic && tab === 'saves', showDetails: tab === 'details',
+      ranking: deck ? ranking.slice(0, 2) : ranking, rowW: deck ? 660 : 820, pinW: deck ? 680 : 840, slots,
+      footBtns, showCard: !deck, menu,
+    };
+  }
+}
+</script>
+</body>
+</html>

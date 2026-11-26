@@ -1,6 +1,6 @@
-//! The built-in kinds (docs/plans/sim-core.md 6.1). WP0 lists every variant so the loader can
-//! parse kinds; WP6a owns the file afterwards. Dispatch lives in `builtins/mod.rs`, where WP0
-//! routed every variant to its own file, so WP6b and WP6c edit neither file.
+//! The built-in kinds (docs/architecture/sim/builtins.md). Every variant is listed here so the
+//! loader can parse kinds; dispatch lives in `builtins/mod.rs`, which routes every variant to
+//! its own file.
 
 /// Every built-in kind. A package kind is one of these, with params (a preset) or a script on
 /// top (`Scripted`, or a base built-in plus a script).
@@ -9,7 +9,7 @@ pub enum Builtin {
     // Engine kinds the sim spawns by role (`EngineKind`).
     /// The engine controller: restart, reset, pause, mute, timers (tier 1).
     World,
-    /// The kid (WP5a-WP5c).
+    /// The kid.
     Kid,
     /// The kid's bullet (tier 1).
     KidBullet,
@@ -111,12 +111,12 @@ pub enum Builtin {
     Decor,
     /// Builds a `particles/<id>.toml` system (#765).
     ParticleSystem,
-    /// A kind whose behavior is a script (WP9).
+    /// A kind whose behavior is a script.
     Scripted,
 
     // Not in the package format.
     /// Test built-in that logs every event and can move, spawn, destroy and request a room
-    /// (WP1 tests, WP11 golden probe tests). Never loaded from a package.
+    /// (the tests and golden probe tests). Never loaded from a package.
     Probe,
     /// `LoadMode::Trace`: an unmapped script kind loaded with no events; its mask still collides.
     Inert,
@@ -237,20 +237,40 @@ impl Builtin {
         }
     }
 
+    /// The native behaviour this kind belongs to (decision 0005; [`crate::def::traits`]):
+    /// one of the twelve standard behaviours, the controller, the kid, or a data base.
+    #[must_use]
+    pub fn behaviour(self) -> crate::def::traits::Behaviour {
+        crate::def::traits::behaviour(self)
+    }
+
     /// The built-in a package may name, by its package-format name. `probe` and `inert` are not
     /// package names and give `None`.
+    ///
+    /// A standard behaviour base name (`base = "hazard"`) is an additive alias for the
+    /// behaviour's reference kind ([`crate::def::traits::BEHAVIOUR_BASES`]); the 50 kind names
+    /// keep their own behavior.
     pub fn from_name(name: &str) -> Option<Builtin> {
         Builtin::ALL
             .iter()
             .copied()
             .filter(|b| !matches!(b, Builtin::Probe | Builtin::Inert))
             .find(|b| b.name() == name)
+            .or_else(|| crate::def::traits::base_from_name(name))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn behaviour_bases_resolve_to_their_reference_kind() {
+        assert_eq!(Builtin::from_name("hazard"), Some(Builtin::Killer));
+        assert_eq!(Builtin::from_name("solid"), Some(Builtin::Block));
+        assert_eq!(Builtin::from_name("spawn"), Some(Builtin::KidStart));
+        assert_eq!(Builtin::from_name("nope"), None);
+    }
 
     #[test]
     fn names_round_trip_and_are_unique() {

@@ -1,7 +1,7 @@
 //! Rounding, integer conversion and the small GML helpers built on exact operations.
 //!
 //! Everything here is exact IEEE (no transcendental math), so hardware f64 is safe. Functions
-//! whose result depends on an open rule take the run's [`NumRules`] (docs/plans/sim-core.md 3.2).
+//! whose result depends on an open rule take the run's [`NumRules`] (docs/architecture/sim/numbers.md).
 
 use super::compare::epsilon;
 use super::{NumError, Real};
@@ -113,7 +113,7 @@ pub fn frac(x: Real) -> Real {
 /// The default fits the recorder (CLONE_SPEC numbers, Confirmed (recorder)): an hspeed from
 /// `-1.4e-14` to `-9e-14` has sign 0 and `-1e-13` has sign -1
 /// (`traces/little-trap/num-eps-slip-b.csv` rows 50-51, `num-eps-slip-c.csv` rows 50-100).
-/// Slip blocks subtract `slip * sign(hspeed)`, so N11 must follow N1 (plan 3.2).
+/// Slip blocks subtract `slip * sign(hspeed)`, so N11 must follow N1 (docs/architecture/sim/numbers.md).
 pub fn sign(x: Real, r: &NumRules) -> Real {
     let v = x.get();
     let e = match r.sign {
@@ -140,33 +140,32 @@ pub fn abs(x: Real) -> Real {
 
 /// GML `min` of two values; ties and signed zeros per N12 (`NumRules::min_max_ties`).
 ///
-/// `MinMaxTies::StrictGreater` (engine_rev 0 default): `b` when `a > b`, else `a`. Ties and a
-/// NaN `b` keep `a`; a NaN `a` stays. `MinMaxTies::GreaterOrEqual`: `b` when `a >= b`, else `a`.
-/// The test is exact in both; whether GM8 uses the compare epsilon here is part of N12.
+/// `MinMaxTies::StrictGreater` (engine_rev 0 default, the only value in this ruleset revision):
+/// `b` when `a > b`, else `a`. Ties and a NaN `b` keep `a`; a NaN `a` stays. The test is exact;
+/// whether GM8 uses the compare epsilon here is part of N12, and a settled answer adds its value
+/// then.
 pub fn gm_min(a: Real, b: Real, r: &NumRules) -> Real {
     let take_b = match r.min_max_ties {
         MinMaxTies::StrictGreater => a.get() > b.get(),
-        MinMaxTies::GreaterOrEqual => a.get() >= b.get(),
     };
     if take_b { b } else { a }
 }
 
 /// GML `max` of two values; ties and signed zeros per N12 (`NumRules::min_max_ties`).
 ///
-/// `MinMaxTies::StrictGreater` (engine_rev 0 default): `a` when `a > b`, else `b`. Ties and a
-/// NaN on either side give `b` (`max(-0.0, 0.0) = 0.0`, `max(NaN, 1) = 1`).
-/// `MinMaxTies::GreaterOrEqual`: `a` when `a >= b`, else `b`.
+/// `MinMaxTies::StrictGreater` (engine_rev 0 default, the only value in this ruleset revision):
+/// `a` when `a > b`, else `b`. Ties and a NaN on either side give `b` (`max(-0.0, 0.0) = 0.0`,
+/// `max(NaN, 1) = 1`). A settled answer adds its value then.
 pub fn gm_max(a: Real, b: Real, r: &NumRules) -> Real {
     let take_a = match r.min_max_ties {
         MinMaxTies::StrictGreater => a.get() > b.get(),
-        MinMaxTies::GreaterOrEqual => a.get() >= b.get(),
     };
     if take_a { a } else { b }
 }
 
 /// How many times GML `repeat (x)` runs its body: the rounded value of `x` (Confirmed, manual),
 /// rounding half to even (Inferred), and 0 when that is 0 or less. It takes the rules so a later
-/// `engine_rev` can change the rounding without a new signature (plan 11).
+/// `engine_rev` can change the rounding without a new signature (docs/architecture/sim/scripts.md).
 ///
 /// Errors on NaN or infinity, and on a value outside i64 (`OutOfRange`). The script step budget
 /// bounds what a large count can cost.

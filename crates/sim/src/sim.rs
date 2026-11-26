@@ -1,15 +1,14 @@
-//! The simulation handle the client, server and CLI drive (docs/plans/sim-core.md 2.1, 13 WP0).
+//! The simulation handle the client, server and CLI drive (docs/architecture/sim/tick.md).
 //!
-//! WP0 declared; WP1 owns the method bodies.
-
 use std::sync::Arc;
 
 use crate::def::GameDef;
 use crate::error::SimError;
 use crate::input::InputFrame;
+use crate::rng::RngStreams;
 use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
-use crate::script::ScriptRuntime;
+use crate::script::{PreparedScripts, ScriptRuntime};
 use crate::sound::DllMode;
 use crate::stripped::PlayMode;
 use crate::tick;
@@ -41,7 +40,7 @@ pub struct StepResult {
     pub tick: u64,
     /// Running, halted or ended after the step.
     pub status: SimStatus,
-    /// Timing splits recorded this tick (WP8b).
+    /// Timing splits recorded this tick.
     pub splits: Vec<Split>,
 }
 
@@ -52,10 +51,17 @@ pub struct Sim {
     pub(crate) rules: RunnerRules,
     pub(crate) world: World,
     pub(crate) options: SimOptions,
-    /// The compiled scripts, lent to each `Ctx` as `ctx.scripts` (WP9).
+    /// The compiled scripts, lent to each `Ctx` as `ctx.scripts`.
     pub(crate) scripts: ScriptRuntime,
     /// Between `step_rows` and `finish_step`.
     pub(crate) rows_done: bool,
+}
+
+/// The rules a run uses: the runner's, with the package's FPU model.
+fn run_rules(def: &GameDef) -> Result<RunnerRules, SimError> {
+    let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
+    rules.num.float_model = def.float_model;
+    Ok(rules)
 }
 
 impl Sim {
@@ -73,28 +79,79 @@ impl Sim {
         Ok(sim)
     }
 
+    /// Compiles the package's scripts once so a quick retry can reuse them (#1021, #1093).
+    ///
+    /// The artifact is immutable. Every run from it gets a fresh Rhai engine and its own RNG,
+    /// budget, log and parked world; see [`Sim::new_or_halted_prepared`].
+    pub fn prepare(def: &GameDef) -> Result<PreparedScripts, SimError> {
+        PreparedScripts::new(def, &run_rules(def)?)
+    }
+
     /// [`Sim::new`], except that a start that halts (a script error in a start-room Create, #946)
     /// is returned as the halted sim, `SimStatus::Halted` in its world, as a halt during play
     /// leaves it. Only a sim that cannot be set up is an error: a map the package does not have,
     /// a runner it does not support, scripts that do not compile.
     pub fn new_or_halted(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
-        let map = def.map_index(options.map.as_deref()).ok_or_else(|| {
+        // Keep the error precedence: map, then rules/scripts (the prepare compiles).
+        let map = Sim::map_for(&def, &options)?;
+        let prepared = Sim::prepare(&def)?;
+        Sim::build(def, options, map, &prepared)
+    }
+
+    /// [`Sim::new_or_halted`] with an artifact from [`Sim::prepare`]: the same start, without
+    /// compiling the scripts again. A quick retry uses this (#1093; the client cache is
+    /// #1093B).
+    pub fn new_or_halted_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let map = Sim::map_for(&def, &options)?;
+        Sim::build(def, options, map, prepared)
+    }
+
+    /// [`Sim::new`] with a prepared artifact: a start that halts is returned as the error.
+    pub fn new_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let sim = Sim::new_or_halted_prepared(def, options, prepared)?;
+        if let SimStatus::Halted(e) = &sim.world.status {
+            return Err(e.clone());
+        }
+        Ok(sim)
+    }
+
+    /// The map error first, as every constructor has always reported it.
+    fn map_for(def: &GameDef, options: &SimOptions) -> Result<u16, SimError> {
+        def.map_index(options.map.as_deref()).ok_or_else(|| {
             SimError::unsupported(format!(
                 "map `{}` is not in package `{}`",
                 options.map.as_deref().unwrap_or_default(),
                 def.id
             ))
-        })?;
-        let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        rules.num.float_model = def.float_model;
-        let scripts = ScriptRuntime::new(&def, &rules)?;
+        })
+    }
+
+    /// The shared body of the constructors after the map check and script preparation.
+    fn build(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        map: u16,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let rules = run_rules(&def)?;
+        let scripts = ScriptRuntime::new_run(Arc::clone(&def), &rules, prepared)?;
         let mut world = World::new(def.start_room, options.seed);
+        // The ruleset selects the stream layout; the state it observes is hashed.
+        world.streams = RngStreams::seeded(options.seed, rules.rng.layout);
         world.next_id = World::first_runtime_id(&def);
         world.mode = options.mode;
         world.map = map;
         {
             let mut ctx = Ctx {
-                def: &def,
+                def: def.as_ref(),
                 rules: &rules,
                 w: &mut world,
                 scripts: &scripts,
@@ -118,7 +175,7 @@ impl Sim {
     /// keeps what `Sim::new` produced: the first room's start (music, sounds, shake) is reported
     /// with tick 0, so a client that reads `output` after every step never misses it and must
     /// not also read it after `Sim::new`. Reaching `GameDef::max_ticks` halts
-    /// with `SimError::Overflow`; any error halts (plan 2.2).
+    /// with `SimError::Overflow`; any error halts (docs/architecture/sim/tick.md).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
         self.step_rows(input);
         self.finish_step()
@@ -146,7 +203,7 @@ impl Sim {
                 self.rows_done = tick::run_rows(&mut ctx, input, &tick::Hooks::ENGINE).is_some();
             }
         }
-        self.rows_done && self.world.pending.is_some()
+        self.rows_done && !self.world.pending.is_empty()
     }
 
     /// Rows 15-16 of [`Sim::step`] (the room change, the sound tick, the tick count). Does nothing
@@ -201,6 +258,24 @@ impl Sim {
     /// The game.
     pub fn def(&self) -> &GameDef {
         &self.def
+    }
+
+    /// The whole world as bytes: a practice save state (docs/product.md, Practice;
+    /// docs/architecture/client/practice.md). A run that saves or loads one is practice, so it is
+    /// never ranked and its replay is not recorded (the state jump breaks an input-only replay).
+    pub fn snapshot(&self) -> Vec<u8> {
+        postcard::to_allocvec(&self.world).expect("the world is plain data")
+    }
+
+    /// Replaces the world with a [`snapshot`](Self::snapshot), between two steps. The run's own
+    /// rules, scripts and options stay as they are.
+    pub fn restore(&mut self, bytes: &[u8]) -> Result<(), SimError> {
+        if self.rows_done {
+            return Err(SimError::invariant("a save state is restored between steps"));
+        }
+        self.world = postcard::from_bytes(bytes)
+            .map_err(|e| SimError::invariant(format!("the save state does not decode ({e})")))?;
+        Ok(())
     }
 
     /// Turns the `keyboard_check_direct` latch off or on for this run. The trace runner turns it

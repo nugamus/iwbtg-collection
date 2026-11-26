@@ -1,6 +1,5 @@
-//! Rooms as loaded from a package (docs/plans/sim-core.md 4.1).
+//! Rooms as loaded from a package (docs/architecture/sim/rooms.md).
 //!
-//! WP0 declares; WP7a owns afterwards.
 
 use super::ids::{GroupId, KindId, NameId, SoundId, VarId};
 use super::kind::Params;
@@ -177,7 +176,7 @@ impl PlacedInstance {
     }
 }
 
-/// One room creation code action, as data (plan 4.2 step 6).
+/// One room creation code action, as data (docs/architecture/sim/rooms.md step 6).
 #[derive(Clone, PartialEq, Debug)]
 pub enum RoomAction {
     /// `global.<var> = value`.
@@ -205,8 +204,10 @@ pub enum RoomAction {
     /// `instance_destroy()` in room creation code: destroys nothing and the rest of the code
     /// runs (R24, Confirmed).
     DestroySelf,
-    /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). The element
-    /// is the run-time variable `<var>[<index>]` (`World::var_names`).
+    /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). Element 0
+    /// is the variable itself, so an index-0 write is the bare assignment; a higher index makes
+    /// the global a dense array in `Value::Array` (its element 0 is the scalar already stored,
+    /// unwritten slots read 0). There is no `<var>[<index>]` variable (research#130, #998).
     SetGlobalIndexed {
         /// The array's global name.
         var: String,

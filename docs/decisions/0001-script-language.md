@@ -116,6 +116,7 @@ The sandbox has four layers:
 - Host caps: 256 script spawns per call, 4,096 per tick (enforced; a Create run by a spawn counts toward the spawning call), 50,000 live instances per room (enforced in `World::insert`, so scripts and built-ins alike; instances destroyed this tick do not count).
 - Exceeding any budget or cap is a deterministic script error. It can only happen to a runaway script, because of the CI rule below.
 - CI rule: a script's measured peak use must stay under 25% of its package's tick budget over the package's test replays. `iwbtg profile <pkg> --replay <file>` reports peak units and milliseconds per tick. The validator warns at 10%.
+- Performance class: over a package's stored clear replays (`tests/replays/*.iwbr`), `iwbtg profile <pkg> --summary` reports `light` (peak under 10% of the tick budget and of the 50,000 live-instance cap), `heavy` (10-25%) or `extreme` (25% or more), taking the worse of the two fractions. It reuses the 10% warning and the 25% CI rule, so badly performing content is classified for the catalog and the game page instead of gaining a new design cap. `iwbtg pkg publish` stores the class and the peaks; the hard caps above remain the server-safety line (#798).
 - Operation counts are deterministic for a fixed Rhai version, optimization level and script. That is why the version is pinned and part of `SIM_VERSION`.
 
 ### Determinism rules
@@ -145,7 +146,7 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 - `draw(d)` runs only in the client. It gets a draw-list builder and no setters, so it can never change sim state. The server never runs it.
 - Built-in variables are registered getters and setters on `Inst`: `x`, `y`, `xstart`, `ystart`, `xprevious`, `yprevious`, `hspeed`, `vspeed`, `speed`, `direction`, `gravity`, `gravity_direction`, `friction`, `sprite`, `image_index`, `image_speed`, `image_xscale`, `image_yscale`, `image_angle`, `image_alpha`, `visible`, `solid`, `depth`, `kind`. Speed setters apply the GM8 motion coupling.
 - Custom variables use Rhai's indexer property fallback: `this.hp = 20`. They live in the instance's variable map in the sim. Reading an unset variable is an error, as in GM8.
-- The kid is read-only to scripts, apart from `kill_kid()` and documented knobs such as flipping gravity. Scripts never replace the kid's physics.
+- The kid's state is reachable through the documented field table of decision [0004](0004-extension-model.md#kid-fields-a-script-may-read-and-write): the generic instance fields plus the kid-only read/write fields (`djump`, `curJumps`, `tjump`, `onPlatform`, `ladder`, `frozen`, `frozen2`, `muteki`, `tempHspeed`, `maxSpeed`, `maxVspeed`, `maxFallSpeed`, `scale`) and the read-only set (`ladderud`, `ladderjump`, `yflag`, `flipped`, `facing`, `jump`/`jump2`/`jump3`, `on_slope_last`, `walk_h`, `onVineL`/`onVineR`). `facing` follows `image_xscale`; `yflag` and `flipped` change only through the gravity knobs. A script may compose with the kid's actions at the fixed slots of [0004](0004-extension-model.md#kid-script-slots); it never replaces the kid's per-tick physics, which stays native.
 - The first API surface is listed in [architecture](../architecture/sim/scripts.md#script-api-first-version). The generated reference is `docs/format/script-api.md`.
 
 Example:
@@ -201,7 +202,7 @@ fn collide(other) {
 
 ### Costs we accept
 
-- Rhai is a tree-walking interpreter, and `set_fast_operators(false)` makes every operator slower. WASM is about 30% slower again. Bullets therefore stay native (the built-in `projectile` kind); scripts only spawn and steer them. Repeated patterns get promoted to built-ins.
+- Rhai is a tree-walking interpreter, and `set_fast_operators(false)` makes every operator slower. WASM is about 30% slower again. Bullets therefore stay native (a `killer` or `kid_bullet` with GM motion; #1004 decided against a separate `projectile` kind); scripts only spawn and steer them. Repeated patterns get promoted to built-ins.
 - Agents know Rhai less well than Lua. Generated docs, stubs, the cookbook and strict compile errors make up for it.
 - GM comparisons are explicit calls, which is more verbose than GML.
 - Operation counts tie replays to the Rhai version. The server keeps old verifier builds for replays made with an older `SIM_VERSION`.
@@ -241,3 +242,68 @@ The user asked whether Rhai is the right choice and left the decision to Claude.
   - Non-coders: they never see Rhai. The editor's room painter, trigger wiring, timeline editor and boss builder write data, not scripts.
 - **Swappable.** The script host sits behind the `ScriptHost` trait, so a later switch stays possible.
 - **Checkpoint.** Re-check after the first boss and the first avoidance game are ported (Little Trap and Rori Girl): peak budget per tick, and how much agent effort the scripts took. Rhai is replaced only if one of those fails.
+
+## Revisited 2026-11-24
+
+The stress packages were measured before mass porting, as the checkpoint asks (#1002). The numbers
+are `iwbtg profile` on a 121-tick idle `.inputs` (`frame 120: end`), so every tick after the first
+twenty runs with the room's full bullet count (the spawner adds 250 a tick). Each row is the
+minimum of five runs.
+
+Machine and build, so a later table can be compared: Intel Core Ultra 5 225H (14 cores: 4 P, 8 E
+and 2 low-power E), 32 GB RAM, Windows 11 Pro 10.0.26300; rustc 1.99.1; `iwbtg-tools` built from
+main `bad863f` with `cargo build --release`, and with `cargo build --release --target
+wasm32-wasip1` for the wasm rows, which ran under wasmtime 51.0.0 (the official x86_64-windows
+release zip, sha256 `d2f5853a1cded9b1256b45cd57686b6855e69049ef07fd4ad78feb78dfa3aada`, unpacked in
+a temp folder; no install). The host was shared with other agent builds, so every run was pinned
+to one core (CPU 11, a P-core) after a scan found unpinned runs up to 8x slower when Windows
+placed them on an E-core. A row is reproduced with `iwbtg profile <pkg> --replay <inputs>
+--room <id>` (the same `--room` as `replay run`, #1433), and the `ms per tick` line names the
+build target it ran on (`native` or `wasm32-wasip1`). The recorded runs predate `--room`, so they
+selected each room through a copy of the package with `start_room` and `[engine].new_game_room`
+set to that room (nothing else changed); the package bytes are otherwise identical.
+
+| live bullets | variant | native ms/tick | wasm32-wasip1 ms/tick | peak script units / limit |
+|---|---|---|---|---|
+| 500 | native motion | 0.458 | 0.588 | 27,036 / 1,000,000 (2.7%) |
+| 2,000 | native motion | 2.240 | 2.603 | 27,036 (2.7%) |
+| 5,000 | native motion | 4.335 | 8.320 | 27,036 (2.7%) |
+| 500 | `step()` on every bullet | 0.970 | 3.395 | 32,036 (3.2%) |
+| 2,000 | `step()` on every bullet | 4.345 | 9.859 | 47,036 (4.7%) |
+| 5,000 | `step()` on every bullet | 12.488 | 27.540 | 77,036 (7.7%) |
+| boss fight (52 instances) | one script, alarms, timeline | 0.058 | 0.133 | 979 (0.1%) |
+
+The 31-tick replays that ship with the packages read lower because the room is still filling for
+their first 20 ticks: native 0.320 / 1.676 / 3.951 and 1.200 / 4.783 / 9.236, wasmtime 0.450 /
+1.879 / 6.788 and 2.671 / 9.366 / 16.785 in the table's order (boss: 0.058 / 0.133 over its own
+121-tick replay). The 121-tick row is the one to quote.
+
+**Verdict: Rhai stays, with one qualification.** At 50 ticks per second a tick has 20 ms. Native
+release keeps that at every count measured: the worst synthetic case, 5,000 live bullets each
+running a `step()`, takes 12.5 ms (62% of the tick), and the 2,000-bullet case 4.3 ms. On
+wasm32-wasip1 the budget holds to 2,000 scripted movers (9.9 ms), but **5,000 scripted bullets
+take 27.5 ms, 38% over the tick** (about 36 ticks per second). A per-bullet `step()` costs about
+1.6 µs natively and 3.8 µs under wasmtime over the same bullet moved natively. Peak budget use is
+7.7% of the 1,000,000-unit limit, well inside the 25% rule, and the boss package's script cost is
+negligible.
+
+The shortfall is the price of one interpreter call per bullet per tick, not of scripting a game:
+at the counts a port actually plays the budget holds with room, and the 5,000-bullet all-scripted
+row is the stress ceiling. Decision [0004](0004-extension-model.md)'s "50 ticks per second ... on
+native release and wasm32" sentence therefore holds for native at every count and for wasm32 up to
+2,000 scripted movers, not for the 5,000 scripted row; the qualifier is filed as
+[#1452](https://github.com/nugamus/iwbtg-collection/issues/1452) for that document's owner.
+Nothing here triggers the replacement the checkpoint allowed for at realistic counts, and
+[#44](https://github.com/nugamus/iwbtg-collection/issues/44) is re-scoped to confirming peak
+budget and agent effort on the first real ports.
+
+**Projectile (#1004).** No separate `projectile` kind. A bullet moved natively costs the same
+whether it is called a projectile or a `killer`: 4.3 ms/tick native and 8.3 ms wasm32-wasip1 at
+5,000, against 12.5 and 27.5 with a `step()` on every bullet. `killer` already provides the role
+the draft gave `projectile` — native motion (`hspeed`/`vspeed`), kill-on-touch through its class
+and `destroy_outside_room` — and the native rows above are that pattern. The research list has no
+`projectile` in `converter/kinds.toml` and its MECH-009 records that no game needs one beyond
+`killer` and scripted objects, so a new kind would split one role across two, which format
+principle 9 rejects. The docs now name `killer` where they used to say `projectile`; the open
+pointer in the research MECH-009 is filed as
+[research#297](https://github.com/nugamus/iwbtg-collection-research/issues/297).

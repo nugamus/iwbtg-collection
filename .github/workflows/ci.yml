@@ -1,6 +1,14 @@
 name: CI
 # Every PR runs this workflow so the required `ci-ok` check always reports (auto-merge, #528).
-# A change that touches only docs, Markdown, workspace/ or .claude/ skips the build jobs.
+# PRs select changed crates and transitive consumers; main/merge groups retain the full matrix.
+# Test-consumed docs select sim/format natively; they select WASM/determinism only where a test
+# there reads the fixture (#1124). Ordinary documentation skips builds.
+# Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
+# holding `ci-ok` and auto-merge for GitHub's 6 hour default. The native cap is 45 minutes: a full
+# Windows run measured 28m36s on a cold-ish cache (#1041, run 44531896479), and main also runs the
+# Rust-cache save there; the warm path is about 5.5 minutes. The two wasm caps stay 25 (slowest
+# wasm cold measurement 11m33s, #961); the web cap is 60 because the cold release build and
+# `wasm-opt -Oz` add up (#1131); everything else is 5 to 15.
 on:
   pull_request:
   merge_group:
@@ -8,7 +16,11 @@ on:
     branches: [main]
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # PR and merge-group runs still cancel superseded work. A push to main does not cancel the
+  # active run: that trusted generation finishes and publishes its caches, and GitHub keeps the
+  # newest push as the single pending run for the group (#1027). This bounds main to one running
+  # plus one pending run instead of starving cache saves during a burst of merges.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
@@ -19,57 +31,101 @@ env:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      packages: ${{ steps.diff.outputs.packages }}
+      # The native job's set: consumers for a code change, the fixture readers only for a
+      # docs-fixture-only change (#1405).
+      native_packages: ${{ steps.diff.outputs.native_packages }}
+      wasip1: ${{ steps.diff.outputs.wasip1 }}
+      browser: ${{ steps.diff.outputs.browser }}
+      web: ${{ steps.diff.outputs.web }}
+      determinism: ${{ steps.diff.outputs.determinism }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - id: diff
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
-          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          if [ "$EVENT" = pull_request ]; then
+            python3 scripts/ci_scope.py --base "$BASE" --github-output "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci_scope.py --full --github-output "$GITHUB_OUTPUT"
           fi
-          code=$(git diff --name-only "$BASE" HEAD | grep -vE '^(docs/|workspace/|\.claude/)|\.md$' || true)
-          echo "$code"
-          echo "code=$([ -n "$code" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # The deployment files are not crate inputs, so no crate job ever reads them. `compose config`
+      # validates the Compose schema and interpolation without a daemon or an image build, and
+      # ubuntu-latest preinstalls the plugin. It runs on every changes job (well under a second)
+      # rather than on a path filter: a broken compose.yaml otherwise only fails on the host (#1419).
+      - name: Validate compose.yaml
+        run: docker compose config --quiet
+      - name: Workflow selector, metrics and agent hook tests
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 -I .claude/stats.py --test
+          python3 -I .claude/hooks/build_guard.py --test
+          python3 -I .claude/hooks/conflict_guard.py --test
+          python3 -I .claude/hooks/issues.py --test
 
   native:
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    env:
+      PACKAGES: ${{ needs.changes.outputs.native_packages }}
+    defaults:
+      run:
+        shell: bash
     name: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    # A full-coverage Windows run measured 28m36s on a cold-ish cache (#1041); the warm path is
+    # about 5m30s. 45 minutes leaves room for the main-only cache save without keeping a wedged
+    # job for GitHub's default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - run: rustup show   # installs the toolchain from rust-toolchain.toml
-      # Bevy's windowing (winit, wayland, x11) needs system libraries on Linux.
+      # Formatting needs neither the cache nor system libraries, so report it before either. A
+      # format-only failure used to wait until after Clippy and the whole test build (#1031).
       - if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
+      # Bevy's windowing (winit, wayland, x11) needs system libraries on Linux.
+      - if: runner.os == 'Linux' && contains(needs.changes.outputs.native_packages, '-p iwbtg-client')
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libudev-dev libasound2-dev
       - uses: Swatinem/rust-cache@v2
         with:
           # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --workspace --tests --locked -- -D warnings
-      - run: cargo test --workspace --locked
-      - if: runner.os == 'Linux'
-        run: cargo fmt --all -- --check
+      - run: cargo clippy $PACKAGES --tests --locked -- -D warnings
+      - run: cargo test $PACKAGES --locked
       # The golden package is in canonical form (`iwbtg pkg fmt`); the games repo runs the same check.
-      - if: runner.os == 'Linux'
+      - if: runner.os == 'Linux' && needs.changes.outputs.determinism == 'true'
         run: cargo run -p iwbtg-tools --locked -- pkg fmt crates/sim/tests/golden/one_room.pkg --check
 
-  wasm32:
+  # The two wasm targets build and test the same crates but share no build artifacts, so they run as
+  # two jobs in parallel (#961). Sequential, the golden corpus alone took 8 min under wasmtime plus
+  # 5 min under node on a cold cache, and every auto-merge waited for both. Each job still runs
+  # every command the single `wasm32` job ran; none of them was dropped or moved to main/nightly.
+  wasm32-wasip1:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.wasip1 == 'true'
     runs-on: ubuntu-latest
+    # Slowest measured 9m12s (cold cache, #961); the golden corpus alone can take 8 min.
+    timeout-minutes: 25
     env:
       # Tests read fixtures through absolute paths, so the whole file system is visible to them.
       CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
+      # The golden corpus is nearly all of this job's wall time, and the default `test` profile is
+      # unoptimized (#966). One level of optimization cuts the wasm run many-fold for seconds more
+      # compile. Only the opt-level changes: debug assertions and overflow checks stay on, and no
+      # local profile or `.cargo/config.toml` is touched.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -78,29 +134,109 @@ jobs:
           # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: bytecodealliance/actions/wasmtime/setup@v1
-      # wasm32-wasip1 aborts on panic, and the WP0 stubs that are not merged yet panic. The format
-      # integration tests that load whole packages (wp7a_*) go through them, so they run on
-      # native targets only until WP11 removes the stubs.
+      # wasm32-wasip1 aborts on panic. This job runs the library tests and the `fixtures` target;
+      # the package-loading modules (`load_*` in `tests/it.rs`) run on the native jobs.
+      # `cargo test -p iwbtg-sim` runs the golden corpus here too (tests/golden_corpus.rs): it is
+      # ~4 min under wasmtime on a warm cache and is most of this job's wall time.
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
       - run: cargo test -p iwbtg-format --lib --test fixtures --target wasm32-wasip1 --locked
-      - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
+
+  wasm32-unknown-unknown:
+    needs: changes
+    if: needs.changes.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    # Slowest measured 11m33s (cold cache, #961).
+    timeout-minutes: 25
+    env:
+      # The same optimized test profile as wasm32-wasip1 (#966). `cargo build` and Clippy use the
+      # dev profile, so only the test binaries below change.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - if: needs.changes.outputs.wasip1 == 'true'
+        run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
       # The client's browser build (it opens the UI gallery; docs/dev-setup.md, UI gallery in a browser).
       # Clippy compiles the whole crate, including the web-only code (storage.rs localStorage backend),
       # and replaces a plain `cargo build` of the client: same errors, no codegen, plus the lints.
       - run: cargo clippy -p iwbtg-client --target wasm32-unknown-unknown --locked -- -D warnings
-      # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file.
-      - name: Install wasm-bindgen CLI at the locked version
+      # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file;
+      # the composite action installs it (and the test runner) with a checksum.
+      - uses: ./.github/actions/wasm-bindgen
+        if: needs.changes.outputs.wasip1 == 'true'
+      # The golden corpus again, this time linked for wasm32-unknown-unknown and run under node.
+      # The public feel contracts run on every target too (#1169); they are compiled in, so they
+      # link and run here without the private repos.
+      - if: needs.changes.outputs.wasip1 == 'true'
+        run: cargo test -p iwbtg-sim --test determinism --test golden_corpus --test feel --target wasm32-unknown-unknown --locked
+
+  # The browser page a playtest uses (#29, #1078): the release wasm plus the pinned wasm-bindgen
+  # output, a compressed-size budget, and a headless-browser load of a fixture package. Selected
+  # only when the client itself (including crates/client/web/) changed, not for sim/format-only
+  # changes, which the wasm job above already lints.
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    # The cold release wasm build is the long part. `wasm-opt -Oz` adds its own pass (measured
+    # 12m34s for 125.6 MB on the dev PC, #1131); a slow two-core runner needs the larger cap.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Only main writes the cache: PR runs restore it and skip the slow save.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ./.github/actions/wasm-bindgen
+      - uses: ./.github/actions/wasm-opt
+      - name: Build the browser bundle
+        timeout-minutes: 20
         run: |
-          v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
-          cargo install wasm-bindgen-cli --version "$v" --locked
-      - run: cargo test -p iwbtg-sim --test wp1_determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+          cargo build -p iwbtg-client --release --target wasm32-unknown-unknown --locked
+          wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target/wasm32-unknown-unknown/release/iwbtg-client.wasm
+      # Shrink the wasm-bindgen output without changing the cargo profile or the native release
+      # build (#1131). Measured 125,551,438 -> 50,336,719 bytes raw and 20,168,221 -> 15,456,322
+      # bytes gzip on 2026-11-25.
+      - name: Optimize the wasm
+        timeout-minutes: 40
+        run: |
+          wasm-opt -Oz crates/client/web/pkg/iwbtg-client_bg.wasm -o crates/client/web/pkg/iwbtg-client_bg.wasm.opt
+          mv crates/client/web/pkg/iwbtg-client_bg.wasm.opt crates/client/web/pkg/iwbtg-client_bg.wasm
+      # The budget is the compressed wasm a server sends; scripts/check_web_size.py fails on growth.
+      - name: Check the compressed wasm size
+        timeout-minutes: 2
+        run: python3 -I scripts/check_web_size.py crates/client/web/pkg/iwbtg-client_bg.wasm
+      # A downloadable bundle should be playable without another build: the showcase is the one
+      # package a tester plays (docs/architecture/client/view.md, The showcase).
+      - name: Pack the showcase for the artifact
+        timeout-minutes: 5
+        run: cargo run -q -p iwbtg-tools --locked -- pkg pack crates/client/showcase.pkg -o crates/client/web/showcase.iwbz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: |
+            crates/client/web/index.html
+            crates/client/web/pkg
+            crates/client/web/showcase.iwbz
+          # The bundle is large; keep it long enough for a playtest, not forever.
+          retention-days: 7
+      # Packs the fixture, serves the page and asserts the browser logs the same gameplay hash
+      # native `iwbtg pkg pack` prints (scripts/web_smoke.py).
+      - name: Headless browser smoke test
+        timeout-minutes: 8
+        run: python3 -I scripts/web_smoke.py --web-dir crates/client/web --package-dir crates/client/tests/fixtures/clear.pkg
 
   # `iwbtg determinism report` on every target that can run the CLI; the next job requires the
   # three outputs to be byte-identical (docs/plans/sim-core.md 10.6). wasm32-unknown-unknown
   # checks the same lines through the `golden_corpus` test in the wasm32 job.
   determinism-report:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.determinism == 'true'
     name: determinism report (${{ matrix.target }})
     strategy:
       fail-fast: false
@@ -110,6 +246,8 @@ jobs:
           - {target: x86_64-unknown-linux-gnu, os: ubuntu-latest}
           - {target: wasm32-wasip1, os: ubuntu-latest}
     runs-on: ${{ matrix.os }}
+    # Slowest measured 2m39s (wasm32-wasip1), with room for a cold build.
+    timeout-minutes: 15
     env:
       CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
     steps:
@@ -130,8 +268,10 @@ jobs:
           path: report.txt
 
   determinism-compare:
-    needs: determinism-report
+    needs: [changes, determinism-report]
+    if: needs.changes.outputs.determinism == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -152,6 +292,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/cargo-deny
@@ -163,17 +304,38 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    # The prebuilt cargo-about download plus a regeneration; reuse scans the whole checkout.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/cargo-deny
         with:
           command: check licenses
+      - run: rustup show
+      - name: Install reuse
+        timeout-minutes: 3
+        run: |
+          pipx install "reuse[charset-normalizer]==6.3.0"
+          # pipx writes the console script here; later steps need it on PATH.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # Every tracked file carries licence information, in REUSE.toml or an in-file or `.license` tag (#976).
+      - name: Check REUSE compliance
+        timeout-minutes: 3
+        run: reuse lint
+      - uses: ./.github/actions/cargo-about
+      # The committed list must match Cargo.lock; a dependency change regenerates it in its PR.
+      - name: THIRD_PARTY_LICENSES is current
+        timeout-minutes: 10
+        run: |
+          cargo about generate --locked --output-file THIRD_PARTY_LICENSES about.hbs
+          git diff --exit-code -- THIRD_PARTY_LICENSES
 
   # The one required check: green when every job above passed or was skipped for a docs-only change.
   ci-ok:
-    needs: [changes, native, wasm32, determinism-report, determinism-compare, sim-deps, licenses]
+    needs: [changes, native, wasm32-wasip1, wasm32-unknown-unknown, web, determinism-report, determinism-compare, sim-deps, licenses]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}

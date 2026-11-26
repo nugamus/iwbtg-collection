@@ -1,31 +1,39 @@
 //! The window: a camera on the room and one Bevy sprite per visible sim instance.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use bevy::app::RunFixedMainLoopSystems;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use iwbtg_sim::script::PreparedScripts;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 pub(crate) mod order;
+pub(crate) mod output;
+pub(crate) mod transition;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
-use crate::package::{Package, sprite_images};
-use crate::shell::{AppScreen, InRun, LoadedPackage, RUN_ONLY, RunSteps};
+use crate::package::{Package, SpriteImage};
+use crate::shell::{AppScreen, InRun, RUN_ONLY, RunSteps};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
 pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
+
+/// The package's compiled scripts, prepared once at run start and reused by a quick retry
+/// (#1093B). `PreparedScripts` is `!Send` (its Rhai ASTs are `Rc`), so it lives beside `Game` as
+/// a non-send resource, never in the `Send + Sync` `RunStart`.
+struct Prepared(PreparedScripts);
 
 /// How the run started, so a retry can start it again the same way.
 #[derive(Resource)]
@@ -36,13 +44,48 @@ struct RunStart {
     fresh_seed: bool,
 }
 
-/// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
+/// The Bevy image of each sprite strip, by `SpriteId`, with the strip size. It starts as `None`s
+/// and [`upload_textures`] fills it a bounded chunk a frame, so a large package never stalls a
+/// frame on its GPU upload; systems that draw skip a sprite until its entry is `Some`.
 #[derive(Resource)]
 pub(crate) struct Textures(pub(crate) Vec<Option<(Handle<Image>, UVec2)>>);
 
-/// Which Bevy entity draws which instance.
+/// The package's decoded sprite strips, from the staged preparation (`shell::stage`) or the
+/// synchronous start (`shell::prepare`). [`setup`] takes them and queues the GPU upload.
+#[derive(Resource)]
+pub(crate) struct RunSprites(pub(crate) Vec<Option<SpriteImage>>);
+
+/// Sprite strips waiting to become Bevy images, uploaded a bounded chunk a frame
+/// ([`upload_textures`]).
+#[derive(Resource)]
+pub(crate) struct SpriteQueue {
+    sprites: Vec<Option<SpriteImage>>,
+    /// The first strip not uploaded yet.
+    next: usize,
+    /// The startup measurement's counters (#1489); `None` unless the page asked (`?measure`).
+    profile: Option<UploadProfile>,
+}
+
+/// How long [`upload_textures`] spent building images and how many frames it spanned (#1489).
+struct UploadProfile {
+    started: crate::time::Instant,
+    /// CPU time inside `upload_textures` (image construction and `Assets<Image>` insertions).
+    cpu: crate::time::Duration,
+    frames: u32,
+}
+
+/// The most sprite bytes [`upload_textures`] uploads in one frame (one sprite can exceed it).
+const UPLOAD_BUDGET_BYTES: usize = 8 << 20;
+
+/// Which Bevy entity draws which instance, with the frame (`stamp`) it was last seen in.
+///
+/// `sync_instances` stamps every instance it draws and then removes the entries a frame did not
+/// see: one map, one lookup and no per-frame scratch map (#1524).
 #[derive(Resource, Default)]
-struct Drawn(BTreeMap<InstId, Entity>);
+struct Drawn {
+    sprites: HashMap<InstId, (Entity, u64)>,
+    stamp: u64,
+}
 
 /// The size in pixels of the room the sim is in (kept in step with the sim's room).
 #[derive(Resource)]
@@ -114,6 +157,13 @@ pub enum FrameCap {
     Fps(u32),
     /// No limit.
     Unlimited,
+}
+
+impl Default for FrameCap {
+    /// The browser build's frame cap, the value clap gives when `--fps` is absent.
+    fn default() -> FrameCap {
+        FrameCap::Fps(60)
+    }
 }
 
 impl std::str::FromStr for FrameCap {
@@ -224,7 +274,7 @@ pub(crate) struct Stats {
 }
 
 /// The view's command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Clone, Default)]
 pub struct ViewArgs {
     /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
     /// rate either way.
@@ -243,6 +293,13 @@ pub struct ViewArgs {
     pub ranked: bool,
 }
 
+/// The view's place in the module list (main.rs): its flags. `view::run` builds the app itself.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ViewArgs;
+}
+
 /// How runs start: from the view's flags, the same for every package opened.
 #[derive(Resource, Clone, Copy)]
 struct RunConfig {
@@ -256,31 +313,54 @@ struct RunConfig {
 pub(crate) struct NewRun {
     game: Game,
     start: RunStart,
+    prepared: Prepared,
+    /// The package's decoded sprite strips, ready for [`setup`].
+    sprites: Vec<Option<SpriteImage>>,
 }
 
 impl NewRun {
-    /// Puts the sim and how it started in `world`.
+    /// Puts the sim, its prepared scripts, how it started and its decoded sprites in `world`.
     pub(crate) fn install(self, world: &mut World) {
         world.insert_non_send(self.game);
+        world.insert_non_send(self.prepared);
         world.insert_resource(self.start);
+        world.insert_resource(RunSprites(self.sprites));
     }
 }
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
 /// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
-/// `map` is the map id, `None` the first.
-pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result<NewRun, String> {
+/// `map` is the map id, `None` the first; `mode` is the run's play mode, `None` the command
+/// line's default (`--ranked` or Play original); `start` is an explicit start point (game
+/// select's practice pickers, #39), `None` the mode's own (a new game for Ranked, the save or a
+/// new game for Play original). `sprites` are `pkg`'s decoded strips
+/// (`package::sprite_images`), decoded by the caller off the UI thread when it can.
+pub(crate) fn new_run(
+    world: &World,
+    pkg: &Package,
+    map: Option<&str>,
+    mode: Option<iwbtg_sim::stripped::PlayMode>,
+    start: Option<iwbtg_sim::room::StartPoint>,
+    sprites: Vec<Option<SpriteImage>>,
+) -> Result<NewRun, String> {
+    use iwbtg_sim::stripped::PlayMode;
     let config = *world.resource::<RunConfig>();
+    let mode = mode.unwrap_or(if config.ranked {
+        PlayMode::Stripped
+    } else {
+        PlayMode::Original
+    });
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
-        // A ranked run is always a new game; Play original resumes the save file when there is
-        // one, else a new game in the game's `new_game_room`. The title and menus come with the
-        // rest of the client; until then the first thing on screen is the first room.
-        start: if config.ranked {
+        // Ranked (stripped) is always a new game; Play original resumes the save file when
+        // there is one, else a new game in the game's `new_game_room`. The title and menus come
+        // with the rest of the client; until then the first thing on screen is the first room.
+        // An explicit `start` (practice) wins over both.
+        start: start.unwrap_or(if mode == PlayMode::Stripped {
             iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
         } else {
             crate::savefile::start_point(&def)
-        },
+        }),
         // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps
         // it). A `--screenshot` check keeps seed 0, so it looks the same every time.
         seed: if config.fresh_seed {
@@ -289,19 +369,33 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
             0
         },
         dll_mode: DllMode::Model,
-        mode: if config.ranked {
-            iwbtg_sim::stripped::PlayMode::Stripped
-        } else {
-            iwbtg_sim::stripped::PlayMode::Original
-        },
+        mode,
         map: map.map(str::to_owned),
     };
+    // The sim constructors report a map error before compiling scripts. Keep that precedence:
+    // when the map is not there, let the unprepared constructor produce the error (it cannot
+    // succeed without a map).
+    if def.map_index(options.map.as_deref()).is_none() {
+        return Err(Sim::new_or_halted(Arc::clone(&def), options)
+            .err()
+            .map_or_else(
+                || "the game did not start: the map is missing".to_owned(),
+                |e| format!("the game did not start: {e}"),
+            ));
+    }
+    // Compile the scripts once and keep the artifact for the run, so a quick retry does not
+    // compile them again (#1093B).
+    let clock = crate::startup_profile::start();
+    let prepared = Sim::prepare(&def).map_err(|e| format!("the game did not start: {e}"))?;
+    crate::startup_profile::mark("script prepare", clock);
     // A start that halts (a script error in a start-room Create, #946) is a run whose sim is
     // halted from tick 0: it opens on the script error screen (`script_error/`), as a halt in
     // play does. Only a sim that cannot be set up is an error.
-    let sim = Sim::new_or_halted(Arc::clone(&def), options.clone())
+    let clock = crate::startup_profile::start();
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&def), options.clone(), &prepared)
         .map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
+    crate::startup_profile::mark("first room", clock);
     Ok(NewRun {
         game: Game { sim },
         start: RunStart {
@@ -309,6 +403,8 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
             options,
             fresh_seed: config.fresh_seed,
         },
+        prepared: Prepared(prepared),
+        sprites,
     })
 }
 
@@ -364,6 +460,7 @@ impl Plugin for ViewPlugin {
                 Update,
                 (
                     follow_view,
+                    upload_textures.before(DrawInstances),
                     (set_alpha, sync_instances.in_set(DrawInstances))
                         .chain()
                         .after(follow_view),
@@ -390,6 +487,12 @@ fn enter(world: &mut World) {
         ..default()
     });
     world.init_resource::<hud::SignText>();
+    // A `--hud-preview-sign` check raises the box at the run's start, as a sign that has just
+    // spoken leaves it, so the screenshot shows the latch rather than needing a real Up press.
+    if let Some(text) = crate::hud::sign_preview() {
+        world.resource_mut::<hud::SignText>().raise(text.to_owned());
+    }
+    world.init_resource::<transition::Transition>();
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
     // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
     // keeps it so after every tick.
@@ -403,13 +506,24 @@ fn enter(world: &mut World) {
 /// Closes the run's view; the sim goes last, after every module's own exit systems.
 fn leave(world: &mut World) {
     world.remove_resource::<Textures>();
+    world.remove_resource::<SpriteQueue>();
+    world.remove_resource::<RunSprites>();
     world.remove_resource::<Drawn>();
     world.remove_resource::<RoomSize>();
     world.remove_resource::<ViewRect>();
     world.remove_resource::<Previous>();
     world.remove_resource::<hud::SignText>();
+    world.remove_resource::<transition::Transition>();
     world.remove_resource::<RunStart>();
+    world.remove_non_send::<Prepared>();
     world.remove_non_send::<Game>();
+}
+
+/// The first package a client starts with: a path natively, or the browser's fetched files.
+enum First<'a> {
+    Path(&'a std::path::Path),
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    Package(crate::package::Package, std::path::PathBuf),
 }
 
 /// Opens the window and runs until it closes. `first` is the package from the command line,
@@ -417,6 +531,31 @@ fn leave(world: &mut World) {
 /// select screen. `plugins` adds the other modules' plugins (main.rs lists them).
 pub fn run(
     first: Option<&std::path::Path>,
+    args: ViewArgs,
+    trace_mode: bool,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(first.map(First::Path), args, trace_mode, plugins)
+}
+
+/// [`run`] with the first package already in memory: the browser fetched an `.iwbz`
+/// (docs/architecture/client/web.md, #29). `source` names it in messages, its URL.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub fn run_package(
+    first: Option<(crate::package::Package, std::path::PathBuf)>,
+    args: ViewArgs,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(
+        first.map(|(pkg, source)| First::Package(pkg, source)),
+        args,
+        false,
+        plugins,
+    )
+}
+
+fn run_inner(
+    first: Option<First>,
     args: ViewArgs,
     trace_mode: bool,
     plugins: impl FnOnce(&mut App),
@@ -436,17 +575,22 @@ pub fn run(
     // `shell::load` builds the first sim with it, before the plugins are in.
     app.insert_resource(view.config());
     let (title, (width, height)) = match first {
-        Some(path) => {
+        Some(First::Path(path)) => {
             crate::shell::load(app.world_mut(), path, trace_mode).map_err(|e| e.to_string())?;
-            let world = app.world();
-            let size = room_size(world.non_send::<Game>());
-            let id = world.resource::<RunStart>().def.id.clone();
-            (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
+            first_title(app.world())
+        }
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        Some(First::Package(pkg, source)) => {
+            crate::shell::load_package(app.world_mut(), pkg, source).map_err(|e| e.to_string())?;
+            first_title(app.world())
         }
         None => (crate::shell::select::TITLE.to_owned(), (800, 608)),
     };
+    let clock = crate::startup_profile::start();
     app.add_plugins(
         DefaultPlugins
+            // Drops the ICU4X segmentation notice (logging.rs, #734).
+            .set(crate::logging::log_plugin())
             .set(ImagePlugin::default_nearest())
             .set(WindowPlugin {
                 primary_window: Some(Window {
@@ -464,6 +608,7 @@ pub fn run(
     .insert_resource(Cap(cap))
     .add_systems(Last, limit_frames);
     plugins(&mut app);
+    crate::startup_profile::mark("bevy init", clock);
     if let Some(path) = screenshot {
         // `screen` pins the size when `--window` gives one (`ShotSize`).
         add_screenshot(&mut app, path, None);
@@ -471,12 +616,19 @@ pub fn run(
     shot_result(app.run())
 }
 
-/// The game camera and the sprite images.
+/// The window title and size of the first package, which is already the loaded one.
+fn first_title(world: &World) -> (String, (u32, u32)) {
+    let size = room_size(world.non_send::<Game>());
+    let id = world.resource::<RunStart>().def.id.clone();
+    (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
+}
+
+/// The game camera and the sprite images' place. The strips were decoded before the run opened
+/// (`RunSprites`); [`upload_textures`] moves them into `Assets<Image>` a chunk a frame.
 fn setup(
     mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    loaded: Res<LoadedPackage>,
     room: Res<RoomSize>,
+    mut sprites: ResMut<RunSprites>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
     commands.spawn((
@@ -496,27 +648,84 @@ fn setup(
         }),
         RUN_ONLY,
     ));
-    let textures = sprite_images(&loaded.pkg.files)
-        .into_iter()
-        .map(|s| {
-            s.map(|s| {
-                let size = UVec2::new(s.size.0, s.size.1);
-                let image = Image::new(
-                    Extent3d {
-                        width: s.size.0,
-                        height: s.size.1,
-                        depth_or_array_layers: 1,
-                    },
-                    TextureDimension::D2,
-                    s.rgba,
-                    TextureFormat::Rgba8UnormSrgb,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-                (images.add(image), size)
-            })
-        })
-        .collect();
-    commands.insert_resource(Textures(textures));
+    let sprites = std::mem::take(&mut sprites.0);
+    commands.insert_resource(Textures(vec![None; sprites.len()]));
+    commands.insert_resource(SpriteQueue {
+        sprites,
+        next: 0,
+        profile: crate::startup_profile::enabled().then(|| UploadProfile {
+            started: crate::time::Instant::now(),
+            cpu: crate::time::Duration::ZERO,
+            frames: 0,
+        }),
+    });
+}
+
+/// Moves queued sprite strips into `Assets<Image>`, at most [`UPLOAD_BUDGET_BYTES`] a frame, so
+/// a package with many big sprites never stalls the first frame of its run. Removes the queue when
+/// the last strip is in; the loading card waits for it before it starts [playing](crate::loading).
+fn upload_textures(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut queue: Option<ResMut<SpriteQueue>>,
+    mut textures: ResMut<Textures>,
+) {
+    let Some(queue) = queue.as_deref_mut() else {
+        return;
+    };
+    let clock = queue
+        .profile
+        .as_ref()
+        .map(|_| crate::time::Instant::now());
+    let mut bytes = 0usize;
+    while queue.next < queue.sprites.len() {
+        let i = queue.next;
+        if let Some(s) = queue.sprites[i].take() {
+            bytes += s.rgba.len();
+            let size = UVec2::new(s.size.0, s.size.1);
+            let image = Image::new(
+                Extent3d {
+                    width: s.size.0,
+                    height: s.size.1,
+                    depth_or_array_layers: 1,
+                },
+                TextureDimension::D2,
+                s.rgba,
+                TextureFormat::Rgba8UnormSrgb,
+                RenderAssetUsages::RENDER_WORLD,
+            );
+            textures.0[i] = Some((images.add(image), size));
+        }
+        queue.next += 1;
+        if bytes >= UPLOAD_BUDGET_BYTES && queue.next < queue.sprites.len() {
+            note_upload_frame(queue, clock);
+            return;
+        }
+    }
+    note_upload_frame(queue, clock);
+    // The GPU transfer itself happens in the renderer, not here; this is the CPU image build and
+    // the frame span it took (docs/architecture/client/web.md, Measuring startup).
+    if let Some(profile) = queue.profile.as_ref() {
+        crate::startup_profile::log(&format!(
+            "startup phase sprite build (cpu): {:.3} ms over {} frames",
+            profile.cpu.as_secs_f64() * 1000.0,
+            profile.frames
+        ));
+        crate::startup_profile::log(&format!(
+            "startup phase sprite queue (wall): {:.3} ms",
+            profile.started.elapsed().as_secs_f64() * 1000.0
+        ));
+        crate::startup_profile::total("sprites ready");
+    }
+    commands.remove_resource::<SpriteQueue>();
+}
+
+/// Adds one `upload_textures` call to the queue's startup counters (#1489).
+fn note_upload_frame(queue: &mut SpriteQueue, clock: Option<crate::time::Instant>) {
+    if let (Some(clock), Some(profile)) = (clock, queue.profile.as_mut()) {
+        profile.cpu += clock.elapsed();
+        profile.frames += 1;
+    }
 }
 
 /// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
@@ -594,16 +803,18 @@ fn collect_pad(
 /// tick's `follow_room_speed`.
 pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let start = world.resource::<RunStart>();
+    // The scripts were prepared at run start; a retry reuses that artifact (#1093B).
+    let prepared = world.non_send::<Prepared>();
     let mut options = start.options.clone();
     if start.fresh_seed {
         options.seed = crate::replays::fresh_seed();
     }
     // A start that halts comes back halted, so the script error screen opens again (#946).
-    let sim = Sim::new_or_halted(Arc::clone(&start.def), options)
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&start.def), options, &prepared.0)
         .map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
-    let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
-    for entity in drawn.into_values() {
+    let drawn = std::mem::take(&mut *world.resource_mut::<Drawn>());
+    for (entity, _) in drawn.sprites.into_values() {
         world.despawn(entity);
     }
     {
@@ -613,7 +824,7 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     }
     // Keys held through the retry stay held; edges from before it are dropped.
     world.resource_mut::<Collector>().take_frame();
-    world.resource_mut::<hud::SignText>().0 = None;
+    world.resource_mut::<hud::SignText>().clear();
     Ok(())
 }
 
@@ -627,9 +838,11 @@ pub(crate) fn test_world(pkg: &Package) -> World {
         mode: iwbtg_sim::stripped::PlayMode::Original,
         map: None,
     };
-    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let prepared = Sim::prepare(&pkg.def).unwrap();
+    let sim = Sim::new_prepared(Arc::clone(&pkg.def), options.clone(), &prepared).unwrap();
     let mut world = World::new();
     world.insert_non_send(Game { sim });
+    world.insert_non_send(Prepared(prepared));
     world.insert_resource(RunStart {
         def: Arc::clone(&pkg.def),
         options,
@@ -639,6 +852,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     world.init_resource::<Previous>();
     world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
     world.init_resource::<hud::SignText>();
+    world.init_resource::<transition::Transition>();
     world
 }
 
@@ -656,9 +870,12 @@ pub(crate) fn tick(
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
+    mut transition: ResMut<transition::Transition>,
     mut replay: Option<ResMut<crate::replays::Recorder>>,
+    mut phases: Option<ResMut<crate::perf::Phases>>,
 ) {
     if previous.on {
+        let clock = phases.is_some().then(Instant::now);
         let world = game.sim.world();
         previous.room = Some(world.room);
         previous.view = game
@@ -672,6 +889,9 @@ pub(crate) fn tick(
             .filter(|i| i.alive)
             .map(|i| (i.id, (i.m.x().get(), i.m.y().get())))
             .collect();
+        if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+            draw.snapshot += clock.elapsed().as_secs_f64();
+        }
     }
     let frame = collector.take_frame();
     let was_running = game.sim.world().status == SimStatus::Running;
@@ -682,9 +902,7 @@ pub(crate) fn tick(
     if step.status == SimStatus::Running {
         stats.ticks += 1;
         let output = &game.sim.world().output;
-        hud::note_tick(&mut sign, output);
-        audio.push(Instant::now(), output);
-        shake.tick(output);
+        output::drain(output, &mut sign, &mut audio, &mut shake, Some(&mut transition), true);
     }
 }
 
@@ -716,27 +934,37 @@ fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fi
 }
 
 /// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
-fn limit_frames(cap: Res<Cap>, mut last: Local<Option<Instant>>) {
-    let FrameCap::Fps(fps) = cap.0 else {
-        *last = None;
-        return;
-    };
-    let target = Duration::from_secs_f64(1.0 / f64::from(fps));
-    let start = *last.get_or_insert_with(Instant::now);
-    let spin = Duration::from_micros(1500);
-    loop {
-        let spent = start.elapsed();
-        if spent >= target {
-            break;
-        }
-        let left = target - spent;
-        if left > spin {
-            std::thread::sleep(left - spin);
-        } else {
-            std::hint::spin_loop();
-        }
+fn limit_frames(cap: Res<Cap>, last: Local<Option<Instant>>) {
+    // A browser paces the window with animation frames, and `std::thread::sleep` panics on
+    // wasm32-unknown-unknown; the sim's fixed clock does not depend on the frame rate anyway.
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        let _ = (cap, last);
     }
-    *last = Some(Instant::now());
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let mut last = last;
+        let FrameCap::Fps(fps) = cap.0 else {
+            *last = None;
+            return;
+        };
+        let target = Duration::from_secs_f64(1.0 / f64::from(fps));
+        let start = *last.get_or_insert_with(Instant::now);
+        let spin = Duration::from_micros(1500);
+        loop {
+            let spent = start.elapsed();
+            if spent >= target {
+                break;
+            }
+            let left = target - spent;
+            if left > spin {
+                std::thread::sleep(left - spin);
+            } else {
+                std::hint::spin_loop();
+            }
+        }
+        *last = Some(Instant::now());
+    }
 }
 
 /// Makes the entities match the sim's instances: spawn, move, frame, remove. Each one's z is its
@@ -753,6 +981,7 @@ fn sync_instances(
     mut drawn: ResMut<Drawn>,
     previous: Res<Previous>,
     ladder: Option<Res<order::Ladder>>,
+    mut phases: Option<ResMut<crate::perf::Phases>>,
     mut query: Query<(&mut Sprite, &mut Transform)>,
 ) {
     let Some(textures) = textures else { return };
@@ -760,10 +989,20 @@ fn sync_instances(
     let world = game.sim.world();
     let alpha = previous.alpha;
     let same_room = previous.room == Some(world.room);
-    let mut alive = BTreeMap::new();
+    let stamp = drawn.stamp.wrapping_add(1);
+    drawn.stamp = stamp;
     let none = order::Ladder::default();
     let ladder = ladder.as_deref().unwrap_or(&none);
-    for (id, z) in order::instance_z(world, ladder, |i| i.img.sprite().is_some()) {
+    // `--perf`: time the draw order and, below, the loop (with the interpolation lookups inside
+    // it) and the removal pass (#1524).
+    let clock = phases.is_some().then(Instant::now);
+    let order = order::instance_z(world, ladder, |i| i.img.sprite().is_some());
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.order += clock.elapsed().as_secs_f64();
+    }
+    let clock = phases.is_some().then(Instant::now);
+    let (mut spawned, mut updated) = (0u32, 0u32);
+    for (id, z) in order {
         let Some(inst) = world.get(id) else { continue };
         let Some(sprite_id) = inst.img.sprite() else {
             continue;
@@ -776,6 +1015,7 @@ fn sync_instances(
         };
         let frame = u32::from(inst.img.subimage(sprite_def.frames).unwrap_or(0));
         let cur = (inst.m.x().get(), inst.m.y().get());
+        let blend_clock = (previous.on && phases.is_some()).then(Instant::now);
         let (px, py) = if previous.on {
             blend(
                 previous.pos.get(&inst.id).copied().filter(|_| same_room),
@@ -785,6 +1025,9 @@ fn sync_instances(
         } else {
             cur
         };
+        if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), blend_clock) {
+            draw.blend += clock.elapsed().as_secs_f64();
+        }
         let (rect, transform) = place_sprite(
             sprite_def,
             frame,
@@ -796,7 +1039,7 @@ fn sync_instances(
             room.0,
         );
         let color = Color::srgba(1.0, 1.0, 1.0, inst.img.alpha().get() as f32);
-        let entity = match drawn.0.get(&inst.id).copied() {
+        let entity = match drawn.sprites.get(&inst.id).map(|(entity, _)| *entity) {
             Some(entity) => {
                 if let Ok((mut sprite, mut t)) = query.get_mut(entity) {
                     sprite.image = handle.clone();
@@ -804,29 +1047,46 @@ fn sync_instances(
                     sprite.color = color;
                     *t = transform;
                 }
+                updated += 1;
                 entity
             }
-            None => commands
-                .spawn((
-                    Sprite {
-                        image: handle.clone(),
-                        rect: Some(rect),
-                        color,
-                        ..default()
-                    },
-                    transform,
-                    RUN_ONLY,
-                ))
-                .id(),
+            None => {
+                spawned += 1;
+                commands
+                    .spawn((
+                        Sprite {
+                            image: handle.clone(),
+                            rect: Some(rect),
+                            color,
+                            ..default()
+                        },
+                        transform,
+                        RUN_ONLY,
+                    ))
+                    .id()
+            }
         };
-        alive.insert(inst.id, entity);
+        drawn.sprites.insert(inst.id, (entity, stamp));
     }
-    for (id, entity) in &drawn.0 {
-        if !alive.contains_key(id) {
-            commands.entity(*entity).despawn();
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.sync += clock.elapsed().as_secs_f64();
+    }
+    let clock = phases.is_some().then(Instant::now);
+    let mut removed = 0u32;
+    drawn.sprites.retain(|_, (entity, seen)| {
+        if *seen == stamp {
+            return true;
         }
+        commands.entity(*entity).despawn();
+        removed += 1;
+        false
+    });
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.despawn += clock.elapsed().as_secs_f64();
+        draw.spawned += spawned;
+        draw.updated += updated;
+        draw.removed += removed;
     }
-    drawn.0 = alive;
 }
 
 /// Where frame `frame` of a sprite drawn at room position `at` (GM: y down from the room corner)
@@ -1170,5 +1430,27 @@ mod tests {
             ..view(0.0, 0.0)
         };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
+    }
+
+    /// A quick retry keeps the artifact prepared at run start instead of compiling the scripts
+    /// again (#1093B). A rewrite that returned to `Sim::new_or_halted` would replace it.
+    #[test]
+    fn a_retry_keeps_the_prepared_scripts() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = test_world(&pkg);
+        let before: *const Prepared = world.non_send::<Prepared>();
+        // Step the run so the retry has something to reset.
+        world
+            .non_send_mut::<Game>()
+            .sim
+            .step(iwbtg_sim::input::InputFrame::EMPTY);
+        restart_run(&mut world).unwrap();
+        let after: *const Prepared = world.non_send::<Prepared>();
+        assert!(
+            std::ptr::eq(before, after),
+            "the prepared artifact is kept, not rebuilt"
+        );
+        assert_eq!(world.non_send::<Game>().sim.world().tick, 0);
     }
 }

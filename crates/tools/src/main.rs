@@ -1,14 +1,18 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture/cli.md, The iwbtg CLI).
 //!
-//! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
-//! `replay`.
+//! Commands are described in docs/architecture/cli.md.
 
+mod assets_cmd;
+mod baseline;
 mod case;
 mod determinism_cmd;
 mod engine_cmd;
+mod feel_cmd;
 mod import;
 mod pack_cmd;
-mod pkg_cmd;
+mod profile_cmd;
+mod publish_cmd;
+mod removals_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -48,6 +52,11 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Feel contracts: run one, or sweep a directory against a baseline.
+    #[command(subcommand)]
+    Feel(FeelCommand),
+    /// Profiles a replay: script budget, instances and ms per tick.
+    Profile(profile_cmd::ProfileArgs),
     /// Rooms of a package.
     #[command(subcommand)]
     Room(RoomCommand),
@@ -60,6 +69,27 @@ enum Command {
     /// The script language.
     #[command(subcommand)]
     Script(ScriptCommand),
+    /// Assets across the games repo.
+    #[command(subcommand)]
+    Assets(AssetsCommand),
+    /// Signed removal lists for the catalog (docs/server.md, Removal list).
+    #[command(subcommand)]
+    Removals(removals_cmd::RemovalsCommand),
+}
+
+#[derive(Subcommand)]
+enum AssetsCommand {
+    /// Writes the global asset index keyed by content hash (docs/content.md, Assets).
+    Index {
+        /// Games repo folder: one package folder per game, each with game.toml.
+        dir: PathBuf,
+        /// Write the index here instead of `<dir>/assets-index.toml`.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Change nothing: exit 1 when the index is missing or would change.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -182,6 +212,42 @@ enum TraceCommand {
 }
 
 #[derive(Subcommand)]
+enum FeelCommand {
+    /// Runs one contract and prints its verdict and every mismatch.
+    Run {
+        /// Contract file.
+        contract: PathBuf,
+        /// The games repo: package folders for contracts that name a package id, looked up first.
+        #[arg(long)]
+        packages: Option<PathBuf>,
+        /// Converter output (`$IWBTG_RESEARCH/build/packages`), looked up when the games repo
+        /// does not have the package; loaded like the trace sweep (unmapped kinds inert).
+        #[arg(long)]
+        converter_packages: Option<PathBuf>,
+    },
+    /// Runs every contract below a folder and compares the statuses with a baseline.
+    Sweep {
+        /// Contracts root: `*.toml` files, each `id` equal to its path below the root.
+        #[arg(long)]
+        contracts: PathBuf,
+        /// The games repo: package folders for contracts that name a package id, looked up first.
+        #[arg(long)]
+        packages: Option<PathBuf>,
+        /// Converter output (`$IWBTG_RESEARCH/build/packages`), looked up when the games repo
+        /// does not have the package; loaded like the trace sweep (unmapped kinds inert). A
+        /// package in neither source is SKIP.
+        #[arg(long)]
+        converter_packages: Option<PathBuf>,
+        /// Baseline file of `<area>/<name> <STATUS>` lines to compare with.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// Rewrite the baseline with this run's statuses instead of comparing.
+        #[arg(long, requires = "baseline")]
+        bless: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum PkgCommand {
     /// Validates and loads a package.
     Check {
@@ -198,6 +264,17 @@ enum PkgCommand {
         /// Change nothing: list the files that would change and exit 1 if there are any.
         #[arg(long)]
         check: bool,
+    },
+    /// Rewrites a package folder to the current format (docs/format/v1.md); the game plays the same.
+    Upgrade {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Change nothing: list the files that would change and exit 1 if there are any.
+        #[arg(long)]
+        check: bool,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
     },
     /// Checks a package and writes it as one `.iwbz` file (docs/format/iwbz.md).
     Pack {
@@ -216,6 +293,17 @@ enum PkgCommand {
         file: PathBuf,
         /// The folder to write.
         dir: PathBuf,
+    },
+    /// Packs a package, writes `<content_hash>.iwbz` and updates `catalog.json` (#806).
+    Publish {
+        /// Package folder or `.iwbz` file.
+        pkg: PathBuf,
+        /// Folder holding `catalog.json` and `files/`, as the server's `--catalog-dir` reads it.
+        #[arg(long)]
+        catalog_dir: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
     },
     /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
     Hash {
@@ -278,7 +366,7 @@ fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
 /// The cases folder: `--cases`, else IWBTG_CASES, else `crates/tools/cases` in the current folder
 /// or the nearest folder above it. Decided at run time, never from the build machine's paths, so
 /// a moved checkout and a wasm32 build (with the folder preopened) work.
-fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+pub(crate) fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
     let env = std::env::var_os("IWBTG_CASES").map(PathBuf::from);
     let cwd = std::env::current_dir().ok();
     resolve_cases(arg, env, cwd.as_deref())
@@ -303,6 +391,16 @@ fn resolve_cases(
     Err(ToolError::Message(format!(
         "no cases folder: pass --cases <dir>, set IWBTG_CASES, or run inside a checkout that has {CASES_IN_CHECKOUT}"
     )))
+}
+
+/// Runs one of the package commands of `iwbtg_format::pkg_cmd` (data lane, #1120) on the package
+/// folder or `.iwbz` at `dir`, read with its engine pack bundled, writing to stdout.
+fn pkg_cmd(
+    dir: &Path,
+    command: impl FnOnce(&iwbtg_format::PackageFiles, &mut std::io::StdoutLock<'static>) -> std::io::Result<bool>,
+) -> Result<bool, ToolError> {
+    let files = trace_cmd::load_package(dir)?;
+    command(&files, &mut std::io::stdout().lock()).map_err(|e| ToolError::Message(e.to_string()))
 }
 
 /// Runs a command; `Ok(false)` means it ran and found problems.
@@ -357,16 +455,46 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             import::main(&trace, &pkg, research.as_deref().map(Path::new), &cases, force)?;
             Ok(true)
         }
-        Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
-        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
-        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::check(files, trace_mode, out)
+        }),
+        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::fmt(&pkg, files, check, out)
+        }),
+        Command::Pkg(PkgCommand::Upgrade {
+            pkg,
+            check,
+            trace_mode,
+        }) => {
+            if pack_cmd::is_iwbz(&pkg) {
+                return Err(ToolError::Message(format!(
+                    "{}: upgrade the package folder, then pack it again",
+                    pkg.display()
+                )));
+            }
+            pkg_cmd(&pkg, |files, out| {
+                iwbtg_format::pkg_cmd::upgrade(&pkg, files, check, trace_mode, out)
+            })
+        }
+        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::hash(files, trace_mode, out)
+        }),
         Command::Pkg(PkgCommand::Pack { pkg, out, trace_mode }) => {
             pack_cmd::pack_main(&pkg, out.as_deref(), trace_mode)
         }
         Command::Pkg(PkgCommand::Unpack { file, dir }) => pack_cmd::unpack_main(&file, &dir),
+        Command::Pkg(PkgCommand::Publish {
+            pkg,
+            catalog_dir,
+            trace_mode,
+        }) => publish_cmd::publish_main(&pkg, &catalog_dir, trace_mode),
+        Command::Removals(command) => removals_cmd::run(command),
         Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)
+        }
+        Command::Assets(AssetsCommand::Index { dir, out, check }) => {
+            assets_cmd::index_main(&dir, out.as_deref(), check)
         }
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
@@ -397,6 +525,36 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             };
             engine_cmd::main(&pkg, to, trace_mode, Some(traces))
         }
+        Command::Profile(args) => {
+            profile_cmd::main(&args)?;
+            Ok(true)
+        }
+        Command::Feel(FeelCommand::Run {
+            contract,
+            packages,
+            converter_packages,
+        }) => feel_cmd::run_main(
+            &contract,
+            feel_cmd::Sources {
+                games: packages.as_deref(),
+                converter: converter_packages.as_deref(),
+            },
+        ),
+        Command::Feel(FeelCommand::Sweep {
+            contracts,
+            packages,
+            converter_packages,
+            baseline,
+            bless,
+        }) => feel_cmd::sweep_main(
+            &contracts,
+            feel_cmd::Sources {
+                games: packages.as_deref(),
+                converter: converter_packages.as_deref(),
+            },
+            baseline.as_deref(),
+            bless,
+        ),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
@@ -409,35 +567,14 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
     }
 }
 
-/// The work package named by a WP0 stub panic (`not implemented: WP6a: world::init_state`).
-fn unmerged_stub(payload: &(dyn std::any::Any + Send)) -> Option<String> {
-    let msg = payload
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| payload.downcast_ref::<&str>().copied())?;
-    msg.strip_prefix("not implemented: ")
-        .filter(|rest| rest.starts_with("WP"))
-        .map(str::to_owned)
-}
-
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    // Until every work package has merged, running the sim can reach a WP0 stub. Say so plainly
-    // instead of ending with a bare panic.
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(cli))) {
-        Ok(Ok(true)) => ExitCode::SUCCESS,
-        Ok(Ok(false)) => ExitCode::from(1),
-        Ok(Err(e)) => {
+    match run(Cli::parse()) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(e) => {
             eprintln!("error: {e}");
             ExitCode::from(2)
         }
-        Err(payload) => match unmerged_stub(payload.as_ref()) {
-            Some(stub) => {
-                eprintln!("error: this needs {stub}, which is not merged yet");
-                ExitCode::from(3)
-            }
-            None => std::panic::resume_unwind(payload),
-        },
     }
 }
 

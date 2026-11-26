@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Classic shelf</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Classic: a shelf of games, not a list of maps. One cover per game (no child entries: the game's own difficulty select runs in the game). The picked game's art fills the screen. Saves are not handled here: Play opens the game's own title screen, where New game, Continue and its file select work as in the original. The right side shows progress the client saw (stages reached, deaths), never a save. Left / Right move along the shelf (covers slide 400 ms OutQuint, the picked one grows 1.15x with OutElastic); Enter plays. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" scene="castle" blur="6" dim="0.22" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.82) 0%, rgba(8,9,14,.35) 45%, rgba(8,9,14,.55) 100%)"></div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 600px; background: linear-gradient(0deg, rgba(8,9,14,.96) 30%, rgba(8,9,14,0) 100%)"></div>
+
+  <!-- hero: the picked game -->
+  <div style="position: absolute; left: 64px; top: 104px; width: 1000px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; gap: 8px; align-items: center">
+      <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #8ecbff; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b1a2a">Ranked</span></div>
+      <span style="padding-left: 6px; font-size: 16px; font-weight: 600; color: #e3e5ee">4 difficulties, picked in the game · 7 sections</span>
+    </div>
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 92px; font-weight: 700; font-style: italic; line-height: .9; letter-spacing: -.01em; text-shadow: 0 4px 28px rgba(0,0,0,.55)">I wanna be the Kaenbyou</span>
+    <div style="display: flex; align-items: center; gap: 10px; font-size: 18px; color: #dfe2ec">
+      <div style="width: 26px; height: 26px; border-radius: 13px; background: hsl(48 70% 52%); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #10121a">K</div>
+      <span>by <span style="font-weight: 700; color: #ffffff">Kira☆~Kira☆~</span> · [year]</span>
+      <span style="padding-left: 10px; display: flex; gap: 8px">
+        <sc-for list="{{tags}}" as="tg" hint-placeholder-count="3">
+          <span style="height: 26px; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.14); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 500">{{tg}}</span></span>
+        </sc-for>
+      </span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin-top: 14px; width: 860px">
+      <sc-for list="{{stats}}" as="s" hint-placeholder-count="5">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{s.k}}</span>
+          <span style="font-size: 24px; font-weight: 600; white-space: nowrap">{{s.v}}</span>
+          <span style="font-size: 13px; color: #a2a8bc; white-space: nowrap">{{s.d}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- your progress, from what the client saw you play; the game keeps its own saves -->
+  <div style="position: absolute; left: 1210px; top: 96px; width: 660px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 8px 0 4px">
+      <span style="font-size: 20px; font-weight: 700">Your progress</span>
+      <span style="font-size: 14px; color: #a2a8bc">last played 2 days ago</span>
+    </div>
+    <div style="padding: 4px 4px 0"><dc-import name="Route" len="standard" variant="progress" mode="classic" w="652" head="{{ false }}" hint-size="652px,72px"></dc-import></div>
+    <span style="font-size: 14px; color: #c9cde0; padding-left: 4px">Furthest: <span style="font-weight: 700; color: #ffffff">the boss</span> · finished once, 14 Sep · sections from the package</span>
+    <div style="display: flex; gap: 10px; margin-top: 8px; padding-left: 6px">
+      <button type="button" style="all: unset; flex: 1; height: 64px; border-radius: 10px; background: #8f7bff; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: 0 10px 28px rgba(143,123,255,.4)"><span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; font-size: 23px; font-weight: 700">Play<span style="font-size: 14px; font-weight: 600; opacity: .9">opens the game's title screen</span></span></button>
+      <button type="button" style="all: unset; height: 64px; padding: 0 24px; border-radius: 10px; background: rgba(255,255,255,.14); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 700">Details</span></button>
+    </div>
+    <span style="padding: 2px 0 0 10px; font-size: 14px; line-height: 1.5; color: #a2a8bc">New game, Continue and the file select are the game's own, exactly as in the original. Its saves stay in the game's save folder; the client never picks a save for you.</span>
+  </div>
+
+  <!-- the shelf -->
+  <div style="position: absolute; left: 64px; top: 556px; right: 64px; display: flex; align-items: center; gap: 10px">
+    <span style="font-size: 20px; font-weight: 700; padding-right: 10px">Library</span>
+    <label for="shelf-search" style="width: 380px; height: 42px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg)">
+      <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; padding: 0 16px; width: 100%">
+        <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>
+        <input id="shelf-search" type="search" placeholder="Search 20 games" style="all: unset; flex: 1; font-size: 15px; color: #f3f4f8">
+      </span>
+    </label>
+    <sc-for list="{{chips}}" as="c" hint-placeholder-count="4">
+      <button type="button" style="all: unset; height: 34px; padding: 0 14px; border-radius: 10px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px; white-space: nowrap"><span style="color: #a2a8bc">{{c.k}}</span><span style="font-weight: 600">{{c.v}}</span></span></button>
+    </sc-for>
+  </div>
+  <div style="position: absolute; left: 40px; top: 616px; display: flex; align-items: flex-end; gap: 18px; height: 318px">
+    <sc-for list="{{covers}}" as="c" hint-placeholder-count="8">
+      <div style="position: relative; width: {{c.w}}px; height: {{c.h}}px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); box-shadow: {{c.shadow}}; flex: none; opacity: {{c.op}}">
+        <div style="position: absolute; left: -40px; top: 0; width: {{c.artW}}px; height: {{c.h}}px; transform: skewX(11.31deg)">
+          <dc-import name="Backdrop" w="{{c.artW}}px" h="{{c.h}}px" hue="{{c.hue}}" scene="{{c.scene}}" blur="0" dim="0" tag="none" hint-size="280px,300px"></dc-import>
+        </div>
+        <div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(8,9,14,.94) 12%, rgba(8,9,14,.1) 62%)"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: {{c.band}}"></div>
+        <div style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 0 18px 18px 26px">
+          <span style="font-size: {{c.size}}px; font-weight: 700; line-height: 1.1">{{c.title}}</span>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: {{c.ink}}"><sc-if value="{{c.done}}" hint-placeholder-val="{{ false }}"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="11" height="13" style="image-rendering: pixelated"></sc-if>{{c.save}}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- footer -->
+  <div style="position: absolute; left: 64px; right: 64px; bottom: 26px; display: flex; align-items: flex-end; gap: 12px">
+    <button type="button" style="all: unset; height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2L4 7l5 5" stroke="#f3f4f8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>Back</span></button>
+    <button type="button" style="all: unset; height: 52px; padding: 0 24px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 600">Details</span></button>
+    <span style="flex: 1"></span>
+    <div style="align-self: center"><dc-import name="Hints" items="A:Play|X:Details|Y:Favourite|LB/RB:Mode|B:Back" hint-size="600px,40px"></dc-import></div>
+    <span style="flex: 1"></span>
+    <div style="width: 420px; height: 108px"><dc-import name="ProfileCard" variant="footer" mode="classic" hint-size="420px,108px"></dc-import></div>
+  </div>
+
+  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="classic" hint-size="1920px,56px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const G = [
+      ['I wanna eat the lemon', 52, 'forest', 'Finished · Hard', true], ['I wanna be the Little runner', 140, 'forest', 'Not started', false],
+      ['I wanna help the Fairy tale', 300, 'city', 'Played · Stage 2', false], ['I wanna be the Kaenbyou', 250, 'castle', 'Played · Stage 7', false],
+      ['I wanna be the Machinary', 190, 'cave', 'Not started', false], ['I wanna go the Spook House', 20, 'sea', 'Finished · Normal', true],
+      ['I Wanna Rely The Needle 4.2', 330, 'city', 'Played · Stage 3', false], ['I wanna get the Rainbow feather', 95, 'forest', 'Not started', false],
+    ];
+    const covers = G.map(([title, hue, scene, save, done], i) => {
+      const sel = i === 3;
+      const w = sel ? 236 : 200, h = sel ? 318 : 270;
+      return { title, hue, scene, save, done, w, h, artW: w + 80, size: sel ? 21 : 18, op: i === 7 ? 0.6 : 1,
+        shadow: sel ? '0 0 0 3px #b9adff, 0 18px 40px rgba(0,0,0,.55)' : '0 8px 20px rgba(0,0,0,.35)',
+        band: sel ? '#8f7bff' : done ? 'rgba(255,255,255,.5)' : save.startsWith('Played') ? 'rgba(143,123,255,.6)' : 'transparent',
+        ink: save === 'Not started' ? '#a2a8bc' : '#e3e5ee' };
+    });
+    return {
+      covers,
+      tags: ['Needle', 'Avoidance', 'Adventure'],
+      stats: [
+        { k: 'Time played', v: '15:59:12', d: 'in Classic' }, { k: 'Deaths', v: '5,194', d: '412 this week' }, { k: 'Finished', v: 'Once', d: '14 Sep' },
+        { k: 'Furthest', v: 'The boss', d: 'section 7 of 7' }, { k: 'Last session', v: '1:12:05', d: '412 deaths' },
+      ],
+      diffs: [['Medium', false], ['Hard', true], ['Very Hard', false], ['Impossible', false]].map(([name, done]) => ({ name, done, bg: done ? 'rgba(143,123,255,.3)' : 'rgba(255,255,255,.08)', ink: done ? '#ffffff' : '#a2a8bc', ring: done ? 'inset 0 0 0 1.5px rgba(185,173,255,.8)' : 'none' })),
+      chips: [{ k: 'Sort', v: 'Last played ▾', bg: 'rgba(12,14,22,.72)' }, { k: '', v: 'Played', bg: 'rgba(255,255,255,.2)' }, { k: '', v: 'Finished', bg: 'rgba(12,14,22,.72)' }, { k: '', v: 'Collections ▾', bg: 'rgba(12,14,22,.72)' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

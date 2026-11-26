@@ -1,16 +1,20 @@
 # Lane briefs
 
-One page per agent-team lane: what the lane owns, how to build and test it fast, and the mistakes that cost time before. A teammate reads its lane's page right after the issue, instead of exploring the repo. The lead prompt (`TEAM_LEAD_PROMPT.md`, workspace root) assigns the lanes.
+One page per agent-team lane: what the lane owns, how to build and test it fast, and the mistakes that cost time before. A teammate reads its lane's page right after the issue, instead of exploring the repo. When a team lead runs lanes, its prompt assigns them; a lane page never grants or withholds merge authority.
+
+The daily handoff contract is authoritative in [`CLAUDE.md`](../../CLAUDE.md) and [agent workflow](../agent-workflow.md): the PR owner reviews the diff, runs the User check and requests auto-merge. A lead handles spawning and integration after merge waves, not routine merges.
 
 | Lane | Worktree | Page |
 |---|---|---|
 | ui | `worktrees/client-ui` | [ui.md](ui.md) |
 | data | `worktrees/client-data` | [data.md](data.md) |
 | sim | `worktrees/client-sim` | [sim.md](sim.md) |
-| research | main `research/` checkout (one agent) | [research.md](research.md) |
+| research | main `iwbtg-collection-research/` checkout (one agent) | [research.md](research.md) |
+| server | `worktrees/client-server` | [server.md](server.md) |
 
-Every lane: launch the client only with `--mute` (or with `IWBTG_MUTE=1` set; a `--screenshot` run is silent anyway), so test runs never play sound on the user's speakers (#712). Screenshots come only from the client's `--screenshot` flag, never from OS or desktop screen captures (#822). Work in your worktree only, switch branches there per issue (`git switch -c issue-<n>-<name> origin/main`), run cargo in the foreground, test what you touched while working and `cargo xtask check` once before the PR; `cargo xtask pr-body` drafts the PR body (client `CLAUDE.md`, Builds). Keep scratch files (PR bodies, commit messages, issue text) in your own subfolder `<scratchpad or %TEMP%>/<agent-name>/`, never at the top level of the shared scratchpad and never inside the worktree (#869). Update your page in the same PR when you learn something that would have saved you time.
+Every lane: launch the client only with `--mute` (or with `IWBTG_MUTE=1` set; a `--screenshot` run is silent anyway), so test runs never play sound on the user's speakers (#712). Screenshots come only from the client's `--screenshot` flag, never from OS or desktop screen captures (#822). Work in your worktree only, switch branches there per issue (`git switch -c issue-<n>-<name> origin/main`), run cargo in the foreground, test what you touched while working and `cargo xtask check` once before the PR; `cargo xtask pr-body` drafts the PR body (client `CLAUDE.md`, Builds). A cold or heavy client build goes through the machine-wide slot: `python -I scripts/heavy_build.py -- cargo build -p iwbtg-client`; light checks and warm work do not wait, and the slot reclaims a crashed holder after 90 s (#1029). Keep scratch files (PR bodies, commit messages, issue text) in your own subfolder `<scratchpad or %TEMP%>/<agent-name>/`, never at the top level of the shared scratchpad and never inside the worktree (#869). Update your page in the same PR when you learn something that would have saved you time.
 
 ## Pitfalls for every lane
 
+- Git has no `user.name`/`user.email` in any checkout (client, research, games and their worktrees), so a plain `git commit` stops with `Author identity unknown`. Commit as the author of the existing history: `git -c user.name="Jonas Dahl" -c user.email="jonas.dahl01@gmail.com" commit -F <file>`. Never set it in shared or global git config (#980).
 - In PowerShell, never read or write files with .NET calls (`[IO.File]::...`) and relative paths: .NET resolves them against the process's start folder (the main checkout), not the `cd` location; on 2026-11-12 that wrote a teammate's edits into the main client checkout. Use the Edit tool with absolute worktree paths.

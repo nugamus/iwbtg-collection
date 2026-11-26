@@ -1,5 +1,5 @@
-//! Gravity flip: the `[flip]` models (docs/plans/sim-core.md 5.3). WP5c owns it. Family B's
-//! `player_reverse` is in `b.rs`; the group A object swap (`flip_swap`) is WP5c.4 (#131).
+//! Gravity flip: the `[flip]` models (docs/architecture/sim/kid.md). Family B's
+//! `player_reverse` is in `b.rs`; the group A object swap (`flip_swap`) came with #131.
 
 use serde::Deserialize;
 

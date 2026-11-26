@@ -65,26 +65,52 @@ fn reals(nan_bits: u64) -> World {
     w
 }
 
-pub(crate) const VECTORS: [(&str, &str); 5] = [
+/// Vector 6: arrays (#984) in a global and an instance variable: flat, nested, empty and holding
+/// `None`, so an array hashes by its elements, not by a single tag.
+fn arrays() -> World {
+    let mut w = World::new(RoomId(0), 1);
+    add(&mut w, 0, 0.0, 0.0);
+    let flat = Value::array(vec![Value::Real(Real::new(1.0)), Value::Str("a".into())]).expect("flat array");
+    let nested = Value::array(vec![
+        Value::array(vec![Value::Real(Real::new(2.0))]).expect("inner array"),
+        Value::None,
+    ])
+    .expect("nested array");
+    let outer = Value::array(vec![flat, nested, Value::array(Vec::new()).expect("empty array")])
+        .expect("outer array");
+    w.globals.insert(VarId(0), outer);
+    let id = w.instances()[0].id;
+    w.get_mut(id).expect("instance").vars.insert(
+        VarId(1),
+        Value::array(vec![Value::Real(Real::new(3.5))]).expect("var array"),
+    );
+    w
+}
+
+pub(crate) const VECTORS: [(&str, &str); 6] = [
     (
         "empty",
-        "38f25bd28b6c80877388754e0dacdcd99058316c15adff89845e770a700791ef",
+        "deceffc01e100b223c018041b522f84cb13628e66c5f49ea0efdd051f0bebd49",
     ),
     (
         "instances",
-        "e35b7d739dc58f67a296f473c2549fd8214e335dfc8487bc990725dafde3873b",
+        "d2e571db1f79e1b289ba4d1a3e9a5d27c6173c69523a3b754b5055437f747c8c",
     ),
     (
         "globals",
-        "d8c700641f81f648304e580393939f223d67afb57d6b4d8a4e5fef685894cfff",
+        "33826c7c66daaa1942198be45f047e26350dfe1567145e477ffbbc9e91397d56",
     ),
     (
         "rng",
-        "b3e1a61a4f126a25c39c7150647343a9009088251794b5ba84473b0967260932",
+        "8d25b8ddc4ca598f7a038ae603ecfcb5536b2e1e58eecddf56fa556f8a006b2e",
     ),
     (
         "reals",
-        "6b7c478a26c9afb5477ba65b703627667296fdd8c9ad277915d285318b10fb9d",
+        "e0f65b29d94c16b35c3bf349b3d1f963a9e0028a1cc757516a1cd42dcbace77f",
+    ),
+    (
+        "arrays",
+        "249d7db9e54fa4cd19ea43d2d2cc96958edff13ce7e57ca25dc2b0fd11b218d8",
     ),
 ];
 
@@ -95,6 +121,7 @@ fn world(name: &str) -> World {
         "globals" => globals(),
         "rng" => rng(),
         "reals" => reals(f64::NAN.to_bits()),
+        "arrays" => arrays(),
         _ => unreachable!(),
     }
 }

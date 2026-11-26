@@ -1,9 +1,8 @@
-//! Kid state (docs/plans/sim-core.md 5.1).
+//! Kid state (docs/architecture/sim/kid.md).
 //!
-//! WP5a owns this file: the core fields every family uses. Family B fields live in `KidStateB`
-//! (WP5b), the rest in `KidStateExt` (WP5c), so no WP edits another's struct. Fields are plain
-//! data; the actions (`kid/actions/`) and `kid::api` are the only code that reads or writes
-//! them, and other WPs go through `kid::api` (plan 1.6).
+//! The core fields every family uses. Family B fields live in `KidStateB`, the rest in
+//! `KidStateExt`. Fields are plain data; the actions (`kid/actions/`) and `kid::api` are the
+//! only code that reads or writes them (docs/architecture/sim/world.md).
 //!
 //! The image alpha, scales and sprite are the instance's own `Image`, not kid fields: the fade-in
 //! (A1 Step 7) and the bow snapshot read `Instance::img`. Numbers such as `run_speed` are copied
@@ -60,9 +59,9 @@ pub struct KidState {
     pub scale: Real,
     /// The previous tick's slope-contact flag (slope families).
     pub on_slope_last: bool,
-    /// Family B fields (WP5b).
+    /// Family B fields.
     pub b: KidStateB,
-    /// Families A2-A5 and C fields (WP5c).
+    /// Families A2-A5 and C fields.
     pub ext: KidStateExt,
 }
 
@@ -98,8 +97,8 @@ impl Default for KidState {
 }
 
 /// Kid globals that persist while no kid exists (A3 Inferred, I6), split like [`KidState`]:
-/// the core fields are here; B's `reverse` lives in `b` (WP5b); the latched vine-key flags of
-/// wanna, rori, fairy-tale and showdown live in `ext` (WP5c).
+/// the core fields are here; B's `reverse` lives in `b`; the latched vine-key flags of
+/// wanna, rori, fairy-tale and showdown live in `ext`.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct KidGlobals {
     /// `global.grav`: the next kid is the flipped one (A1 Step 5 swap, saved in byte 9).
@@ -111,9 +110,9 @@ pub struct KidGlobals {
     pub frozen: bool,
     /// `global.frozen2`: the movement action is skipped (family B and later).
     pub frozen2: bool,
-    /// Family B globals (WP5b).
+    /// Family B globals.
     pub b: KidGlobalsB,
-    /// Families A2-A5 and C globals (WP5c).
+    /// Families A2-A5 and C globals.
     pub ext: KidGlobalsExt,
 }
 

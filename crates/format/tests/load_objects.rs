@@ -4,10 +4,86 @@
 
 use crate::load_engine_packs::with_pack;
 use crate::wp7a_load::*;
-use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
+use iwbtg_format::{PackageFiles, Severity};
 use iwbtg_sim::def::{ClassMask, EngineKind, GameDef, ParamValue, RoomId};
 use iwbtg_sim::num::Real;
+
+/// The WP7a order with a `save` object appended (`@saver`, `base = "save"`).
+const ORDER_SAVE: &str = r#"object_order = [
+  "world", "kid", "block", { kind = "spike", dir = "up" }, "kid_start", "warp", "@boss",
+  { kind = "spike", dir = "down" }, "spike", "kid_bullet", "blood", "blood_emitter", "game_over",
+  "bow", "playerface", "@saver",
+]"#;
+
+/// The WP7a package with `once = true` (a little-trap move param) on a `save` object, under
+/// package id `id`.
+fn save_once_package(id: &str) -> PackageFiles {
+    package(|f| {
+        let text = manifest(ORDER_SAVE, "").replace("id = \"wp7a_basic\"", &format!("id = \"{id}\""));
+        set(f, "game.toml", text);
+        f.push((
+            "objects/saver.toml".into(),
+            b"base = \"save\"\nonce = true\n".to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn a_legacy_param_outside_its_game_is_a_warning() {
+    let report = load_report(&save_once_package("wp7a_basic"), STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    let warning = report
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("format-0 legacy alias"))
+        .unwrap_or_else(|| panic!("no legacy warning:\n{}", render(&report)));
+    assert_eq!(warning.severity, Severity::Warning);
+    assert!(warning.message.contains("little-trap"), "{}", warning.message);
+    assert!(warning.message.contains("#1269"), "{}", warning.message);
+    assert!(warning.message.contains("wp7a_basic"), "{}", warning.message);
+}
+
+#[test]
+fn a_legacy_param_for_its_game_does_not_warn() {
+    let report = load_report(&save_once_package("little_trap"), STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .all(|d| !d.message.contains("format-0 legacy alias")),
+        "{}",
+        render(&report)
+    );
+}
+
+/// The same package rewritten as format 1: `ruleset` for `engine_rev` and a `[compat]` profile.
+fn save_once_package_format_one() -> PackageFiles {
+    package(|f| {
+        let text = manifest(ORDER_SAVE, "\n[compat]\nprofile = \"gm8/a1@1\"\n")
+            .replace("format = 0\n", "format = 1\n")
+            .replace("engine_rev = 0\n", "ruleset = \"gm8@0\"\n");
+        set(f, "game.toml", text);
+        f.push((
+            "objects/saver.toml".into(),
+            b"base = \"save\"\nonce = true\n".to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn a_legacy_param_outside_its_game_warns_in_format_one_too() {
+    let report = load_report(&save_once_package_format_one(), STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    let warning = report
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("format-0 legacy alias"))
+        .unwrap_or_else(|| panic!("no legacy warning in format 1:\n{}", render(&report)));
+    assert_eq!(warning.severity, Severity::Warning);
+    assert!(warning.message.contains("#1269"), "{}", warning.message);
+}
 
 // ---- #234: tier 1 built-in params ---------------------------------------------------------
 
@@ -1100,6 +1176,96 @@ fn a_scripted_object_runs_in_a_room() {
     assert_eq!(again.state_hash(), hash, "two runs hash the same");
 }
 
+/// A scripted `@mover` with the object `timeline` key and two moment handlers.
+pub(crate) fn timeline_package(timeline: &str) -> PackageFiles {
+    let order = ORDER.replace("\"playerface\",", "\"playerface\", \"@mover\",");
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n",
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n  { kind = \"@mover\", x = 100, y = 100 },\n",
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/mover.toml".into(),
+            format!("script = \"mover\"\nsprite = \"block\"\ntimeline = \"{timeline}\"\n").into_bytes(),
+        ));
+        f.push((
+            "timelines/phases.toml".into(),
+            b"moments = [{ t = 0, call = \"intro\" }, { t = 2, call = \"wave\" }]\n".to_vec(),
+        ));
+        f.push((
+            "scripts/mover.rhai".into(),
+            b"fn create() { this.x = 100.0; }\nfn moment_intro() { this.y = 42.0; }\nfn moment_wave() { this.y = 24.0; }\n"
+                .to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn an_object_timeline_key_loads_into_the_kind_and_its_moments_reach_the_script() {
+    use iwbtg_sim::input::InputFrame;
+
+    let (def, _) = load_ok(&timeline_package("phases"), STRICT);
+    let (mover_kind, mover) = kind_named(&def, "@mover");
+    let timeline = mover.timeline.expect("@mover starts a timeline");
+    assert_eq!(def.timelines[timeline.index().unwrap()].name, "phases");
+    assert!(!mover.params.0.contains_key("timeline"), "the key is not a param");
+    assert_eq!(
+        mover
+            .events
+            .moments
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["intro", "wave"],
+        "the script's moment handlers are in the kind's event set"
+    );
+
+    let stage = RoomId(def.rooms.iter().position(|r| r.name == "stage1").unwrap() as u32);
+    let mut sim = iwbtg_sim::Sim::new(
+        std::sync::Arc::new(def),
+        iwbtg_sim::SimOptions {
+            start: iwbtg_sim::StartPoint::Room {
+                room: stage,
+                difficulty: 0,
+            },
+            seed: 1,
+            dll_mode: iwbtg_sim::sound::DllMode::Stub,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
+        },
+    )
+    .expect("the sim starts");
+    let y = |sim: &iwbtg_sim::Sim| {
+        sim.world()
+            .instances()
+            .iter()
+            .find(|i| i.kind == mover_kind)
+            .expect("mover")
+            .m
+            .y()
+            .get()
+    };
+    assert_eq!(y(&sim), 100.0, "created at y 100, no moment yet");
+    sim.step(InputFrame::EMPTY);
+    assert_eq!(y(&sim), 42.0, "moment_intro runs on the first tick");
+    sim.step(InputFrame::EMPTY);
+    sim.step(InputFrame::EMPTY);
+    assert_eq!(y(&sim), 24.0, "moment_wave runs at t = 2");
+}
+
+#[test]
+fn an_unknown_object_timeline_is_an_error() {
+    let r = load_report(&timeline_package("missing"), STRICT);
+    assert!(!r.ok());
+    assert!(
+        render(&r).contains("unknown timeline `missing`"),
+        "{}",
+        render(&r)
+    );
+}
+
 #[test]
 fn sprite_pngs_follow_the_order_of_the_loaded_sprites() {
     let files = with_pack(|_| {});
@@ -1124,4 +1290,129 @@ fn the_golden_walker_script_loads_clean_through_the_loader() {
     let r = load_report(&files, STRICT);
     assert!(r.ok(), "{}", render(&r));
     assert!(!render(&r).contains("scripts/boss.rhai"), "{}", render(&r));
+}
+
+// ---- #1075: 96 package classes -------------------------------------------------------------
+
+/// Kinds that each declare a distinct package class through `counts_as`, listed in
+/// `object_order`.
+fn package_class_kinds(n: u32) -> Vec<(String, String)> {
+    (0..n)
+        .map(|i| {
+            (
+                format!("class_kind_{i}"),
+                format!("base = \"killer\"\ncounts_as = [\"class_{i}\"]\n"),
+            )
+        })
+        .collect()
+}
+
+fn load_package_classes(n: u32) -> iwbtg_format::load::LoadReport {
+    let objects = package_class_kinds(n);
+    let refs: Vec<(&str, &str)> = objects.iter().map(|(s, t)| (s.as_str(), t.as_str())).collect();
+    load_report(&wp6b2_package(&refs, false), STRICT)
+}
+
+/// Decision 0004: the 17th package class (bit 48) is no longer a load error.
+#[test]
+fn seventeen_package_classes_load() {
+    let r = load_package_classes(17);
+    assert!(
+        !errors(&r).iter().any(|e| e.contains("too many package classes")),
+        "{}",
+        render(&r)
+    );
+}
+
+/// The 97th distinct package class is the new error, and it names the new cap.
+#[test]
+fn the_97th_package_class_is_an_error() {
+    let r = load_package_classes(97);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.contains("too many package classes") && e.contains("at most 96")),
+        "{}",
+        render(&r)
+    );
+}
+
+// ---- #1153 E3: classes and the draw key are declared data --------------------------------
+
+/// #1153 E3: a class is a collision set from declared data and a draw layer is the declared
+/// depth; neither is an instance's numeric id. Both live in package data, so a change to either
+/// is visible in `gameplay_hash`.
+#[test]
+fn class_and_draw_data_changes_move_the_gameplay_hash() {
+    let hash = |files: &PackageFiles| load_report(files, STRICT).gameplay_hash.expect("loads");
+    let base = package(|_| {});
+
+    // The object's `depth` is the draw-order key.
+    let deeper = package(|f| {
+        let boss = f.iter_mut().find(|(p, _)| p == "objects/boss.toml").unwrap();
+        boss.1 = b"base = \"killer\"\nscript = \"boss\"\nsprite = \"boss\"\ndepth = -6\ncounts_as = [\"boss_part\", \"solidblock\"]\n".to_vec();
+    });
+    assert_ne!(hash(&base), hash(&deeper), "declared depth is in the hash");
+    let (def, _) = load_ok(&deeper, STRICT);
+    assert_eq!(kind_named(&def, "@boss").1.depth, Real::new(-6.0));
+
+    // The object's `counts_as` is its declared collision class set.
+    let other_class = package(|f| {
+        let boss = f.iter_mut().find(|(p, _)| p == "objects/boss.toml").unwrap();
+        boss.1 = b"base = \"killer\"\nscript = \"boss\"\nsprite = \"boss\"\ndepth = -5\ncounts_as = [\"boss_part\"]\n".to_vec();
+    });
+    assert_ne!(
+        hash(&base),
+        hash(&other_class),
+        "declared classes are in the hash"
+    );
+    let (def, _) = load_ok(&other_class, STRICT);
+    let boss = kind_named(&def, "@boss").1;
+    assert!(boss.classes.contains(ClassMask::KILLER));
+    assert!(!boss.classes.contains(ClassMask::SOLIDBLOCK));
+
+    // A room-file instance `depth` override is declared data too.
+    let moved = package(|f| {
+        let room = f.iter_mut().find(|(p, _)| p == "rooms/stage1.toml").unwrap();
+        let text = String::from_utf8(room.1.clone())
+            .unwrap()
+            .replace("depth = 5", "depth = 6");
+        room.1 = text.into_bytes();
+    });
+    assert_ne!(
+        hash(&base),
+        hash(&moved),
+        "an instance depth override is in the hash"
+    );
+}
+
+#[test]
+fn an_object_timeline_is_a_reserved_key_not_a_param() {
+    let o = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = \"phases\"
+",
+    )
+    .unwrap();
+    assert_eq!(o.timeline.unwrap().get_ref(), "phases");
+    assert!(o.params.is_empty());
+    let e = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = \"a\"
+[params]
+timeline = \"b\"
+",
+    )
+    .unwrap_err();
+    assert!(format!("{e:?}").contains("param `timeline` is set twice or is a reserved key"));
+    let e = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = 3
+",
+    )
+    .unwrap_err();
+    assert!(format!("{e:?}").contains("`timeline` must be a string"));
 }

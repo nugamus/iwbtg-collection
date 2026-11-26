@@ -427,7 +427,7 @@ mod n10_2 {
 
 /// The particle state in `World` and its tick slot (#764).
 mod world {
-    use crate::wp1_support::*;
+    use crate::support::*;
 
     use iwbtg_sim::def::RoomId;
     use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeStep};
@@ -573,7 +573,7 @@ mod world {
 /// `World::particles` as `Particles::build` does, the tick streams it, and the lifecycle params
 /// make their call.
 mod particle_system {
-    use crate::wp1_support::*;
+    use crate::support::*;
 
     use iwbtg_sim::builtins;
     use iwbtg_sim::def::RoomId;
@@ -816,7 +816,7 @@ mod particle_system {
 /// (one type of 4 draws, one linear rectangle emitter streaming 15) and the tick streams it until
 /// the emitter goes; kaenbyou's NUM-PART-RNG-3 run k1 (research#170) replays bit for bit.
 mod blood_emitter {
-    use crate::wp1_support::*;
+    use crate::support::*;
 
     use iwbtg_sim::builtins::{self, BuiltinOutput};
     use iwbtg_sim::def::{Builtin, KindDef, KindId, ParamValue};

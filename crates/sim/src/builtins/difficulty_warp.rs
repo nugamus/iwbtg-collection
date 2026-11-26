@@ -1,5 +1,5 @@
-//! Built-in `difficulty_warp` (warpStart, objWarpStart; rooms; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/difficulty_warp.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `difficulty_warp` (warpStart, objWarpStart; rooms; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/difficulty_warp.md). Tier 1.
 //!
 //! Collision with the kid: set the difficulty from `dif`, delete the save, zero the death and
 //! time counters (the original writes 0 into the slot's death and time entries; the new kid's
@@ -26,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "dif",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "room_to",
         ty: ParamType::Room,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition_steps",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

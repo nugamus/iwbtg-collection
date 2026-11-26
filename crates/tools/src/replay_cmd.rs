@@ -1,4 +1,4 @@
-//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/plans/sim-core.md 9.4, WP8b).
+//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/architecture/cli.md).
 //!
 //! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints seven
 //! lines:
@@ -20,26 +20,24 @@
 //! `mode: stripped` (Play original or ranked, #561; a `.iwbr` replay's header says which, else
 //! `--mode`), `map: <id>`, the map whose timing chain (and in a stripped run, ranked start) the
 //! run used (#505; the header's, else `--map`, else the package's first map), and
-//! `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
+//! `start: <room id>`, the room the run started in. `--room` starts an `.inputs` run in that room
+//! instead of the new-game room or the map's ranked start; a `.iwbr` replay carries its own
+//! start. The run stops early when the sim ends (`game_end`) and
 //! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
 //! carrying it) the run also stops on the tick of the first death, and a replay with inputs past
 //! that tick is rejected (docs/architecture/replay.md, "Mods").
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use iwbtg_format::{LoadMode, PackageFiles, load_game};
-use iwbtg_sim::def::GameDef;
+use iwbtg_format::{LoadMode, PackageFiles};
+use iwbtg_sim::SimOptions;
+use iwbtg_sim::def::{GameDef, RoomId};
 use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
-use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode, Trailer};
+use iwbtg_sim::replay::{Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
-use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
-use iwbtg_sim::timing::Split;
-use iwbtg_sim::world::SimStatus;
-use iwbtg_sim::{Sim, SimOptions};
 
 use crate::trace_cmd::{ToolError, load_package, read_text};
 
@@ -70,84 +68,15 @@ pub struct ReplayRunArgs {
     /// `[[maps]]`); a `.iwbr` replay carries its own, and a different `--map` is an error.
     #[arg(long)]
     pub map: Option<String>,
+    /// Start an `.inputs` run in this room; overrides the new-game room and the map's ranked
+    /// start in either play mode. An `.iwbr` replay carries its own start.
+    #[arg(long)]
+    pub room: Option<String>,
 }
 
-/// What to run: the frames and the setup a replay header (or the `.inputs` flags) gives.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RunInput {
-    /// One frame per tick.
-    pub frames: Vec<InputFrame>,
-    /// The RNG seed.
-    pub seed: u32,
-    /// The mods.
-    pub mods: ModSet,
-    /// Original or stripped.
-    pub mode: PlayMode,
-    /// The map id; `None` is the package's first map.
-    pub map: Option<String>,
-    /// The save slot a `FromSave` replay starts from (a client's Play original run that resumed
-    /// the save file, #476); `None` is a new game.
-    pub save: Option<SaveSlot>,
-}
+pub use iwbtg_verify::RunInput;
 
-impl RunInput {
-    /// Where the run starts: the replay's save slot, else a new game on `difficulty`.
-    pub fn start(&self, difficulty: u8) -> StartPoint {
-        match &self.save {
-            Some(slot) => StartPoint::FromSave(slot.clone()),
-            None => StartPoint::NewGame { difficulty },
-        }
-    }
-}
-
-/// What a headless run gives.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ReplaySummary {
-    /// Ticks run.
-    pub ticks: u64,
-    /// Splits from the `[timing]` triggers.
-    pub splits: Vec<Split>,
-    /// Ranked time in ticks (`Sim::ranked_ticks`).
-    pub ranked_ticks: u64,
-    /// The timer's ticks inside a region (`Sim::frozen_ticks`).
-    pub frozen_ticks: u64,
-    /// The final state hash.
-    pub hash: [u8; 32],
-    /// Original or stripped.
-    pub mode: PlayMode,
-    /// The map the run played (`Sim::map_id`).
-    pub map: String,
-    /// The room the run started in (after `Sim::new`), by id.
-    pub start_room: String,
-    /// `(tick, state hash truncated to 16 bytes)` after every tick that is a multiple of
-    /// `replay::CHECKPOINT_INTERVAL`, as a replay's trailer keeps them.
-    pub checkpoints: Vec<(u64, [u8; 16])>,
-}
-
-impl ReplaySummary {
-    /// The seven output lines.
-    pub fn lines(&self) -> String {
-        let splits = if self.splits.is_empty() {
-            "none".to_owned()
-        } else {
-            self.splits
-                .iter()
-                .map(|s| format!("{}@{}", s.index, s.tick))
-                .collect::<Vec<_>>()
-                .join(" ")
-        };
-        let hash: String = self.hash.iter().map(|b| format!("{b:02x}")).collect();
-        format!(
-            "ticks: {}\nsplits: {splits}\nranked: {} frozen: {}\nhash: {hash}\nmode: {}\nmap: {}\nstart: {}\n",
-            self.ticks,
-            self.ranked_ticks,
-            self.frozen_ticks,
-            self.mode.name(),
-            self.map,
-            self.start_room
-        )
-    }
-}
+pub use iwbtg_verify::ReplaySummary;
 
 /// `iwbtg replay run`: reads the package and the input, runs [`run`] and prints `ticks: N`,
 /// `splits: ...`, `ranked: N frozen: N`, `hash: <hex>`, `mode: ...`, `map: <id>` and
@@ -159,10 +88,21 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
             args.start
         )));
     }
+    if args.room.is_some() && is_replay(&args.input) {
+        return Err(ToolError::Message(format!(
+            "{}: an .iwbr replay carries its own start; --room needs an .inputs file",
+            args.input.display()
+        )));
+    }
     let pkg = load_package(&args.pkg)?;
     let input = read_input(&args.input, args.seed, args.mods, args.mode, args.map.clone())?;
+    let def = load_strict(&pkg, LoadMode::Strict)?;
+    let start = match &args.room {
+        Some(room) => room_start(&pkg, room, args.difficulty)?,
+        None => input.start(&def, args.difficulty)?,
+    };
     let options = SimOptions {
-        start: input.start(args.difficulty),
+        start,
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
@@ -171,6 +111,26 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     let summary = run(&pkg, &input.frames, options, input.mods)?;
     print!("{}", summary.lines());
     Ok(())
+}
+
+/// `--room`: a start in that room. [`StartPoint::Room`] already overrides the new-game room and
+/// a stripped run's ranked start; cut rooms still redirect.
+pub(crate) fn room_start(pkg: &PackageFiles, room: &str, difficulty: u8) -> Result<StartPoint, ToolError> {
+    let def = load_strict(pkg, LoadMode::Strict)?;
+    let id = def
+        .rooms
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.name == room)
+        .and_then(|(index, _)| u32::try_from(index).ok())
+        .map(RoomId)
+        .ok_or_else(|| ToolError::Message(format!("no room `{room}` in package `{}`", def.id)))?;
+    Ok(StartPoint::Room { room: id, difficulty })
+}
+
+/// Whether a replay argument is a recorded `.iwbr` file (as opposed to an `.inputs` file).
+pub(crate) fn is_replay(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"))
 }
 
 /// Arguments of `iwbtg replay verify <pkg> <replay>`.
@@ -193,84 +153,23 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
     let bytes = std::fs::read(&args.replay)
         .map_err(|e| ToolError::Message(format!("{}: {e}", args.replay.display())))?;
     let label = args.replay.display().to_string();
-    let replay = Replay::decode(&bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
-    let report = iwbtg_format::load::load_report(&files, LoadMode::Strict);
-    let (Some(def), Some(gameplay_hash)) = (report.def, report.gameplay_hash) else {
-        return Err(load_strict(&files, LoadMode::Strict)
-            .err()
-            .unwrap_or_else(|| ToolError::Message("the package does not load".to_owned())));
-    };
-    let input = replay_input(&bytes, &label)?;
-    let options = SimOptions {
-        start: input.start(0),
-        seed: input.seed,
-        dll_mode: DllMode::Model,
-        mode: input.mode,
-        map: input.map.clone(),
-    };
-    let h = &replay.header;
-    let mut bad = Vec::new();
-    if h.package_id != def.id {
-        bad.push(format!("package `{}`, not `{}`", h.package_id, def.id));
+    // The verification itself lives in `iwbtg-verify`, shared with the server (#1565); this
+    // command only loads the package and prints the result.
+    let verification = iwbtg_verify::verify(&files, &bytes, &label)?;
+    if let Some(summary) = &verification.summary {
+        print!(
+            "{}{}",
+            summary.lines(),
+            pause_lines(&verification.pauses, verification.run_time)
+        );
     }
-    if h.gameplay_hash != gameplay_hash {
-        bad.push(format!(
-            "gameplay_hash {} is not this package's {}",
-            hex(&h.gameplay_hash),
-            hex(&gameplay_hash)
-        ));
+    for mismatch in &verification.mismatches {
+        println!("mismatch: {mismatch}");
     }
-    if h.sim_version != iwbtg_sim::SIM_VERSION {
-        bad.push(format!(
-            "recorded on sim version {}, this build is {}",
-            h.sim_version,
-            iwbtg_sim::SIM_VERSION
-        ));
-    }
-    let s = run_def(def, &input.frames, options, input.mods)?;
-    let t = &replay.trailer;
-    print!("{}{}", s.lines(), pause_lines(t, s.ranked_ticks));
-    if s.ticks != t.total_ticks {
-        bad.push(format!(
-            "ran {} ticks, the replay claims {}",
-            s.ticks, t.total_ticks
-        ));
-    }
-    let splits: Vec<(u16, u64)> = s.splits.iter().map(|x| (x.index, x.tick)).collect();
-    if splits != t.splits {
-        bad.push(format!("splits {splits:?}, the replay claims {:?}", t.splits));
-    }
-    if s.ranked_ticks != t.ranked_ticks {
-        bad.push(format!(
-            "ranked time {}, the replay claims {}",
-            s.ranked_ticks, t.ranked_ticks
-        ));
-    }
-    if let Some((ours, theirs)) = s.checkpoints.iter().zip(&t.checkpoints).find(|(a, b)| a != b) {
-        bad.push(format!(
-            "checkpoint at tick {} differs (first desync before tick {})",
-            theirs.0, ours.0
-        ));
-    } else if s.checkpoints.len() != t.checkpoints.len() {
-        bad.push(format!(
-            "{} checkpoints, the replay claims {}",
-            s.checkpoints.len(),
-            t.checkpoints.len()
-        ));
-    }
-    if s.hash != t.final_hash {
-        bad.push(format!(
-            "final hash differs: the replay claims {}",
-            hex(&t.final_hash)
-        ));
-    }
-    for b in &bad {
-        println!("mismatch: {b}");
-    }
-    if bad.is_empty() {
+    if verification.verified {
         println!("verified");
     }
-    Ok(bad.is_empty())
+    Ok(verification.verified)
 }
 
 /// Arguments of `iwbtg replay dump <replay>`.
@@ -379,16 +278,10 @@ fn pauses_text(pauses: &[(u64, u64)]) -> String {
 }
 
 /// The two lines `replay verify` prints after the run's: the replay's pauses and the run's
-/// time, the run's ranked ticks plus the ticks paused (`Trailer::ranked_time`; the sim never
-/// sees a pause, so the pauses are the client's claim).
-fn pause_lines(t: &Trailer, ranked_ticks: u64) -> String {
-    format!(
-        "pauses: {}
-time: {}
-",
-        pauses_text(&t.pauses),
-        ranked_ticks.saturating_add(t.paused_ticks())
-    )
+/// time (`Trailer::ranked_time`; the sim never sees a pause, so the pauses are the client's
+/// claim).
+fn pause_lines(pauses: &[(u64, u64)], run_time: u64) -> String {
+    format!("pauses: {}\ntime: {run_time}\n", pauses_text(pauses))
 }
 
 /// Lowercase hex.
@@ -399,41 +292,20 @@ fn hex(bytes: &[u8]) -> String {
 /// The frames, seed, mods and play mode of a `.iwbr` replay's bytes; `label` names the replay in
 /// errors.
 pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
-    let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
-    let save = match &replay.header.start_mode {
-        StartMode::NewGame => None,
-        StartMode::FromSave(bytes) => Some(postcard::from_bytes::<SaveSlot>(bytes).map_err(|e| {
-            ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
-        })?),
-    };
-    let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
-        ToolError::Message(format!(
-            "{label}: the replay's seed {} does not fit the sim's 32-bit seed",
-            replay.header.rng_seed
-        ))
-    })?;
-    Ok(RunInput {
-        frames: replay.inputs,
-        seed,
-        mods: replay.header.mods,
-        mode: replay.header.play_mode,
-        map: Some(replay.header.map),
-        save,
-    })
+    Ok(iwbtg_verify::replay_input(bytes, label)?)
 }
 
 /// What to run: a `.iwbr` replay's inputs and header, or the frames of an `.inputs` file (frames
 /// 0 through its `end` frame, as the trace runner ticks them) with `seed`, `mods`, `mode` and
 /// `map`. A `map` that differs from a replay header's is an error.
-fn read_input(
+pub(crate) fn read_input(
     path: &Path,
     seed: u32,
     mods: ModSet,
     mode: PlayMode,
     map: Option<String>,
 ) -> Result<RunInput, ToolError> {
-    let is_replay = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"));
-    if is_replay {
+    if is_replay(path) {
         let bytes =
             std::fs::read(path).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
         let input = replay_input(&bytes, &path.display().to_string())?;
@@ -474,16 +346,7 @@ pub fn run(
 
 /// Loads a package, formatting the diagnostics as an error.
 pub fn load_strict(pkg: &PackageFiles, mode: LoadMode) -> Result<GameDef, ToolError> {
-    load_game(pkg, mode).map_err(|diags| {
-        ToolError::Message(format!(
-            "the package does not load:
-  {}",
-            diags.iter().map(ToString::to_string).collect::<Vec<_>>().join(
-                "
-  "
-            )
-        ))
-    })
+    Ok(iwbtg_verify::load_strict(pkg, mode)?)
 }
 
 /// Runs a loaded game headless on these input frames, one per tick, from `options`. A run that
@@ -494,69 +357,15 @@ pub fn run_def(
     options: SimOptions,
     mods: ModSet,
 ) -> Result<ReplaySummary, ToolError> {
-    let mode = options.mode;
-    let mut sim = Sim::new(Arc::new(def), options)
-        .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
-    let start_room = room_name(sim.def(), sim.world().room);
-    let map = sim.map_id().to_owned();
-    let mut splits = Vec::new();
-    let mut checkpoints = Vec::new();
-    for (index, frame) in frames.iter().enumerate() {
-        let deaths = sim.world().engine.run.deaths;
-        let step = sim.step(*frame);
-        splits.extend(step.splits);
-        // After every tick that reaches a multiple of the interval (a halted step adds no tick).
-        if step.tick > 0
-            && step.tick.is_multiple_of(CHECKPOINT_INTERVAL)
-            && checkpoints.last().map(|c: &(u64, [u8; 16])| c.0) != Some(step.tick)
-        {
-            let mut c = [0; 16];
-            c.copy_from_slice(&sim.state_hash()[..16]);
-            checkpoints.push((step.tick, c));
-        }
-        if step.status == SimStatus::Running && mods.ends_run(deaths, sim.world().engine.run.deaths) {
-            let left = frames.len() - index - 1;
-            if left > 0 {
-                return Err(ToolError::Message(format!(
-                    "Sudden Death ended the run at tick {}, but {left} more input ticks follow",
-                    step.tick
-                )));
-            }
-            break;
-        }
-        match step.status {
-            SimStatus::Running => {}
-            SimStatus::Ended => break,
-            SimStatus::Halted(e) => {
-                return Err(ToolError::Message(format!(
-                    "the sim halted at tick {}: {e}",
-                    step.tick
-                )));
-            }
-        }
-    }
-    Ok(ReplaySummary {
-        ticks: sim.world().tick,
-        splits,
-        ranked_ticks: sim.ranked_ticks(),
-        frozen_ticks: sim.frozen_ticks(),
-        hash: sim.state_hash(),
-        mode,
-        map,
-        start_room,
-        checkpoints,
-    })
-}
-
-/// A room's id from the package, or its number when the definition has no such room.
-fn room_name(def: &GameDef, room: iwbtg_sim::def::RoomId) -> String {
-    def.room(room)
-        .map_or_else(|| format!("#{}", room.0), |r| r.name.clone())
+    Ok(iwbtg_verify::run_def(def, frames, options, mods)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iwbtg_sim::save::Checkpoint;
+    use iwbtg_sim::timing::Split;
+    use iwbtg_verify::{StartSave, sim_version_mismatch};
 
     #[test]
     fn lines_have_the_three_prefixes() {
@@ -600,6 +409,66 @@ mod tests {
         assert_eq!(input.seed, 9);
         assert_eq!(input.mode, PlayMode::Stripped);
         assert_eq!(frames[2].held, iwbtg_sim::input::Action::Jump.bit());
+    }
+
+    /// The `stripped_example` fixture starts original runs in `intro` (`new_game_room`) and
+    /// stripped runs at `stage1` (`[stripped].start`); `--room title` beats both.
+    #[test]
+    fn a_room_start_overrides_the_new_game_and_ranked_starts() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let frames = vec![InputFrame::default(); 3];
+        for mode in [PlayMode::Original, PlayMode::Stripped] {
+            let options = SimOptions {
+                start: room_start(&pkg, "title", 1).unwrap(),
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode,
+                map: None,
+            };
+            let s = run(&pkg, &frames, options, ModSet::NONE).unwrap();
+            assert_eq!(s.start_room, "title", "{mode:?}");
+        }
+        for (mode, want) in [(PlayMode::Original, "intro"), (PlayMode::Stripped, "stage1")] {
+            let options = SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode,
+                map: None,
+            };
+            let s = run(&pkg, &frames, options, ModSet::NONE).unwrap();
+            assert_eq!(s.start_room, want, "without --room, {mode:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_room_names_the_room_and_package() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let err = room_start(&pkg, "no_such_room", 0).unwrap_err().to_string();
+        assert!(err.contains("no_such_room"), "{err}");
+        assert!(err.contains("stripped_example"), "{err}");
+    }
+
+    #[test]
+    fn a_room_option_needs_an_inputs_file() {
+        let path = std::env::temp_dir().join(format!("iwbtg-room-test-{}.iwbr", std::process::id()));
+        std::fs::write(&path, stripped_replay("medium")).unwrap();
+        let args = ReplayRunArgs {
+            pkg: Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped"),
+            input: path.clone(),
+            start: "new-game".into(),
+            difficulty: 0,
+            seed: 0,
+            mods: ModSet::NONE,
+            mode: PlayMode::Original,
+            map: None,
+            room: Some("title".into()),
+        };
+        let err = main(&args).unwrap_err().to_string();
+        std::fs::remove_file(&path).ok();
+        assert!(err.contains("--room"), "{err}");
     }
 
     /// A kid whose suicide press kills it, and frames that press it on tick 5.
@@ -694,6 +563,139 @@ mod tests {
         }
         .encode()
         .unwrap()
+    }
+
+    /// A format-7 replay's `FromSave` carries a checkpoint; a format-6 replay's carries a raw
+    /// slot. Both decode, and each starts from its save. The two layouts are identical apart
+    /// from the opaque payload, so a format-6 file is the format-7 bytes with the version byte.
+    #[test]
+    fn a_from_save_replay_reads_both_payload_versions() {
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, SAVE_SLOT_FORMAT, Trailer};
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let files = load_package(&dir).unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
+        let slot = iwbtg_sim::save::SaveSlot {
+            room: def.start_room,
+            x: iwbtg_sim::num::Real::new(96.0),
+            y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            point: None,
+            flipped: false,
+            facing: 1,
+            difficulty: 0,
+            deaths: 7,
+            time: 1234,
+            bosses: 0,
+            items: 0,
+            clear: false,
+        };
+        let checkpoint = Checkpoint::from_slot(&def, &slot).unwrap();
+        let replay = |start_mode| Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: def.id.clone(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode,
+                play_mode: PlayMode::Original,
+                map: "medium".into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            inputs: vec![InputFrame::default(); 4],
+            trailer: Trailer {
+                total_ticks: 4,
+                ..Trailer::default()
+            },
+        };
+
+        let bytes = replay(StartMode::FromSave(checkpoint.encode().unwrap()))
+            .encode()
+            .unwrap();
+        let input = replay_input(&bytes, "checkpoint").unwrap();
+        assert_eq!(input.save, Some(StartSave::Checkpoint(checkpoint.clone())));
+        assert_eq!(
+            input.start(&def, 0).unwrap(),
+            StartPoint::FromSave(checkpoint.clone()),
+            "the checkpoint reaches the sim unresolved (#1238)"
+        );
+
+        let mut bytes = replay(StartMode::FromSave(postcard::to_stdvec(&slot).unwrap()))
+            .encode()
+            .unwrap();
+        bytes[4] = u8::try_from(SAVE_SLOT_FORMAT).unwrap();
+        let input = replay_input(&bytes, "legacy slot").unwrap();
+        assert_eq!(input.save, Some(StartSave::LegacySlot(slot.clone())));
+        assert_eq!(
+            input.start(&def, 0).unwrap(),
+            StartPoint::FromSave(checkpoint.clone()),
+            "a legacy slot converts to the same checkpoint"
+        );
+
+        // #1325: the checkpoint payload is decoded exactly, so a byte appended after it is
+        // refused instead of ignored.
+        let mut trailing = checkpoint.encode().unwrap();
+        trailing.push(0);
+        let bytes = replay(StartMode::FromSave(trailing)).encode().unwrap();
+        let error = replay_input(&bytes, "trailing").unwrap_err();
+        assert!(error.to_string().contains("trailing bytes"), "{error}");
+    }
+
+    /// #1325: the replay's `FromSave` runs the shared `Checkpoint::validate`; a foreign
+    /// checkpoint format is refused exactly as the client's envelope path refuses it.
+    #[test]
+    fn a_from_save_checkpoint_with_a_foreign_format_is_refused() {
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, Trailer};
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let files = load_package(&dir).unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
+        let slot = iwbtg_sim::save::SaveSlot {
+            room: def.start_room,
+            x: iwbtg_sim::num::Real::new(96.0),
+            y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            point: None,
+            flipped: false,
+            facing: 1,
+            difficulty: 0,
+            deaths: 7,
+            time: 1234,
+            bosses: 0,
+            items: 0,
+            clear: false,
+        };
+        let mut checkpoint = Checkpoint::from_slot(&def, &slot).unwrap();
+        checkpoint.format = Checkpoint::FORMAT + 1;
+        let bytes = Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: def.id.clone(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode: StartMode::FromSave(checkpoint.encode().unwrap()),
+                play_mode: PlayMode::Original,
+                map: "medium".into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            inputs: vec![InputFrame::default(); 4],
+            trailer: Trailer {
+                total_ticks: 4,
+                ..Trailer::default()
+            },
+        }
+        .encode()
+        .unwrap();
+        let error = replay_input(&bytes, "foreign format").unwrap_err();
+        assert!(error.to_string().contains("checkpoint format 2"), "{error}");
     }
 
     /// The `[stripped]` example has two maps: `medium` times `[timing]` from `[stripped].start`
@@ -794,8 +796,9 @@ mod tests {
         let mut replay = Replay::decode(&stripped_replay("hard")).unwrap();
         replay.header.gameplay_hash = hash;
         let input = replay_input(&replay.encode().unwrap(), "x").unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
         let options = SimOptions {
-            start: input.start(0),
+            start: input.start(&def, 0).unwrap(),
             seed: input.seed,
             dll_mode: DllMode::Model,
             mode: input.mode,
@@ -820,8 +823,14 @@ mod tests {
             .unwrap()
         };
         assert!(verify(&replay));
+        let mut old = replay.clone();
+        old.header.sim_version = iwbtg_sim::SIM_VERSION - 1;
+        assert!(!verify(&old), "another build's replay does not verify");
         assert_eq!(
-            pause_lines(&replay.trailer, s.ranked_ticks),
+            pause_lines(
+                &replay.trailer.pauses,
+                s.ranked_ticks + replay.trailer.paused_ticks()
+            ),
             format!(
                 "pauses: 5+100 40+25
 time: {}
@@ -836,6 +845,16 @@ time: {}
         other.header.gameplay_hash = [7; 32];
         assert!(!verify(&other));
         std::fs::remove_file(&path).ok();
+    }
+
+    /// A replay from another build is reported as a sim-version mismatch, not as a hash
+    /// mismatch: the other build's hashes mean nothing here (#1303).
+    #[test]
+    fn a_sim_version_mismatch_names_the_versions_and_not_a_hash() {
+        assert_eq!(sim_version_mismatch(2, 2), None);
+        let line = sim_version_mismatch(1, 2).expect("a mismatch");
+        assert!(line.contains("sim_version 1, this build is 2"), "{line}");
+        assert!(!line.contains("hash"), "{line}");
     }
 
     #[test]
@@ -871,7 +890,13 @@ time: {}
     fn the_stripped_example_freezes_ranked_time_for_its_cutscene() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
         let pkg = load_package(&dir).unwrap();
-        let frames = vec![InputFrame::default(); 60];
+        // A ranked run's timer starts on the first input (#43): tick 0 carries one, so tick 1
+        // is its first timed tick.
+        let mut frames = vec![InputFrame::default(); 60];
+        frames[0] = InputFrame {
+            held: iwbtg_sim::input::Action::Jump.bit(),
+            ..InputFrame::default()
+        };
         let options = |mode| SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
             seed: 0,
@@ -886,8 +911,8 @@ time: {}
     }
 
     /// The golden one-room package on its `.inputs`: 61 ticks, the run starts at tick 1, and a
-    /// second run gives the same hash. Until WP10's `sound::tick` lands the sim reaches a WP0
-    /// stub; then the test says so and passes (the CLI exits 3 in that case).
+    /// second run gives the same hash. A stub panic aborts the CLI; the test says so if one is
+    /// reached.
     #[test]
     fn the_golden_one_room_package_runs_twice_to_one_hash() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden");

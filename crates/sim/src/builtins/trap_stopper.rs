@@ -1,4 +1,4 @@
-//! Built-in `trap_stopper` (mechanics `trap_stopper`; docs/plans/sim-core.md 6.1, K8;
+//! Built-in `trap_stopper` (mechanics `trap_stopper`; docs/architecture/sim/builtins.md, K8;
 //! docs/format/builtins/trap_stopper.md). Tier 3.
 //!
 //! `mode = "stop"` (rainbow-feather stopneedleblock): an invisible block with no events. A
@@ -24,11 +24,13 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "size",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

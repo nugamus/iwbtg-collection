@@ -1,5 +1,5 @@
 //! `iwbtg trace import`: case skeletons, sorting traces into the three kinds of
-//! docs/plans/sim-core.md 9.1. WP0 creates the file; WP8a owns it.
+//! docs/architecture/traces.md.
 //!
 //! The importer reads the recorder command line from the `.inputs` header
 //! (`iwbtg_sim::input::trace_command`; the tracer's version string is not used) and sorts the
@@ -17,7 +17,7 @@
 //!    columns must be mapped to `save.*` probe columns by hand.
 //!
 //! Original names go through the package's `tests/trace-map.toml` (rooms and objects). Until
-//! `iwbtg_format::tracemap` (WP7a) has fields, the importer reads the two tables it needs itself.
+//! `iwbtg_format::tracemap` has fields, the importer reads the two tables it needs itself.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -31,7 +31,7 @@ use crate::case::{
 };
 use crate::trace_cmd::ToolError;
 
-/// The three kinds of plan 9.1.
+/// The three kinds of trace (docs/architecture/traces.md).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TraceKind {
     /// Kind 1: a case that must diff clean.
@@ -662,7 +662,9 @@ pub fn import_text(
     let trace_name = source.rsplit('/').next().unwrap_or(source);
 
     let mut header = vec![
-        format!("Imported from research trace {source} by `iwbtg trace import`; finish by hand (plan 9.2)."),
+        format!(
+            "Imported from research trace {source} by `iwbtg trace import`; finish by hand (docs/architecture/traces.md)."
+        ),
         format!(
             "Recorder: --object {} --room {} --at {} --from {}{}{}{}",
             args.objects.join(","),
@@ -777,7 +779,7 @@ pub fn import_text(
     let room_orig = args.room.clone().unwrap_or_default();
     if args.room.is_none() {
         open.push(
-            "no --room: the trace starts from the game's boot rooms, which are client UI (plan 4.2)".into(),
+            "no --room: the trace starts from the game's boot rooms, which are client UI (docs/architecture/sim/rooms.md)".into(),
         );
     }
     let start_room = room_of(&room_orig);
@@ -926,6 +928,7 @@ pub fn import_text(
         setup,
         vars,
         ignore: DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect(),
+        required: Vec::new(),
         latch: BTreeMap::new(),
         split: BTreeMap::new(),
         unprobed,
@@ -1409,9 +1412,20 @@ mod tests {
             stems.sort();
             for stem in stems {
                 let source = source_of(&stem).expect("source");
-                let read =
-                    |ext: &str| std::fs::read_to_string(format!("{}.{ext}", stem.display())).expect("read");
-                let i = import_text(&source, &read("inputs"), &read("csv"), names.as_ref())
+                let read = |ext: &str| {
+                    let path = format!("{}.{ext}", stem.display());
+                    std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
+                };
+                let (inputs, csv) = match (read("inputs"), read("csv")) {
+                    (Ok(inputs), Ok(csv)) => (inputs, csv),
+                    (a, b) => {
+                        // An incomplete trace stem (a recording not yet copied in) is skipped, not fatal.
+                        let why = a.err().into_iter().chain(b.err()).collect::<Vec<_>>().join("; ");
+                        eprintln!("skipped incomplete trace {source}: {why}");
+                        continue;
+                    }
+                };
+                let i = import_text(&source, &inputs, &csv, names.as_ref())
                     .unwrap_or_else(|e| panic!("{source}: {e}"));
                 if let Some(case) = &i.case {
                     let text = case.to_toml(&i.header);

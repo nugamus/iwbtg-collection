@@ -1,0 +1,4 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# Fills the room once with `count` dots (`scripts/spawner.rhai`), 250 a tick.
+script = "spawner"
+params = { count = 0.0, bullet = "@dot", spawned = 0.0 }

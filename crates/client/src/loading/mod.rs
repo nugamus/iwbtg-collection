@@ -54,6 +54,25 @@ pub struct LoadingArgs {
     pub loading_preview_back: bool,
 }
 
+/// The loading card's place in the module list (main.rs): its flags and plugin. A `--screenshot`
+/// check skips the card so the other screens' checks see the game.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = LoadingArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: LoadingArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(LoadingPlugin {
+            args,
+            skip: startup.isolated,
+        });
+    }
+}
+
 /// `--loading-preview-back`: the card says `Esc back` without a select screen.
 #[derive(Resource)]
 struct PreviewBack;
@@ -114,6 +133,8 @@ pub struct RunKind {
     pub original: bool,
     pub mods: ModSet,
     pub slow_speed: u8,
+    /// A practice run (a stage/save/room start, #39): never ranked.
+    pub practice: bool,
 }
 
 impl Info {
@@ -178,6 +199,9 @@ pub(crate) fn authors(m: &Manifest) -> Option<String> {
 /// mod that keeps the run off the boards.
 pub fn standing(run: RunKind) -> Standing {
     const OFF: &str = "so this run won’t reach the leaderboard.";
+    if run.practice {
+        return Standing::Unranked("Practice runs stay off the leaderboard.".to_owned());
+    }
     if run.original {
         return Standing::Unranked(format!("Play original keeps your own stats only, {OFF}"));
     }
@@ -254,8 +278,8 @@ impl Plugin for LoadingPlugin {
             let tip = if preview || skip {
                 0
             } else {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                crate::time::SystemTime::now()
+                    .duration_since(crate::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as usize % TIPS.len())
             };
             Loading::new(preview, tip)
@@ -280,6 +304,7 @@ fn prepare(
     stats: Option<Res<Stats>>,
     mods: Option<Res<crate::mods::RunMods>>,
     speed: Option<Res<ClockSpeed>>,
+    practice: Option<Res<crate::practice::Practice>>,
     mut loading: ResMut<Loading>,
 ) {
     if loading.info.is_some() {
@@ -297,6 +322,7 @@ fn prepare(
         original: sim.options().mode == PlayMode::Original,
         mods,
         slow_speed: speed.map_or(100, |s| (s.0 * 100.0).round() as u8),
+        practice: practice.is_some_and(|p| p.0),
     };
     let empty = Book::default();
     let book = stats.as_ref().map_or(&empty, |s| &s.book);
@@ -323,15 +349,18 @@ fn keys(
     }
 }
 
-/// Counts the time shown and starts the run once the minimum has passed.
+/// Counts the time shown and starts the run once the minimum has passed and every sprite is
+/// uploaded. A large package's upload is spread over frames (`view::upload_textures`), so the
+/// card waits for it rather than starting a game whose sprites are not there yet.
 fn advance(
     time: Res<Time>,
     mut loading: ResMut<Loading>,
     mut next: ResMut<NextState<RunScreen>>,
+    uploads: Option<Res<crate::view::SpriteQueue>>,
     collector: Option<ResMut<crate::input::Collector>>,
 ) {
     loading.shown += time.delta_secs();
-    if loading.preview || loading.shown < MIN_SECONDS {
+    if loading.preview || loading.shown < MIN_SECONDS || uploads.is_some() {
         return;
     }
     next.set(RunScreen::Playing);
@@ -500,7 +529,21 @@ mod tests {
             original,
             mods: ModSet::parse(codes).unwrap(),
             slow_speed: 75,
+            practice: false,
         }
+    }
+
+    /// A practice run says so, before the mode or mods reasons (#39).
+    #[test]
+    fn a_practice_run_says_it_is_never_ranked() {
+        let run = RunKind {
+            practice: true,
+            ..run(false, "")
+        };
+        assert_eq!(
+            standing(run),
+            Standing::Unranked("Practice runs stay off the leaderboard.".to_owned())
+        );
     }
 
     /// The artboards' two lines, and the other ways a run is ranked or not.

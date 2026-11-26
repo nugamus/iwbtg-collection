@@ -1,6 +1,5 @@
 //! Built-in `kid_bullet` (the kid's bullet; kid/A1.md "Shooting" and the per-game bullet notes;
-//! docs/plans/sim-core.md 6.1; docs/format/builtins/kid_bullet.md). Tier 1. WP0 creates the
-//! file; WP6a owns it.
+//! docs/architecture/sim/builtins.md; docs/format/builtins/kid_bullet.md). Tier 1.
 //!
 //! - Create arms alarm 0 with `life` (40); Alarm 0 destroys the bullet.
 //! - The shooter (the kid's shoot action) sets `hspeed` after Create (16 times the facing), so
@@ -35,11 +34,13 @@ const SPECS: &[ParamSpec] = &[
         name: "life",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "block_check",
         ty: ParamType::Enum(CHECKS),
         required: false,
+        legacy: None,
     },
 ];
 

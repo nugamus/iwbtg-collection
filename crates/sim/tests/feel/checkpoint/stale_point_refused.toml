@@ -1,0 +1,16 @@
+# A saved key that no longer resolves is refused, never silently resumed at another object
+# (#1297, #1592). The fixture places the save one pixel right of the recorded position, so the
+# checkpoint's key is stale; the contract asserts the refusal instead of a run.
+id = "checkpoint/stale_point_refused"
+impact = "F2"
+packages = ["fixture:retry_moved_save"]
+start = { room = "room_0" }
+save = { room = "room_0", x = 96.0, y = 567.0, point = "at:room_0/save@4058000000000000,4081b80000000000" }
+start_error = "is not in this version of the game"
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["#1153", "#1297", "#1592"]
+
+# A start-error contract asserts the start only; the input script is still required by the loader.
+inputs = "frame 0: end"

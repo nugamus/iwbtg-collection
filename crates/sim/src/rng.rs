@@ -1,16 +1,16 @@
-//! The gameplay random generator (docs/plans/sim-core.md 3.3, N9, N10).
+//! The gameplay random generator (docs/architecture/sim/rng.md, N9, N10).
 //!
 //! The only randomness in the sim. Hidden consumers (blood, playerface) draw from it too
 //! (Confirmed). Delphi LCG: `seed = seed * 134775813 + 1 mod 2^32` with wrapping arithmetic,
 //! value `u = seed / 2^32` with the seed read as unsigned, one draw per call (N9; Confirmed
 //! (recorder), CLONE_SPEC numbers: `traces/rely-the-needle-4-2/num-rng-a.csv` and `-b.csv`).
 //! The start seed is UNKNOWN (the recorder fixes it); the sim takes it from the replay header.
-//! WP2 owns this file.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::SimError;
 use crate::num::Real;
+use crate::rules::rng::StreamLayout;
 
 /// The LCG multiplier, `0x08088405`.
 const MULTIPLIER: u32 = 134_775_813;
@@ -97,5 +97,92 @@ impl Rng {
             .and_then(|i| u32::try_from(i).ok())
             .filter(|&i| i < n)
             .ok_or_else(|| SimError::invariant("choose index out of range"))
+    }
+}
+
+/// A named stream a consumer draws from (decision 0005).
+///
+/// Under [`StreamLayout::Shared`] (`gm8`) every stream is the one gameplay generator; under
+/// [`StreamLayout::Split`] (`standard`) each has its own state. Consumers must be assigned a
+/// stream explicitly, so a new draw cannot silently join the gameplay stream.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Stream {
+    /// The original's generator: gameplay decisions, and the particle update until #760.
+    Gameplay,
+    /// Visual effects whose values a player does not act on: blood, blood emitters, playerface.
+    Effects,
+    /// The Draw slot's own draws (`standard`); no sim consumer today.
+    Draw,
+    /// A script's `random()` family, in `standard`.
+    Script,
+}
+
+/// Per-stream salts for the SplitMix64 finalizer. Fixed, so the replay header needs only the
+/// seed: the layout comes from the ruleset and the other streams are derived from the seed.
+const EFFECTS_SALT: u64 = 0xA076_1D64_78BD_642F;
+const DRAW_SALT: u64 = 0xE703_7ED1_A0B4_28DB;
+const SCRIPT_SALT: u64 = 0x8EBC_6AF0_9C88_C6E3;
+
+/// A deterministic 32-bit stream seed from the replay seed and a salt (SplitMix64's finalizer).
+fn derive(seed: u32, salt: u64) -> u32 {
+    let mut z = u64::from(seed) ^ salt;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    // The finalizer's low 32 bits are the stream seed; the LCG state is 32-bit.
+    let low = (z ^ (z >> 31)) & u64::from(u32::MAX);
+    u32::try_from(low).expect("masked to 32 bits")
+}
+
+/// The named streams' state. Hashed (docs/architecture/sim/hash.md).
+///
+/// [`World::rng`](crate::world::World) is the `gameplay` stream in both layouts; this struct
+/// holds the three streams a split layout adds. In [`StreamLayout::Shared`] they are seeded but
+/// never read, so the `gm8` draw order and values are exactly the recorder's.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct RngStreams {
+    /// Whether consumers share the gameplay generator or draw from their named stream.
+    pub layout: StreamLayout,
+    /// The `effects` stream (`standard`): blood, blood emitters, playerface.
+    pub effects: Rng,
+    /// The `draw` stream (`standard`): the Draw slot's own draws.
+    pub draw: Rng,
+    /// The `script` stream (`standard`): `random()`, `irandom()`, `choose()` and friends.
+    pub script: Rng,
+}
+
+impl RngStreams {
+    /// The streams for a run seeded with `seed`. `gameplay` (the world's `rng`) is the raw seed;
+    /// the other three are derived with fixed salts, so a replay stores only the seed.
+    pub fn seeded(seed: u32, layout: StreamLayout) -> RngStreams {
+        RngStreams {
+            layout,
+            effects: Rng::new(derive(seed, EFFECTS_SALT)),
+            draw: Rng::new(derive(seed, DRAW_SALT)),
+            script: Rng::new(derive(seed, SCRIPT_SALT)),
+        }
+    }
+}
+
+impl Default for RngStreams {
+    /// The absent ruleset is `gm8`: shared, with the derived streams unused. A world restored
+    /// from an older saved state gets these values; nothing reads them under `Shared`.
+    fn default() -> RngStreams {
+        RngStreams::seeded(0, StreamLayout::Shared)
+    }
+}
+
+impl crate::world::World {
+    /// The generator `stream` draws from in this world. Under [`StreamLayout::Shared`] every
+    /// stream is the gameplay generator ([`World::rng`](crate::world::World::rng)), which keeps
+    /// the recorder's one-stream order; under [`StreamLayout::Split`] each stream has its own.
+    ///
+    /// Particles still call this with [`Stream::Gameplay`] until #760 moves them to `effects`.
+    pub fn stream_mut(&mut self, stream: Stream) -> &mut Rng {
+        match (self.streams.layout, stream) {
+            (StreamLayout::Shared, _) | (StreamLayout::Split, Stream::Gameplay) => &mut self.rng,
+            (StreamLayout::Split, Stream::Effects) => &mut self.streams.effects,
+            (StreamLayout::Split, Stream::Draw) => &mut self.streams.draw,
+            (StreamLayout::Split, Stream::Script) => &mut self.streams.script,
+        }
     }
 }

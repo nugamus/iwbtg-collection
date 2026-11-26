@@ -1,0 +1,16 @@
+[package]
+name = "iwbtg-verify"
+description = "Replay verification shared by `iwbtg replay verify` and the server (docs/architecture/replay.md, Verification; #1565)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+iwbtg-format = { workspace = true }
+iwbtg-sim = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

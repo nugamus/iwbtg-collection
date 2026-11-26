@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 use bevy::prelude::*;
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::sim::Sim;
 use iwbtg_sim::stripped::PlayMode;
 
 #[allow(unused_imports, reason = "the screens read these (#494, #496, #151)")]
@@ -84,13 +85,18 @@ pub struct Stats {
     dirty: bool,
     since_flush: f32,
     current: Option<Current>,
+    /// Text this build could not read from `stats.toml`, kept until it has been written to a
+    /// free `stats.broken*` name (#1017). While it is set the original file is never replaced,
+    /// so a failed backup (a full browser quota, a transient write error) cannot destroy it.
+    recovery: Option<String>,
 }
 
 impl Stats {
     /// The stats kept in `store` (`None`: this session keeps nothing).
-    fn open(store: Option<Store>) -> Stats {
-        let book = store.as_ref().map(load).unwrap_or_default();
-        Stats {
+    pub(crate) fn open(store: Option<Store>) -> Stats {
+        let (book, recovery) =
+            store.as_ref().map_or_else(|| (Book::default(), None), load);
+        let mut stats = Stats {
             book,
             session: Session::default(),
             last: None,
@@ -99,7 +105,11 @@ impl Stats {
             dirty: false,
             since_flush: 0.0,
             current: None,
-        }
+            recovery,
+        };
+        // Try the backup at once; a success replaces the now-preserved file with the empty book.
+        stats.flush();
+        stats
     }
 
     /// The board key the current run counts on (`None` before its first tick).
@@ -108,10 +118,56 @@ impl Stats {
         self.current.as_ref().map(|c| c.board.as_str())
     }
 
+    /// Whether the current run counts on its board (`None` before its first tick).
+    #[cfg(test)]
+    pub(crate) fn on_board(&self) -> Option<bool> {
+        self.current.as_ref().map(|c| c.on_board)
+    }
+
+    /// Opens the current run's tracker from the state before its first tick (#1011), so that
+    /// tick's play time, death, split or clear is counted. The first observation is only the
+    /// baseline, so a run from a save keeps that save's counters and counts no historical death.
+    /// Does nothing while a run's tracker is open; a retry or the end of the run clears it
+    /// ([`reset`]).
+    pub(crate) fn open_current(
+        &mut self,
+        sim: &Sim,
+        mods: Option<&crate::mods::RunMods>,
+        menu: Option<&crate::pause::Menu>,
+        practice: bool,
+    ) {
+        if self.current.is_some() {
+            return;
+        }
+        let def = sim.def();
+        let opts = sim.options();
+        let ranked = opts.mode == PlayMode::Stripped;
+        // The selected map's chain, not the package `[timing]` (#1010): maps may have their own
+        // stage lists.
+        let mut tracker = Tracker::new(def.map_timing(sim.world().map).stages.len());
+        tracker.observe(observation(sim, menu));
+        self.current = Some(Current {
+            map: map_key(&def.id, sim.map_id()),
+            game: def.id.clone(),
+            tick_rate: def.tick_rate,
+            // The board of the mods the run opened with (`mods::RunMods`).
+            board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
+            on_board: matches!(opts.start, StartPoint::NewGame { .. })
+                && !practice
+                && !mods.is_some_and(|m| m.0.contains(iwbtg_sim::mods::Mod::SaveStates)),
+            rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
+            tracker,
+        });
+    }
+
     /// Writes the book when it changed. A failed write is a warning; the next change tries
-    /// again.
+    /// again. An unreadable file is backed up first: until that succeeds it is never replaced
+    /// (#1017).
     fn flush(&mut self) {
         self.since_flush = 0.0;
+        if self.preserve() {
+            return;
+        }
         if !self.dirty {
             return;
         }
@@ -122,6 +178,35 @@ impl Stats {
         match store.write_text(FILE, &self.book.to_text()) {
             Ok(()) => self.dirty = false,
             Err(e) => storage::warn(&format!("stats {e}")),
+        }
+    }
+
+    /// Writes the text [`load`] could not read to a free `stats.broken*` name (#1017). Returns
+    /// whether preservation is still pending: a failed backup is warned about here and retried
+    /// on the next flush, and the original file is left untouched meanwhile. A success marks
+    /// the empty book worth writing, so the preserved file is replaced on this same flush.
+    fn preserve(&mut self) -> bool {
+        let Some(text) = self.recovery.take() else {
+            return false;
+        };
+        // `None`: this session keeps nothing, so there is nowhere to write it.
+        let Some(store) = self.store.clone() else {
+            return false;
+        };
+        match backup_name(&store).and_then(|name| store.write_text(&name, &text).map(|()| name)) {
+            Ok(_) => {
+                // The original is safe now; the empty book replaces it with this flush.
+                self.dirty = true;
+                false
+            }
+            Err(e) => {
+                storage::warn(&format!(
+                    "stats {}: {e}; it will not be replaced until a backup is written",
+                    store.describe(FILE)
+                ));
+                self.recovery = Some(text);
+                true
+            }
         }
     }
 
@@ -190,6 +275,25 @@ impl Stats {
             }
         }
     }
+
+    /// Reads one simulated tick into the open run: the tracker's events go into the book. The
+    /// post-tick `watch` uses it, and so does `skip` for every tick it runs at once (#1018), so a
+    /// skipped tick counts exactly like a watched one. Does nothing before a run's tracker is
+    /// open (no run, or the tracker was reset).
+    pub(crate) fn observe(
+        &mut self,
+        sim: &Sim,
+        menu: Option<&crate::pause::Menu>,
+        tick_seconds: f64,
+        replay: Option<&str>,
+    ) {
+        let Some(mut cur) = self.current.take() else {
+            return;
+        };
+        let events = cur.tracker.observe(observation(sim, menu));
+        self.apply(&cur, events, tick_seconds, replay);
+        self.current = Some(cur);
+    }
 }
 
 impl Drop for Stats {
@@ -199,27 +303,46 @@ impl Drop for Stats {
     }
 }
 
-/// Reads the file. A file this build cannot read is moved to `stats.broken.toml` with a
-/// warning, and the session starts an empty book.
-fn load(store: &Store) -> Book {
+/// Reads the file. A file this build cannot read comes back beside an empty book for
+/// [`Stats::preserve`] to back up before the file may be replaced (#1017).
+fn load(store: &Store) -> (Book, Option<String>) {
     match store.read_text(FILE) {
-        Ok(None) => Book::default(),
-        Ok(Some(text)) => Book::parse(&text).unwrap_or_else(|e| {
-            storage::warn(&format!(
-                "stats {}: {e}; kept as {}, starting empty",
-                store.describe(FILE),
-                store.describe(BROKEN)
-            ));
-            if let Err(e) = store.write_text(BROKEN, &text) {
-                storage::warn(&format!("stats {e}"));
+        Ok(None) => (Book::default(), None),
+        Ok(Some(text)) => match Book::parse(&text) {
+            Ok(book) => (book, None),
+            Err(e) => {
+                storage::warn(&format!(
+                    "stats {}: {e}; backing it up before it is replaced, starting empty",
+                    store.describe(FILE)
+                ));
+                (Book::default(), Some(text))
             }
-            Book::default()
-        }),
+        },
         Err(e) => {
             storage::warn(&format!("stats {e}"));
-            Book::default()
+            (Book::default(), None)
         }
     }
+}
+
+/// The first free recovery name: `stats.broken.toml`, then `stats.broken-2.toml`, and so on
+/// (#1017). An existing recovery copy is never replaced, and a name that cannot be checked is
+/// treated as taken, so an unreadable store blocks the backup rather than clobbering it.
+fn backup_name(store: &Store) -> Result<String, String> {
+    const NAMES: u32 = 100;
+    for i in 1..=NAMES {
+        let name = if i == 1 {
+            BROKEN.to_owned()
+        } else {
+            format!("stats.broken-{i}.toml")
+        };
+        match store.read_text(&name) {
+            Ok(None) => return Ok(name),
+            Ok(Some(_)) => {}
+            Err(e) => return Err(format!("cannot check {}: {e}", store.describe(&name))),
+        }
+    }
+    Err("cannot find a free backup name".to_owned())
 }
 
 /// The replays the boards in `store`'s `stats.toml` point at: the PBs' and the other top runs'
@@ -288,10 +411,29 @@ pub struct StatsPlugin {
     pub keep: bool,
 }
 
+/// The stats' place in the module list (main.rs): their plugin. A `--screenshot` check keeps none.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(StatsPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
         let store = if self.keep { Store::data() } else { None };
         app.insert_resource(Stats::open(store))
+            // The tracker opens on the pre-step state, so the first tick counts (#1011).
+            .add_systems(FixedUpdate, seed.before(SimTick))
             .add_systems(FixedUpdate, watch.after(SimTick))
             .add_systems(Update, flush_now_and_then)
             // Leaving the run saves its deaths and play time; the next run starts a new tracker.
@@ -299,6 +441,47 @@ impl Plugin for StatsPlugin {
                 OnExit(crate::shell::AppScreen::Run),
                 reset.in_set(crate::shell::InRun),
             );
+    }
+}
+
+/// Before the run's first tick: opens the tracker from the pre-step state, so that tick is
+/// counted (#1011). A quick retry clears the tracker; the next seed opens the new run.
+fn seed(
+    game: NonSend<Game>,
+    mut stats: ResMut<Stats>,
+    menu: Option<Res<crate::pause::Menu>>,
+    mods: Option<Res<crate::mods::RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
+) {
+    stats.open_current(
+        &game.sim,
+        mods.as_deref(),
+        menu.as_deref(),
+        practice.is_some_and(|p| p.0),
+    );
+}
+
+/// What the sim looks like now, as the tracker reads it. Read only: the death log never touches
+/// the sim's state.
+fn observation(sim: &iwbtg_sim::sim::Sim, menu: Option<&crate::pause::Menu>) -> Observation {
+    let world = sim.world();
+    let kid = world
+        .kid(&sim.rules().tick)
+        .and_then(|id| world.get(id))
+        .map(|k| Spot {
+            room: world.room.0,
+            x: k.m.x().get().round() as i32,
+            y: k.m.y().get().round() as i32,
+        });
+    Observation {
+        tick: world.tick,
+        deaths: world.engine.run.deaths,
+        stages_done: world.timing.stages_done,
+        ended: world.timing.ended,
+        ranked_ticks: sim
+            .ranked_ticks()
+            .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
+        kid,
     }
 }
 
@@ -312,46 +495,23 @@ fn watch(
     replays: Option<Res<crate::replays::Recorder>>,
     menu: Option<Res<crate::pause::Menu>>,
     mods: Option<Res<crate::mods::RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
 ) {
-    let sim = &game.sim;
-    let def = sim.def();
-    let mut cur = stats.current.take().unwrap_or_else(|| {
-        let opts = sim.options();
-        let ranked = opts.mode == PlayMode::Stripped;
-        Current {
-            map: map_key(&def.id, sim.map_id()),
-            game: def.id.clone(),
-            tick_rate: def.tick_rate,
-            // The board of the mods the run opened with (`mods::RunMods`).
-            board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
-            on_board: matches!(opts.start, StartPoint::NewGame { .. }),
-            rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
-            tracker: Tracker::new(def.timing.stages.len()),
-        }
-    });
-    let world = sim.world();
-    // Read only: the death log never touches the sim's state.
-    let kid = world
-        .kid(&sim.rules().tick)
-        .and_then(|id| world.get(id))
-        .map(|k| Spot {
-            room: world.room.0,
-            x: k.m.x().get().round() as i32,
-            y: k.m.y().get().round() as i32,
-        });
-    let events = cur.tracker.observe(Observation {
-        tick: world.tick,
-        deaths: world.engine.run.deaths,
-        stages_done: world.timing.stages_done,
-        ended: world.timing.ended,
-        ranked_ticks: sim
-            .ranked_ticks()
-            .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
-        kid,
-    });
+    // `seed` opened it before this tick; the fallback keeps a direct call (a test, or a tick
+    // that ran before the fixed loop seeded) from losing the first observation.
+    stats.open_current(
+        &game.sim,
+        mods.as_deref(),
+        menu.as_deref(),
+        practice.is_some_and(|p| p.0),
+    );
     let replay = replays.as_deref().and_then(|r| r.current_name());
-    stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
-    stats.current = Some(cur);
+    stats.observe(
+        &game.sim,
+        menu.as_deref(),
+        fixed.timestep().as_secs_f64(),
+        replay,
+    );
 }
 
 /// Writes unsaved deaths and play time every [`FLUSH_SECONDS`].
@@ -362,19 +522,30 @@ fn flush_now_and_then(time: Res<Time<Real>>, mut stats: ResMut<Stats>) {
     }
 }
 
-/// A retry (`retry.rs`) starts a new run: the old one's deaths are saved, the next tick starts
-/// a new tracker.
+/// A run's boundary (a retry, or leaving the run for game select): the old run's deaths are
+/// saved, and its run-scoped state goes: the tracker and the last clear with its record. Leaving
+/// the clear behind is what stops a new run from opening the results page with the old time
+/// (#1551). The stats book keeps what was written.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut stats) = world.get_resource_mut::<Stats>() {
         stats.current = None;
+        stats.last = None;
+        stats.cleared = None;
         stats.flush();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use bevy::ecs::system::RunSystemOnce;
+    use iwbtg_sim::def::{GameDef, MapDef};
     use iwbtg_sim::input::{Action, InputFrame};
+    use iwbtg_sim::sim::{Sim, SimOptions};
+    use iwbtg_sim::sound::DllMode;
+    use iwbtg_sim::stripped::RankedStart;
+    use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 
     use super::*;
 
@@ -382,6 +553,147 @@ mod tests {
         let d = std::env::temp_dir().join(format!("iwbtg-stats-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         Store::at(d)
+    }
+
+    /// One empty fixed step, standing in for `view::tick` (which needs the whole run's
+    /// resources), so the schedule's ordering is exercised.
+    fn step(mut game: NonSendMut<Game>) {
+        game.sim.step(InputFrame::EMPTY);
+    }
+
+    /// The clear fixture with a second map `two` whose stage chain is `stages`; map 0 keeps the
+    /// package `[timing]`.
+    fn two_map_def(base: &GameDef, stages: Vec<TimingTrigger>) -> Arc<GameDef> {
+        // A loaded def's chain lives in its map entry; `def.timing` is the map-less fallback.
+        let chain = base.map_timing(0).clone();
+        let mut def = base.clone();
+        def.maps = vec![
+            MapDef {
+                id: "main".to_owned(),
+                timing: chain.clone(),
+                start: RankedStart::default(),
+            },
+            MapDef {
+                id: "two".to_owned(),
+                timing: TimingDef {
+                    start: chain.start,
+                    end: chain.end,
+                    stages,
+                },
+                start: RankedStart::default(),
+            },
+        ];
+        Arc::new(def)
+    }
+
+    /// A world playing `map` of `def` (the view's run state without a window).
+    fn world_on(def: Arc<GameDef>, map: &str) -> World {
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Original,
+            map: Some(map.to_owned()),
+        };
+        let prepared = Sim::prepare(&def).unwrap();
+        let sim = Sim::new_prepared(def, options, &prepared).unwrap();
+        let mut world = World::new();
+        world.insert_non_send(Game { sim });
+        world
+    }
+
+    /// #1010: a run on a map with two stages records both stage splits (the package `[timing]`
+    /// has one) and a three-segment run.
+    #[test]
+    fn the_selected_maps_stages_shape_the_splits() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let base = (*pkg.def).clone();
+        let goal = base.map_timing(0).stages[0];
+        let def = two_map_def(&base, vec![TimingTrigger::RunStart, goal]);
+        let mut world = world_on(Arc::clone(&def), "two");
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        world.run_system_once(seed).unwrap();
+        let (_, run) = play_demo_clear(&mut world, [0, 0]);
+        assert_eq!(run.segment_deaths.len(), 3, "two stages and the end");
+        assert_eq!(run.splits.len(), 3, "{:?}", run.splits);
+        assert!(run.splits[0] <= 1, "the RunStart stage is at the start: {:?}", run.splits);
+        assert!(run.splits[1] > run.splits[0], "the goal split is later: {:?}", run.splits);
+        assert_eq!(run.splits[2], run.ticks, "the clear ends the run");
+        let id = map_key(&base.id, "two");
+        let stats = world.resource::<Stats>();
+        let cur = stats.current.as_ref().unwrap();
+        assert_eq!(
+            stats.book.map(&id).unwrap().boards[&cur.board].pb().unwrap().segment_deaths.len(),
+            3
+        );
+    }
+
+    /// #1010: a death after both earlier stages counts in the selected map's last segment (of
+    /// three); the package chain's one stage would clamp it into the second.
+    #[test]
+    fn a_death_counts_in_the_selected_maps_segment() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let base = (*pkg.def).clone();
+        let def = two_map_def(&base, vec![TimingTrigger::RunStart, TimingTrigger::RunStart]);
+        let mut world = world_on(def, "two");
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        world.run_system_once(seed).unwrap();
+        // The first tick fires both RunStart stages.
+        world.non_send_mut::<Game>().sim.step(InputFrame::EMPTY);
+        world.run_system_once(watch).unwrap();
+        let suicide = InputFrame {
+            held: Action::Suicide.bit(),
+            pressed: Action::Suicide.bit(),
+            released: 0,
+        };
+        let mut ticks = 0;
+        while world.resource::<Stats>().session.deaths == 0 {
+            assert!(ticks < 100, "no death in 100 ticks");
+            world.non_send_mut::<Game>().sim.step(suicide);
+            world.run_system_once(watch).unwrap();
+            ticks += 1;
+        }
+        let id = map_key(&base.id, "two");
+        assert_eq!(
+            world.resource::<Stats>().session.segment_deaths[&id],
+            vec![0, 0, 1],
+            "the death is in the last of three segments"
+        );
+    }
+
+    /// #1011: in the plugin's schedule (`seed` before the tick, `watch` after), the run's
+    /// pre-step state is the baseline, so every stepped tick is counted, the first included.
+    /// Before the fix `watch` opened the tracker after the first step and counted none of it.
+    #[test]
+    fn the_plugin_schedule_counts_the_first_tick() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        let mut schedule = Schedule::default();
+        schedule.add_systems((
+            seed.before(SimTick),
+            step.in_set(SimTick),
+            watch.after(SimTick),
+        ));
+        let id = map_key(&pkg.def.id, "main");
+        schedule.run(&mut world);
+        assert_eq!(world.non_send::<Game>().sim.world().tick, 1);
+        assert_eq!(
+            world.resource::<Stats>().book.map(&id).unwrap().played_ticks,
+            1,
+            "the first tick counts"
+        );
+        schedule.run(&mut world);
+        assert_eq!(
+            world.resource::<Stats>().book.map(&id).unwrap().played_ticks,
+            2
+        );
     }
 
     #[test]
@@ -510,6 +822,69 @@ mod tests {
         panic!("no clear in 2000 ticks");
     }
 
+    /// A practice run is never put on a board, even from a new game (#39).
+    #[test]
+    fn a_practice_run_is_never_on_a_board() {
+        use iwbtg_sim::room::StartPoint;
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+        use iwbtg_sim::stripped::PlayMode;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let sim = Sim::new(
+            pkg.def.clone(),
+            SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 1,
+                dll_mode: DllMode::Model,
+                mode: PlayMode::Original,
+                map: None,
+            },
+        )
+        .unwrap();
+        let mut stats = Stats::open(None);
+        stats.open_current(&sim, None, None, true);
+        assert_eq!(stats.on_board(), Some(false), "practice is not on a board");
+
+        let mut stats = Stats::open(None);
+        stats.open_current(&sim, None, None, false);
+        assert_eq!(stats.on_board(), Some(true), "a plain new game is");
+    }
+
+    /// Leaving a finished run forgets its clear and its record: a new run's first observation
+    /// has no clear, so nothing can open the results page with the old time (#1551).
+    #[test]
+    fn a_new_run_after_a_clear_starts_with_no_clear() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        let (_, first) = play_demo_clear(&mut world, [0, 0]);
+        assert!(first.ticks > 0);
+        assert!(world.resource::<Stats>().cleared.is_some());
+
+        // Leaving the run (OnExit(Run), the same call a retry makes).
+        crate::view::restart_run(&mut world).unwrap();
+        reset(&mut world);
+        assert!(
+            world.resource::<Stats>().cleared.is_none(),
+            "the finished run is forgotten"
+        );
+        assert!(world.resource::<Stats>().last.is_none());
+
+        // The new run's first observation: a fresh tracker, no clear, and the book keeps the
+        // finished run's one clear.
+        world.run_system_once(watch).unwrap();
+        let stats = world.resource::<Stats>();
+        assert!(stats.last.is_none() && stats.cleared.is_none(), "no clear on the first tick");
+        assert_eq!(
+            stats.book.map(&map_key(&pkg.def.id, "main")).unwrap().clears,
+            1,
+            "only the finished run is in the book"
+        );
+    }
+
     /// #679: a run with deaths logs them with their time, room and the kid's position; the clear
     /// writes it to the file and the next start reads it back.
     #[test]
@@ -587,7 +962,7 @@ mod tests {
     fn the_clear_demo_clears_twice_with_a_split() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        assert_eq!(pkg.def.timing.stages.len(), 1);
+        assert_eq!(pkg.def.map_timing(0).stages.len(), 1);
         let store = temp("clear");
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
@@ -663,6 +1038,59 @@ mod tests {
         assert!(stats.book.maps.is_empty());
         assert_eq!(
             store.read_text(BROKEN).unwrap().as_deref(),
+            Some("version = \"x\"")
+        );
+    }
+
+    /// #1017: while the backup cannot be written, no flush (a normal write included) replaces
+    /// the unreadable file; the backup is retried and only then is the empty book saved.
+    #[test]
+    fn a_failed_backup_never_replaces_the_unreadable_file() {
+        let dir = std::env::temp_dir()
+            .join(format!("iwbtg-stats-test-{}-broken-full", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::at(dir.clone());
+        store.write_text(FILE, "version = \"x\"").unwrap();
+        // A directory in the backup's place makes checking and writing it fail.
+        std::fs::create_dir(dir.join(BROKEN)).unwrap();
+        let mut stats = Stats::open(Some(store.clone()));
+        assert!(stats.book.maps.is_empty());
+        stats.dirty = true;
+        stats.flush();
+        assert_eq!(
+            store.read_text(FILE).unwrap().as_deref(),
+            Some("version = \"x\""),
+            "the original survives a write while its backup is pending"
+        );
+        assert!(stats.recovery.is_some(), "the backup is still pending");
+        // With the name free again the retry preserves the bytes, then saves the empty book.
+        std::fs::remove_dir(dir.join(BROKEN)).unwrap();
+        stats.flush();
+        assert_eq!(
+            store.read_text(BROKEN).unwrap().as_deref(),
+            Some("version = \"x\"")
+        );
+        let written = store
+            .read_text(FILE)
+            .unwrap()
+            .expect("the empty book is written");
+        assert!(Book::parse(&written).unwrap().maps.is_empty());
+    }
+
+    /// #1017: a later unreadable file gets a new backup name; an earlier recovery copy is kept.
+    #[test]
+    fn an_existing_recovery_copy_is_kept() {
+        let store = temp("broken-again");
+        store.write_text(BROKEN, "older = \"copy\"").unwrap();
+        store.write_text(FILE, "version = \"x\"").unwrap();
+        let stats = Stats::open(Some(store.clone()));
+        assert!(stats.book.maps.is_empty());
+        assert_eq!(
+            store.read_text(BROKEN).unwrap().as_deref(),
+            Some("older = \"copy\"")
+        );
+        assert_eq!(
+            store.read_text("stats.broken-2.toml").unwrap().as_deref(),
             Some("version = \"x\"")
         );
     }

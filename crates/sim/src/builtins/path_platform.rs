@@ -1,5 +1,5 @@
-//! Built-in `path_platform` (mechanics `path_platform`; kid/B.md pathPlatform; docs/plans/
-//! sim-core.md 6.1, M8; docs/format/builtins/path_platform.md). Tier 3.
+//! Built-in `path_platform` (mechanics `path_platform`; kid/B.md pathPlatform;
+//! docs/architecture/sim/builtins.md, M8; docs/format/builtins/path_platform.md). Tier 3.
 //!
 //! Kaenbyou pathPlatform. A platform that follows a path (`path::start`; the runner advances it
 //! every tick). Touch mode (`start_on_touch`) starts the path on the first kid contact at speed
@@ -39,31 +39,37 @@ const SPECS: &[ParamSpec] = &[
         name: "path",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "scale",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "path_end",
         ty: ParamType::Enum(PATH_END),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "start_on_touch",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "keep_moving_when_kid_absent",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

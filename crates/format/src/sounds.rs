@@ -1,5 +1,4 @@
-//! Sound entries to `SoundDef` (kind, length in ticks; docs/plans/sim-core.md 7, 8.3). WP0
-//! creates the file; WP7b owns it.
+//! Sound entries to `SoundDef` (kind, length in ticks; docs/format/sounds.md).
 //!
 //! Every `sounds/<id>.ogg` is a normal sound and every `music/<id>.ogg` a MULTIMEDIA one (at
 //! most one copy plays, S2). Ids are the file stems, sounds first then music, each in path
@@ -35,7 +34,7 @@ enum KindName {
 
 /// Reads every sound entry (step 7). The result's index is the `SoundId`. `trace` is
 /// `LoadMode::Trace`: an id used in both folders is a warning, the sound wins. `load::load_game`
-/// (WP7a) calls this.
+/// calls this.
 pub fn load(files: &PackageFiles, trace: bool, diags: &mut Vec<Diagnostic>) -> Vec<SoundDef> {
     let mut out: Vec<SoundDef> = Vec::new();
     let mut no_length: Vec<String> = Vec::new();

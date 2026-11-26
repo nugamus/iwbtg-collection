@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause, redesigned</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes ps-live{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes ps-fruit{from{transform:translateX(0)}to{transform:translateX(-56px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- The pause menu in our own language, replacing m4's in-game PAUSE box. Esc or Start opens it: the game blurs and darkens behind (300 ms OutQuint), the menu slides in from the left (400 ms OutQuint, items 30 ms apart) and the run card from the right. The delicious fruit stays as the selector, a nod to the old box; the picked item slides 20 px right. Left: what you can do. Right: where you are and what this run looks like, so a pause is also a quick look at your splits and the controls. Time Attack says plainly that the timer keeps running (product.md, Pause); Classic stops game time. Destructive items (Restart run, Quit) ask for a 0.6 s hold once the run is over a minute old. -->
+<div style="position: relative; width: {{ow}}px; height: {{oh}}px; overflow: hidden; background: #0b0d14">
+<div style="position: absolute; left: 0; top: 0; width: {{W}}px; height: {{H}}px; transform: scale({{zoom}}); transform-origin: 0 0; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="{{W}}px" h="{{H}}px" hue="250" blur="60" dim="0.5" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: {{gameX}}px; top: 0; width: {{gameW}}px; height: {{H}}px; overflow: hidden; filter: blur(5px) saturate(.6) brightness(.5)"><div style="width: 800px; height: 608px; transform: scale({{gameS}}); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div></div>
+  <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.92) 0%, rgba(8,9,14,.55) 45%, rgba(8,9,14,.7) 100%)"></div>
+
+  <!-- left: the menu -->
+  <div style="position: absolute; left: {{menuX}}px; top: {{menuY}}px; width: {{menuW}}px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{titleSize}}px; font-weight: 700; font-style: italic; line-height: .9">{{title}}</span>
+    <div style="align-self: flex-start; height: 36px; padding: 0 16px; border-radius: 10px; background: {{statusBg}}; display: flex; align-items: center; gap: 10px; transform: skewX(-11.31deg); margin: 6px 0 18px">
+      <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700"><span style="width: 9px; height: 9px; border-radius: 5px; background: {{statusDot}}; animation: {{statusAnim}}"></span>{{status}}</span>
+    </div>
+    <sc-for list="{{items}}" as="it" hint-placeholder-count="6">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 28px; height: 32px; flex: none; overflow: hidden; opacity: {{it.fruit}}" aria-hidden="true"><img src="/_blob/23ec5474ca1d50c871f0d33d2c7f8d59" alt="" width="56" height="32" style="display: block; image-rendering: pixelated; animation: ps-fruit 640ms steps(2) infinite"></span>
+        <button type="button" style="all: unset; position: relative; overflow: hidden; flex: 1; margin-left: {{it.x}}px; height: {{itemH}}px; border-radius: 10px; background: {{it.bg}}; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{it.ring}}">
+          <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{it.hold}}%; background: rgba(255,61,85,.45)"></span>
+          <span style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; gap: 14px; padding: 0 22px 0 26px">
+            <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-size: {{itemSize}}px; font-weight: {{it.w}}; color: {{it.ink}}; white-space: nowrap">{{it.label}}</span><sc-if value="{{it.sub}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; color: {{it.subInk}}; white-space: nowrap">{{it.sub}}</span></sc-if></span>
+            <sc-if value="{{it.key}}" hint-placeholder-val="{{ true }}"><span style="min-width: 28px; height: 28px; padding: 0 8px; box-sizing: border-box; border-radius: 6px; background: rgba(255,255,255,.16); display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #e3e5ee; white-space: nowrap">{{it.key}}</span></sc-if>
+          </span>
+        </button>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- right: this run, or the options -->
+  <sc-if value="{{showRun}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: {{cardX}}px; top: {{menuY}}px; width: {{cardW}}px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="align-self: center"><dc-import name="GameIcon" game="kaenbyou" size="36" hint-size="36px,36px"></dc-import></span><span style="font-size: 24px; font-weight: 700">I wanna be the Kaenbyou</span>
+        <span style="font-size: 16px; color: #c9cde0">{{mapLine}}</span>
+        <sc-for list="{{pills}}" as="p" hint-placeholder-count="1"><span style="height: 24px; padding: 0 9px; border-radius: 8px; background: {{p.bg}}; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .08em; color: {{p.ink}}">{{p.t}}</span></span></sc-for>
+      </div>
+      <div style="display: flex; gap: 40px; align-items: flex-end">
+        <sc-for list="{{big}}" as="b" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{b.k}}</span><span style="font-size: {{b.size}}px; font-weight: 600; line-height: 1; color: {{b.ink}}">{{b.v}}</span><span style="font-size: 14px; font-weight: 600; color: {{b.dc}}">{{b.d}}</span></div>
+        </sc-for>
+      </div>
+      <!-- the route: splits in Time Attack, progress in Classic, at any game length (E7) -->
+      <dc-import name="Route" len="standard" variant="{{routeVariant}}" mode="{{routeMode}}" at="{{routeAt}}" w="{{cardW}}" hint-size="880px,96px"></dc-import>
+      <!-- this stage, room by room -->
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) {{ctlW}}px; gap: 28px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{roomsKey}}</span>
+          <sc-for list="{{rooms}}" as="r" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 40px; gap: 10px; align-items: center; height: 26px">
+              <span style="font-size: 14px; color: {{r.ink}}; white-space: nowrap">{{r.name}}</span>
+              <span style="height: 8px; border-radius: 4px; background: rgba(255,255,255,.08)"><span style="display: block; width: {{r.pct}}%; height: 100%; border-radius: 4px; background: {{r.c}}"></span></span>
+              <span style="font-size: 14px; font-weight: 600; text-align: right">{{r.n}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Controls in this game</span>
+          <sc-for list="{{controls}}" as="c" hint-placeholder-count="5">
+            <span style="display: flex; align-items: center; gap: 10px; font-size: 14px"><span style="min-width: 30px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 6px; background: rgba(255,255,255,.88); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); color: #10121a; display: grid; place-items: center; font-size: 12px; font-weight: 700">{{c.k}}</span><span style="font-weight: 600; color: {{c.ink}}">{{c.a}}</span></span>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{showOptions}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: {{cardX}}px; top: {{menuY}}px; width: {{cardW}}px; display: flex; flex-direction: column; gap: 10px">
+      <span style="font-size: 26px; font-weight: 700">Options</span>
+      <span style="font-size: 15px; color: #a2a8bc; padding-bottom: 6px">Only what is safe mid-run. Nothing here changes the run, its timer or its replay. Everything else is in Settings from the menus.</span>
+      <sc-for list="{{opts}}" as="o" hint-placeholder-count="8">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; min-height: 52px; padding: 4px 16px; border-radius: 10px; background: {{o.bg}}; box-shadow: {{o.ring}}">
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 600">{{o.label}}</span><sc-if value="{{o.desc}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; color: #a2a8bc">{{o.desc}}</span></sc-if></span>
+          <span style="display: flex; align-items: center; gap: 10px">
+            <sc-if value="{{o.slider}}" hint-placeholder-val="{{ false }}"><span style="position: relative; width: 200px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); transform: skewX(-11.31deg)"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{o.pct}}%; border-radius: 4px; background: {{accent}}"></span><span style="position: absolute; top: -6px; left: {{o.pct}}%; margin-left: -6px; width: 12px; height: 20px; border-radius: 4px; background: #ffffff"></span></span></sc-if>
+            <sc-if value="{{o.toggle}}" hint-placeholder-val="{{ false }}"><span style="position: relative; width: 42px; height: 24px; border-radius: 12px; background: {{o.track}}"><span style="position: absolute; top: 3px; left: {{o.knobX}}px; width: 18px; height: 18px; border-radius: 9px; background: #ffffff"></span></span></sc-if>
+            <sc-if value="{{o.button}}" hint-placeholder-val="{{ false }}"><span style="height: 36px; padding: 0 16px; border-radius: 10px; background: rgba(255,255,255,.1); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700">{{o.button}}</span></span></sc-if>
+            <span style="min-width: 56px; text-align: right; font-size: 15px; font-weight: 600">{{o.value}}</span>
+          </span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: {{hintB}}px; display: flex; justify-content: center"><dc-import name="Hints" items="{{hints}}" keys="{{keys}}" hint-size="900px,40px"></dc-import></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic"],"default":"ta"},"view":{"editor":"enum","options":["main","options"],"default":"main"},"ratio":{"editor":"enum","options":["169","43"],"default":"169"},"pad":{"editor":"boolean","default":false},"selected":{"editor":"int","min":0,"max":5,"default":0},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const classic = (this.props.mode ?? 'ta') === 'classic';
+    const opts = (this.props.view ?? 'main') === 'options';
+    const r43 = (this.props.ratio ?? '169') === '43';
+    const pad = this.props.pad === true || this.props.pad === 'true';
+    const sel = opts ? (classic ? 2 : 4) : Number(this.props.selected ?? 0);
+    const accent = classic ? '#8f7bff' : '#ff3d55';
+    const W = r43 ? 1366 : 1920, H = r43 ? 1024 : 1080;
+    const K = (k, padK) => pad ? padK : k;
+    const it = (label, key, sub, extra) => Object.assign({ label, key, sub: sub || '', subInk: '#a2a8bc', hold: 0 }, extra || {});
+    const list = classic ? [
+      it('Continue', K('Esc', 'B')),
+      it('Retry from save', K('R', 'Y'), 'what R does in the game'),
+      it('Options', '', 'volume, display, controls'),
+      it('Back to the shelf', '', 'progress since the last save point is lost, as in the game'),
+    ] : [
+      it('Continue', K('Esc', 'B')),
+      it('Retry from save', K('R', 'Y'), 'what R does; the timer keeps going'),
+      it('Restart run', K('hold `', 'hold Back'), 'a new run from the start', { hold: sel === 2 ? 40 : 0 }),
+      it('Practice this stage', K('P', 'X'), 'unranked, from Stage 5 or your last save point'),
+      it('Options', '', 'volume, display, controls'),
+      it('Quit to game select', '', 'no results; the replay is kept'),
+    ];
+    const items = list.map((x, i) => Object.assign(x, {
+      fruit: i === sel ? 1 : 0, x: i === sel ? 20 : 0,
+      bg: i === sel ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.55)', ring: i === sel ? '0 0 0 2px rgba(255,255,255,.55)' : 'none',
+      w: i === sel ? 700 : 600, ink: i === sel ? '#ffffff' : '#e3e5ee', subInk: i === sel ? '#e3e5ee' : '#a2a8bc',
+    }));
+    const big = classic ? [
+      { k: 'This session', v: '0:12:44', d: 'game time stopped', dc: '#a2a8bc', size: 56, ink: '#ffffff' },
+      { k: 'Deaths', v: '37', d: '5,231 in this game', dc: '#a2a8bc', size: 40, ink: '#ffffff' },
+      { k: 'Where', v: 'Stage 4', d: 'Misty forest 3', dc: '#a2a8bc', size: 40, ink: '#ffffff' },
+    ] : [
+      { k: 'Run time', v: '38:09.02', d: 'still running', dc: '#ffb3bd', size: 56, ink: '#ffffff' },
+      { k: 'vs PB here', v: '+0:46.10', d: 'behind after Stage 4', dc: '#a2a8bc', size: 40, ink: '#ff6b6b' },
+      { k: 'Deaths', v: '1,284', d: 'attempt 41 today', dc: '#a2a8bc', size: 40, ink: '#ffffff' },
+    ];
+    const R = classic ? [['Misty forest 3', 21], ['Misty forest 2', 9], ['Misty forest 1', 5], ['Stage 4 start', 2]] : [['5-3 falling spikes', 24], ['5-2', 19], ['5-4 miniboss', 11], ['5-1', 7]];
+    const max = R[0][1];
+    const rooms = R.map(([name, n], i) => ({ name, n, pct: Math.round(100 * n / max), c: i === 0 ? accent : 'rgba(255,255,255,.35)', ink: i === 0 ? '#ffffff' : '#c9cde0' }));
+    const controls = [['← →', 'Move', '#e3e5ee'], ['Shift', 'Jump', '#e3e5ee'], ['Z', 'Shoot', '#e3e5ee'], ['R', 'Retry from save', '#e3e5ee'], ['C', 'Bomb (extra 1)', '#ffc46b']].map(([k, a, ink]) => ({ k: pad ? ({ '← →': 'D-pad', Shift: 'A', Z: 'X', R: 'Y', C: 'LB' })[k] : k, a, ink }));
+    const o = (label, desc, kind, v, extra) => Object.assign({ label, desc, slider: kind === 'slider', toggle: kind === 'toggle', button: kind === 'button' ? v : '', value: kind === 'button' ? (extra && extra.value) || '' : kind === 'toggle' ? '' : v, pct: extra && extra.pct, track: extra && extra.on ? accent : 'rgba(255,255,255,.2)', knobX: extra && extra.on ? 21 : 3, bg: extra && extra.focus ? 'rgba(255,255,255,.08)' : 'transparent', ring: extra && extra.focus ? 'inset 0 0 0 2px rgba(255,255,255,.5)' : 'none' }, {});
+    const optsList = [
+      o('Music', '', 'slider', '60%', { pct: 60, focus: true }), o('Sound effects', '', 'slider', '100%', { pct: 100 }), o('Master', '', 'slider', '100%', { pct: 100 }),
+      o('Backdrop blur', 'the art around the game', 'slider', '60%', { pct: 60 }),
+      o('Show the HUD', 'Shift+Tab does the same', 'toggle', '', { on: true }),
+      o('Input display', 'for recording or streaming', 'toggle', '', { on: false }),
+      o('Key bindings for this game', 'a change applies to the next input', 'button', 'Open', { value: '' }),
+      o('Audio offset', 'calibration waits for the menus', 'button', 'Change', { value: '+24 ms' }),
+    ];
+    const gameW = r43 ? 1046 : 1422, gameS = gameW / 800;
+    return {
+      ow: r43 ? 1024 : 1920, oh: r43 ? 768 : 1080, W, H, zoom: r43 ? 0.75 : 1, accent,
+      gameX: (W - gameW) / 2, gameW, gameS,
+      menuX: r43 ? 60 : 130, menuY: r43 ? 150 : 170, menuW: r43 ? 560 : 640, titleSize: r43 ? 84 : 104, itemH: r43 ? 66 : 70, itemSize: r43 ? 21 : 22,
+      cardX: r43 ? 680 : 900, cardW: r43 ? 630 : 880, ctlW: r43 ? 230 : 260,
+      title: opts ? 'Paused · Options' : 'Paused',
+      status: classic ? 'Game time stopped' : 'Timer running · 38:09.02', statusBg: classic ? 'rgba(143,123,255,.25)' : 'rgba(255,61,85,.22)', statusDot: classic ? '#b9adff' : '#ff3d55', statusAnim: classic ? 'none' : 'ps-live 1s ease-in-out infinite',
+      items, showRun: !opts, showOptions: opts, opts: optsList,
+      mapLine: classic ? 'Classic' : 'Very Hard · Any%',
+      pills: classic ? [{ t: 'CLASSIC', bg: '#8f7bff', ink: '#ffffff' }] : [{ t: 'SD', bg: 'rgba(255,255,255,.16)', ink: '#ffffff' }, { t: 'AR', bg: 'rgba(255,255,255,.16)', ink: '#ffffff' }],
+      big, routeVariant: classic ? 'progress' : 'splits', routeMode: classic ? 'classic' : 'ta', routeAt: classic ? 3 : 4, roomsKey: classic ? 'Deaths this session, by room' : 'Stage 5 so far: deaths by room', rooms, controls,
+      hints: pad ? 'A:Choose|B:Continue|Y:Retry from save|X:Practice' : 'Enter:Choose|Esc:Continue|R:Retry from save|`:Hold to restart',
+      keys: !pad, hintB: r43 ? 40 : 36,
+    };
+  }
+}
+</script>
+</body>
+</html>

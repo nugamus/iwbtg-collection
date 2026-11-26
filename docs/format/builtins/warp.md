@@ -16,7 +16,7 @@ Room travel (mechanics `warp`, the roomChanger). Collision with either kid kind,
 | `gate_bosses` | list of whole numbers, 0 to 15 | none | Boss flags the gate counts (`MechGlobals::bosses`, the flags `boss_gate`, `boss_item` and `item_viewer` use). One number is a list of one. |
 | `gate_items` | list of whole numbers, 0 to 15 | none | Item flags the gate counts (`MechGlobals::items`, as `secret_item` and `item_viewer`). |
 | `gate_need` | whole number | all listed | The gate is open while at least this many listed flags are set. |
-| `gate_closed` | `hide`, `destroy` | `hide` | A closed gate: `hide` is invisible and its touch does nothing; `destroy` destroys the warp. |
+| `gate_closed` | `hide`, `destroy` | `hide` | A closed gate: `hide` is invisible and its touch does nothing; `destroy` destroys the warp. Format-0 legacy alias (`keep-celebrating-for-xia`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 
 **Moving the kid.** When `warp_x` or `warp_y` is not 0, the handler moves the touching kid, in this order: `clear_rising`, then x, then y. The kid stays the same instance (he is persistent), so he keeps his speed, his djump and the rest of his state.
 

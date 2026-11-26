@@ -105,6 +105,7 @@ fn volumes(ctx: &Ctx) -> Vec<f64> {
             OutputEvent::Sound(SoundOutput::Volume {
                 target: SoundTarget::Builtin(s),
                 value,
+                ..
             }) if *s == MUSIC => Some(value.get()),
             _ => None,
         })

@@ -1,5 +1,5 @@
-//! Built-in `water` (mechanics `water`; kid specs per game; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/water.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `water` (mechanics `water`; kid specs per game; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/water.md). Tier 2.
 //!
 //! Collision with the kid (either kind, one event per kid). In this order:
 //!
@@ -63,71 +63,103 @@ const SPECS: &[ParamSpec] = &[
         name: "angle_step",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "destroy_outside_room",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "cur_jumps",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["kaenbyou"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "release_same_tick",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "area_left",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "area_right",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "area_top",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "area_bottom",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
     },
     ParamSpec {
         name: "variant",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fall_cap",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "refresh",
         ty: ParamType::Enum(REFRESH),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "ground_jump",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "air_jump",
         ty: ParamType::Enum(AIR_JUMP),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "air_jump_speed",
         ty: ParamType::Enum(AIR_SPEED),
         required: false,
+        legacy: None,
     },
 ];
 

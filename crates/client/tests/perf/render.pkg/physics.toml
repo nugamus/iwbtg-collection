@@ -1,0 +1,7 @@
+#:schema ../../../../../docs/format/schema/v0/physics.schema.json
+# The kid stays where the room puts it: this package measures spawning and bullet scripts, not
+# falling, and a floor would need sprite assets it does not have.
+preset = "A1"
+
+[numbers]
+gravity = 0.0

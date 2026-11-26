@@ -1,5 +1,5 @@
-//! Built-in `bow` (the Medium-mode ribbon; CLONE_SPEC sprites "Bow"; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/bow.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `bow` (the Medium-mode ribbon; CLONE_SPEC sprites "Bow"; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/bow.md). Tier 1.
 //!
 //! Persistent, cosmetic. In the phases it handles it destroys itself unless the difficulty is 0
 //! (`medium_only`, default on) and when the room's role is Select (`destroy_in_select`, default
@@ -28,16 +28,19 @@ const SPECS: &[ParamSpec] = &[
         name: "follow",
         ty: ParamType::Enum(FOLLOW),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "medium_only",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroy_in_select",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

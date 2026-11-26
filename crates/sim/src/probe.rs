@@ -1,4 +1,4 @@
-//! Read-only trace sampling, compiled into every build (docs/plans/sim-core.md 9.3).
+//! Read-only trace sampling, compiled into every build (docs/architecture/traces.md).
 //!
 //! Sample point: after tick row 13, before the room change, which is where `Sim::step` returns
 //! (the recorder writes its rows "after End Step, drawing and the animation update, before a
@@ -6,8 +6,7 @@
 //! alive, active instance of the traced kind, in dispatch order (`events::dispatch_order`).
 //!
 //! Reading is side-effect free except for [`KeyRead::Direct`], which consumes the
-//! `keyboard_check_direct` latch the way the recorder's own column read did (I1). WP0 declares;
-//! WP8a owns.
+//! `keyboard_check_direct` latch the way the recorder's own column read did (I1).
 
 pub mod registry;
 
@@ -55,7 +54,7 @@ pub enum Column {
     Count(Target),
     /// `keyboard_check*(...)`.
     Key(KeyRead),
-    /// A save slot field (decoded save files, plan 9.1 kind 3).
+    /// A save slot field (decoded save files, docs/architecture/traces.md kind 3).
     Save(SaveField),
     /// Engine state the original keeps in a global or a built-in variable (`global.death`,
     /// `room_speed`), when the package declares no variable of that name.
@@ -311,10 +310,13 @@ impl SpriteField {
 /// - `image_number`: the sprite's frame count, 0 for a sprite with no frames (CLONE_SPEC
 ///   collision, bbox-empty-mask.csv k1) and with no sprite (CLONE_SPEC sprites,
 ///   traces/little-trap/anim-nosprite.csv).
-/// - `sprite_width`, `sprite_height`: 0 for a sprite with no frames (CLONE_SPEC collision); the
-///   frame size while `image_xscale` (`image_yscale`) is exactly 1 (kid/A4.md playerStart,
-///   bbox-empty-mask.csv k0, k3-k5). Under another scale (k12 reads 6 for a 2x2 sprite at scale
-///   3) and with no sprite, the spec gives no rule: UNKNOWN, an empty cell.
+/// - `sprite_width`, `sprite_height`: the frame width (height) times `image_xscale`
+///   (`image_yscale`), signed and exact under any scale, and independent of `image_angle`
+///   (research#231, CLONE_SPEC sprites "Sprite size variables": maskNothing 2x2 at scale 3 and
+///   angle 30 reads 6x6, bbox-empty-mask.csv k12; a 48-wide player at xscale -1 reads -48,
+///   mask-mirror.csv frame 25). The sprite decides, not the mask. A sprite with no frames reads
+///   0 at any scale (CLONE_SPEC collision, bbox-empty-mask.csv k1). With no sprite the spec has
+///   no rule (`sprite_index = -1` is OPEN, trace request `NUM-SPRITE-SIZE`): an empty cell.
 pub fn sprite_field(def: &GameDef, inst: &Instance, f: SpriteField) -> trace::Value {
     let count = |n: u32| trace::Value::Real(f64::from(n));
     if f == SpriteField::MaskIndex {
@@ -335,10 +337,10 @@ pub fn sprite_field(def: &GameDef, inst: &Instance, f: SpriteField) -> trace::Va
     let size = |n: u32, scale: Real| {
         if sprite.frames == 0 {
             count(0)
-        } else if scale == Real::ONE {
-            count(n)
         } else {
-            trace::Value::Empty
+            // research#231: the signed frame size times the scale, exact at any scale; the
+            // angle does not enter.
+            trace::Value::Real(f64::from(n) * scale.get())
         }
     };
     match f {
@@ -442,6 +444,10 @@ pub enum SaveField {
     Exists,
     /// Saved room.
     Room,
+    /// The save object's stable identity key (`name:<name>` or
+    /// `at:<room>/<kind>@<xbits>,<ybits>`); empty for a first-play or creation-code save (#1153,
+    /// #1297).
+    Point,
     /// Saved x.
     X,
     /// Saved y.
@@ -477,9 +483,7 @@ pub enum SaveField {
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>> {
     let ids = {
         let w = &sim.world;
-        events::dispatch_order(w, &sim.rules.tick, |i| {
-            i.alive && i.active && matches(sim.def(), i, probe.object)
-        })
+        events::dispatch_order(w, |i| matches(sim.def(), i, probe.object))
     };
     let mut rows = Vec::with_capacity(ids.len());
     for id in ids {
@@ -682,11 +686,11 @@ fn target_instance(
 /// `World::first_of` picks one for a class.
 pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
     match rules.first_rule {
-        FirstRule::DispatchOrder => {
-            events::dispatch_order(w, rules, |i| i.alive && i.active && matches(def, i, t))
-                .first()
-                .copied()
-        }
+        FirstRule::InstanceList => w.instance_list().into_iter().find(|id| {
+            w.get(*id)
+                .is_some_and(|i| World::visible_instance(i, false) && matches(def, i, t))
+        }),
+        FirstRule::DispatchOrder => events::dispatch_order(w, |i| matches(def, i, t)).first().copied(),
         FirstRule::LowestId => w
             .iter_alive()
             .filter(|i| i.active && matches(def, i, t))
@@ -706,9 +710,15 @@ pub(crate) fn nth_of_target(
 ) -> Option<InstId> {
     let n = usize::try_from(n).ok()?;
     match rules.first_rule {
-        FirstRule::DispatchOrder => events::dispatch_order(w, rules, |i| matches(def, i, t))
-            .get(n)
-            .copied(),
+        FirstRule::InstanceList => w
+            .instance_list()
+            .into_iter()
+            .filter(|id| {
+                w.get(*id)
+                    .is_some_and(|i| World::visible_instance(i, false) && matches(def, i, t))
+            })
+            .nth(n),
+        FirstRule::DispatchOrder => events::dispatch_order(w, |i| matches(def, i, t)).get(n).copied(),
         FirstRule::LowestId => {
             let mut ids: Vec<InstId> = w
                 .iter_alive()
@@ -842,6 +852,7 @@ fn save_value(def: &GameDef, w: &World, f: SaveField) -> trace::Value {
         SaveField::Room => def
             .room(s.room)
             .map_or(trace::Value::Empty, |r| trace::Value::Str(r.name.clone())),
+        SaveField::Point => s.point.clone().map_or(trace::Value::Empty, trace::Value::Str),
         SaveField::X => real(s.x),
         SaveField::Y => real(s.y),
         SaveField::Flipped => truth(s.flipped),
@@ -872,6 +883,47 @@ fn from_value(v: &Value) -> trace::Value {
         Value::Str(s) => trace::Value::Str(s.clone()),
         Value::Inst(id) => trace::Value::Int(i64::try_from(id.0).unwrap_or(i64::MAX)),
         Value::None => trace::Value::Empty,
+        // One cell holds one value and the recorder has no array column. An empty cell would
+        // make an array indistinguishable from an unset variable, so the whole array goes in
+        // one string cell as its compact text form (`[1.0, [2.0], "x"]`, #1055) and `diff`
+        // compares that text bit for bit.
+        Value::Array(_) => trace::Value::Str(value_text(v)),
+    }
+}
+
+/// The compact text form of a value inside an array cell (#1055).
+///
+/// Elements follow the cell rules: a real as the trace's shortest round-trip decimal
+/// ([`trace::Value::decimal`]), an instance id as a decimal integer, a string quoted with `"`
+/// doubled. `Value::None` (Rhai's unit, no GML value) is `undefined`. Nested arrays recurse,
+/// separated by `, `. The form is deterministic: the same value always gives the same text,
+/// and a changed element changes it.
+fn value_text(v: &Value) -> String {
+    let mut out = String::new();
+    write_value_text(v, &mut out);
+    out
+}
+
+fn write_value_text(v: &Value, out: &mut String) {
+    match v {
+        Value::Real(r) => out.push_str(&trace::Value::Real(r.get()).decimal()),
+        Value::Str(s) => {
+            out.push('"');
+            out.push_str(&s.replace('"', "\"\""));
+            out.push('"');
+        }
+        Value::Inst(id) => out.push_str(&i64::try_from(id.0).unwrap_or(i64::MAX).to_string()),
+        Value::None => out.push_str("undefined"),
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_value_text(item, out);
+            }
+            out.push(']');
+        }
     }
 }
 
@@ -902,7 +954,7 @@ mod tests {
     }
 
     /// A sim in one room with a world instance and two blocks, built without `Sim::new` so the
-    /// test runs before WP1's bodies exist. The instances are stored directly.
+    /// test needs no tick pipeline. The instances are stored directly.
     fn sim_with_blocks() -> (Sim, Vec<InstId>) {
         let mut b = GameDefBuilder::new("probe-test");
         let world_kind = b.kind(KindDef::new("world", Builtin::World));
@@ -977,6 +1029,8 @@ mod tests {
             room: RoomId(0),
             x: Real::new(96.0),
             y: Real::new(567.4),
+            precision: Default::default(),
+            point: None,
             flipped: false,
             facing: -1,
             difficulty: 2,
@@ -1002,6 +1056,16 @@ mod tests {
             save_value(sim.def(), sim.world(), SaveField::Room),
             trace::Value::Str("room_1".into())
         );
+        // A first-play or creation-code save has no stable key (#1153 E1): the column is empty.
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Point),
+            trace::Value::Empty
+        );
+        sim.world.save.as_mut().expect("a save").point = Some("name:checkpoint_a".into());
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Point),
+            trace::Value::Str("name:checkpoint_a".into())
+        );
         let field = |f: &FieldRef| read_field(sim.def(), sim.world(), &sim.rules, ids[2], f, 7);
         assert_eq!(field(&FieldRef::Alarm(0)), trace::Value::Real(-1.0));
         assert_eq!(
@@ -1019,11 +1083,67 @@ mod tests {
         );
     }
 
+    /// An array variable records as one compact string cell, not an empty one (#1055): reals use
+    /// the trace's shortest-decimal form, strings quote with `"` doubled, nested arrays recurse.
+    /// The text is deterministic, so `diff` compares it bit for bit like any string cell.
+    #[test]
+    fn array_values_record_as_compact_text() {
+        let (mut sim, ids) = sim_with_blocks();
+        let nested = Value::array(vec![Value::Real(Real::new(2.0))]).expect("nested");
+        let array = Value::array(vec![
+            Value::Real(Real::ONE),
+            nested,
+            Value::Str("x".into()),
+            Value::Inst(InstId(100_005)),
+            Value::None,
+            Value::Str("a\"b".into()),
+            Value::array(Vec::new()).expect("empty"),
+        ])
+        .expect("array");
+        sim.world
+            .get_mut(ids[1])
+            .expect("block")
+            .vars
+            .insert(VarId(0), array);
+        let field = FieldRef::Var(VarId(0));
+        let cell = read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1);
+        let text = "[1.0, [2.0], \"x\", 100005, undefined, \"a\"\"b\", []]";
+        assert_eq!(cell, trace::Value::Str(text.into()));
+        assert!(
+            !cell.same(&trace::Value::Empty),
+            "an array no longer reads like an unset variable"
+        );
+        assert_eq!(
+            value_text(&Value::Real(Real::new(1.5))),
+            trace::Value::Real(1.5).decimal(),
+            "an element real uses the trace's own decimal form"
+        );
+        assert_eq!(
+            read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1),
+            cell,
+            "the same array always records the same text"
+        );
+        let items = sim
+            .world
+            .get_mut(ids[1])
+            .expect("block")
+            .vars
+            .get_mut(&VarId(0))
+            .expect("var")
+            .as_array_mut()
+            .expect("array");
+        items[0] = Value::Real(Real::new(1.5));
+        assert_ne!(
+            read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1),
+            cell,
+            "a changed element changes the cell"
+        );
+    }
+
     /// `sample` walks `events::dispatch_order`, and a `Direct` column consumes the latch (I1):
-    /// a second sample in the same tick reads only the held state. Needs WP1's bodies of
+    /// a second sample in the same tick reads only the held state. Covers
     /// `dispatch_order`, `InputState::latch` and `InputState::direct`.
     #[test]
-    #[ignore = "needs WP1: events::dispatch_order and InputState bodies"]
     fn sample_rows_and_direct_reads_consume_the_latch() {
         use crate::input::InputFrame;
         let (mut sim, _) = sim_with_blocks();
@@ -1130,6 +1250,64 @@ mod tests {
         assert_eq!(read(&inst), [r(-1.0), r(0.0), e.clone(), e.clone()]);
         inst.img.set_mask(Some(MaskId(0)));
         assert_eq!(read(&inst), [e.clone(), r(0.0), e.clone(), e]);
+    }
+
+    /// `sprite_width`/`sprite_height` are the signed frame size times the scale at any scale,
+    /// independent of the angle (research#231: bbox-empty-mask.csv k12, mask-mirror.csv frame
+    /// 25). A no-frame sprite reads 0 at any scale; no sprite stays an empty cell (OPEN).
+    #[test]
+    fn sprite_sizes_are_the_signed_frame_size_times_scale() {
+        use crate::def::{MaskId, MaskSet, SpriteDef, SpriteId};
+        let mut b = GameDefBuilder::new("probe-sprite-size");
+        let ctl = b.kind(KindDef::new("ctl", Builtin::World));
+        b.room(RoomDef::new("room_1", 800, 608));
+        let small = b.sprite_rect((2, 2), (0, 0));
+        let player = b.sprite_rect((48, 32), (0, 0));
+        // A no-frame sprite keeps its frame size but reads 0; the size path never reads the mask.
+        b.def_mut().sprites.push(SpriteDef {
+            frames: 0,
+            size: (5, 7),
+            origin: (0, 0),
+            masks: MaskSet::Shared(MaskId(0)),
+        });
+        let no_frames = SpriteId(2);
+        let def = b.build().expect("def");
+        let mut inst = Instance::new(InstId(1), ctl, 0, Real::ZERO, Real::ZERO);
+        let read = |inst: &Instance, f: SpriteField| sprite_field(&def, inst, f);
+        let r = |v: f64| trace::Value::Real(v);
+        let e = trace::Value::Empty;
+
+        // 2x2 at scale 3 and angle 30 reads 6x6 (bbox-empty-mask.csv k12).
+        inst.img.set_sprite(Some(small));
+        inst.img.set_xscale(Real::new(3.0)).expect("xscale");
+        inst.img.set_yscale(Real::new(3.0)).expect("yscale");
+        inst.img.set_angle(Real::new(30.0)).expect("angle");
+        assert_eq!(read(&inst, SpriteField::Width), r(6.0));
+        assert_eq!(read(&inst, SpriteField::Height), r(6.0));
+
+        // 48 wide at xscale -1 reads -48 (mask-mirror.csv frame 25); height is signed too.
+        inst.img.set_sprite(Some(player));
+        inst.img.set_xscale(Real::new(-1.0)).expect("xscale");
+        inst.img.set_yscale(Real::new(-1.0)).expect("yscale");
+        assert_eq!(read(&inst, SpriteField::Width), r(-48.0));
+        assert_eq!(read(&inst, SpriteField::Height), r(-32.0));
+
+        // A fractional scale is the exact product: 2 * 1.5 = 3.
+        inst.img.set_sprite(Some(small));
+        inst.img.set_xscale(Real::new(1.5)).expect("xscale");
+        inst.img.set_yscale(Real::new(1.5)).expect("yscale");
+        assert_eq!(read(&inst, SpriteField::Width), r(3.0));
+        assert_eq!(read(&inst, SpriteField::Height), r(3.0));
+
+        // A sprite with no frames reads 0 at any scale, angle included.
+        inst.img.set_sprite(Some(no_frames));
+        assert_eq!(read(&inst, SpriteField::Width), r(0.0));
+        assert_eq!(read(&inst, SpriteField::Height), r(0.0));
+
+        // No sprite: OPEN (`sprite_index = -1`, NUM-SPRITE-SIZE), an empty cell.
+        inst.img.set_sprite(None);
+        assert_eq!(read(&inst, SpriteField::Width), e);
+        assert_eq!(read(&inst, SpriteField::Height), e);
     }
 
     /// A no-frame sprite reads the point round(x), round(y); maskNothing its normalized 2x2 box;

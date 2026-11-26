@@ -93,12 +93,15 @@ impl<'a> Loader<'a> {
         r
     }
 
-    /// Step 6: every variable name the loader can see, sorted (plan 1.1).
+    /// Step 6: every variable name the loader can see, sorted (docs/architecture/sim/world.md).
     pub(super) fn intern(&self, rooms: &[ParsedRoom<'_>]) -> BTreeMap<String, iwbtg_sim::def::VarId> {
         let mut names: BTreeSet<String> = BTreeSet::new();
         for k in &self.kinds {
             names.extend(k.params.0.keys().cloned());
         }
+        // A kid profile's `[script] vars` are declared content, not run-time inferences
+        // (decision 0004).
+        names.extend(self.kid_script_vars.iter().cloned());
         for r in rooms {
             for i in &r.file.instances {
                 names.extend(i.params.keys().cloned());
@@ -108,8 +111,8 @@ impl<'a> Loader<'a> {
                     ActionFile::SetGlobal { var, index: None, .. } => {
                         names.insert(var.clone());
                     }
-                    // The element is a run-time name (`stage[1]`); only the index global is
-                    // known at load.
+                    // The element lives in the global's array (#998), not in a `stage[n]`
+                    // variable; only the index global is known at load.
                     ActionFile::SetGlobal {
                         index: Some(IndexFile::Global { global }),
                         ..
@@ -602,10 +605,7 @@ impl<'a> Loader<'a> {
                     merged.0.insert(k.clone(), v.clone());
                 }
                 let base = kind.base;
-                let refused = matches!(
-                    pending_call(&mut self.pending, || builtins::init_state(base, &merged)),
-                    Some(Err(_))
-                );
+                let refused = builtins::init_state(base, &merged).is_err();
                 if !refused {
                     continue;
                 }

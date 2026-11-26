@@ -1,4 +1,4 @@
-//! Built-in `breakable_block` (mechanics `breakable_block`; docs/plans/sim-core.md 6.1;
+//! Built-in `breakable_block` (mechanics `breakable_block`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/breakable_block.md). Tier 3.
 //!
 //! A solid block child that breaks.
@@ -29,21 +29,25 @@ const SPECS: &[ParamSpec] = &[
         name: "break_on",
         ty: ParamType::Enum(BREAK_ON),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "stages",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "stage_ticks",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

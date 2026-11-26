@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practice: where you die, and how often you make it</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes dm-pop{from{opacity:0;transform:scale(1.8)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- Practice (#39) with two tools built for how fangames are learned: one jump at a time, hundreds of tries. 1. The death map: every death in this room is a small cross where the kid died, this session in white and earlier sessions faint, so the killer spot is plain to see. A new death pops in (200 ms OutQuint). It is drawn only in practice and on results, never in a ranked run. 2. The consistency counter: from a save state or save point, each try is a dot (made it or died), and the panel counts the last 10 and your best streak, so you know when a jump is learnt and not just lucky. A try ends at the next save point or the room's exit. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="60" dim="0.45" tag="bottom-left" label="I wanna be the Kaenbyou" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0; position: relative">
+      <dc-import name="GameScene" hint-size="800px,608px"></dc-import>
+      <svg viewBox="0 0 800 608" width="800" height="608" style="position: absolute; left: 0; top: 0" aria-hidden="true">
+        <sc-for list="{{crosses}}" as="x" hint-placeholder-count="20">
+          <g transform="translate({{x.x}},{{x.y}})" opacity="{{x.op}}"><path d="M-4 -4L4 4M4 -4L-4 4" stroke="{{x.c}}" stroke-width="2.4" stroke-linecap="round"></path></g>
+        </sc-for>
+      </svg>
+    </div>
+  </div>
+
+  <!-- left: the practice panel -->
+  <div style="position: absolute; left: 22px; top: 150px; width: 206px; display: flex; flex-direction: column; gap: 18px">
+    <div style="align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 8px; background: #ffc46b; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #2a1d05">Practice · unranked</span></div>
+    <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">From</span><span style="font-size: 18px; font-weight: 700">Save state 2</span><span style="font-size: 13px; color: #a2a8bc">room 5-3, before the falling spikes</span></div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Last 10 tries</span>
+      <div style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px">
+        <sc-for list="{{tries}}" as="t" hint-placeholder-count="10"><span style="height: 22px; border-radius: 5px; background: {{t.bg}}; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: {{t.ink}}">{{t.s}}</span></sc-for>
+      </div>
+      <span style="font-size: 40px; font-weight: 600; line-height: 1">6 / 10</span>
+      <span style="font-size: 13px; color: #a2a8bc">best streak 4 · 37 tries in all</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Deaths here</span>
+      <span style="font-size: 15px"><b style="font-weight: 700">24</b> this session · <span style="color: #a2a8bc">61 before</span></span>
+      <span style="font-size: 13px; color: #a2a8bc">most at the ceiling spikes (14)</span>
+    </div>
+  </div>
+
+  <!-- right: the map's settings -->
+  <div style="position: absolute; left: 1694px; top: 150px; width: 206px; display: flex; flex-direction: column; gap: 14px">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Death map</span>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <sc-for list="{{shows}}" as="o" hint-placeholder-count="3"><span style="height: 38px; padding: 0 14px; border-radius: 10px; background: {{o.bg}}; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: {{o.w}}; color: {{o.ink}}">{{o.label}}<span style="font-size: 12px; color: #a2a8bc">{{o.k}}</span></span></sc-for>
+    </div>
+    <span style="font-size: 13px; line-height: 1.45; color: #a2a8bc">White: this session. Faint: earlier. Results shows the same map for the room where the run lost most time.</span>
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 18px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Keys</span>
+      <sc-for list="{{keys}}" as="k" hint-placeholder-count="4"><span style="display: flex; align-items: center; gap: 10px; font-size: 14px"><span style="min-width: 30px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 6px; background: rgba(255,255,255,.88); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); color: #10121a; display: grid; place-items: center; font-size: 12px; font-weight: 700">{{k.k}}</span><span style="font-weight: 600">{{k.a}}</span></span></sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    // deaths: under the ceiling spikes (384-544, y 64), on the floor spikes, on the mid spikes
+    const now = [[398, 70], [410, 68], [425, 72], [440, 69], [452, 71], [404, 75], [432, 66], [466, 70], [419, 77], [447, 76], [395, 66], [480, 72], [430, 74], [458, 66], [400, 338], [418, 334], [430, 330], [300, 548], [322, 552], [600, 300], [588, 306], [412, 548], [436, 552], [455, 340]];
+    const old = [[402, 80], [420, 64], [445, 82], [470, 76], [390, 72], [500, 70], [520, 74], [415, 340], [395, 330], [280, 552], [350, 548], [610, 296], [470, 548], [420, 552], [380, 70], [460, 64]];
+    const crosses = old.map(([x, y]) => ({ x, y, op: 0.35, c: '#ff9aa6' })).concat(now.map(([x, y]) => ({ x, y, op: 1, c: '#ffffff' })));
+    const T = ['✓', '✕', '✓', '✓', '✕', '✓', '✓', '✕', '✓', '✕'];
+    const tries = T.map((s) => ({ s, bg: s === '✓' ? 'rgba(69,212,131,.24)' : 'rgba(255,107,107,.22)', ink: s === '✓' ? '#45d483' : '#ff6b6b' }));
+    const shows = [['This session', 'on'], ['All sessions', ''], ['Off', '']].map(([label, k], i) => ({ label, k: i === 1 ? 'M' : '', bg: i === 1 ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)', w: i === 1 ? 700 : 500, ink: i === 1 ? '#ffffff' : '#c9cde0' }));
+    const keys = [['F5', 'Save state'], ['F8', 'Load state'], ['M', 'Death map'], ['F6', 'Reset the count']].map(([k, a]) => ({ k, a }));
+    return { crosses, tries, shows, keys };
+  }
+}
+</script>
+</body>
+</html>

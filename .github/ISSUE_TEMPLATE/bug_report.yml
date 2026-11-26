@@ -7,7 +7,11 @@ body:
     attributes:
       value: |
         Thanks for the report. Do not attach original game files, decompiled code or personal data.
-        For a security problem, use the private process in SECURITY.md instead of this form.
+        For a security problem, use the private process in .github/SECURITY.md instead of this form.
+
+        At triage an agent adds a `## Context` block (code paths, the doc page, spec claim or
+        register ids, the narrow test command, and what must not change); an issue is not
+        `agent-ready` without it. You do not need to fill it in.
   - type: textarea
     id: what-happened
     attributes:
@@ -45,6 +49,19 @@ body:
         - Other
     validations:
       required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Gameplay impact
+      description: How this affects what a player can do. An agent confirms the F tier at triage; leave it blank if you are not sure ([fidelity tiers](https://github.com/nugamus/iwbtg-collection/blob/main/docs/plans/fidelity-tiers.md)).
+      options:
+        - F1 — changes what a skilled player can do (position, death, timing, input, respawn)
+        - F2 — only what I see or hear
+        - F3 — a player cannot observe it
+        - Not about gameplay
+        - Not sure
+    validations:
+      required: false
   - type: input
     id: version
     attributes:

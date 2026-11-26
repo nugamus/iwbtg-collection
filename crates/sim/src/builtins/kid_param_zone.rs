@@ -1,4 +1,4 @@
-//! Built-in `kid_param_zone` (mechanics `kid_param_zone`; docs/plans/sim-core.md 6.1;
+//! Built-in `kid_param_zone` (mechanics `kid_param_zone`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/kid_param_zone.md). Tier 3.
 //!
 //! While a kid overlaps it, it writes the kid numbers it names through
@@ -34,36 +34,43 @@ const SPECS: &[ParamSpec] = &[
         name: "run_speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "max_vspeed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "max_fall_speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "jump",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "jump2",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "jump3",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "target",
         ty: ParamType::Enum(TARGETS),
         required: false,
+        legacy: None,
     },
 ];
 

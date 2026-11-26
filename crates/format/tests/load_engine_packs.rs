@@ -168,6 +168,18 @@ fn a_missing_engine_pack_sound_is_an_error() {
 
 // -- Custom physics (#802) ---------------------------------------------------------------------
 
+/// Makes `stage1` name the room profile `id`, which the caller adds.
+fn stage1_uses(f: &mut [(String, Vec<u8>)], id: &str) {
+    set(
+        f,
+        "rooms/stage1.toml",
+        STAGE1.replace(
+            "file_speed = 30\n",
+            &format!("file_speed = 30\nphysics = \"{id}\"\n"),
+        ),
+    );
+}
+
 #[test]
 fn a_profile_that_matches_its_pack_family_is_not_custom() {
     let (_, report) = load_ok(&with_pack(|_| {}), STRICT);
@@ -227,4 +239,72 @@ fn a_pack_family_other_than_the_profile_preset_is_custom() {
         "{:?}",
         p.differs
     );
+}
+
+#[test]
+fn a_room_profile_that_differs_is_custom_and_named() {
+    let files = with_pack(|f| {
+        stage1_uses(f, "fast");
+        f.push((
+            "physics/fast.toml".into(),
+            b"preset = \"A1\"\n[numbers]\nrun_speed = 4\n".to_vec(),
+        ));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(
+        p.is_custom(),
+        "a medley is custom physics even when the game profile matches"
+    );
+    assert!(p.differs.is_empty(), "{:?}", p.differs);
+    assert_eq!(
+        p.rooms,
+        vec![iwbtg_format::physics::RoomPhysicsStanding {
+            id: "fast".to_owned(),
+            differs: vec!["numbers.run_speed".to_owned()],
+        }]
+    );
+}
+
+#[test]
+fn a_room_profile_that_matches_the_game_profile_is_not_custom() {
+    let files = with_pack(|f| {
+        stage1_uses(f, "same");
+        f.push(("physics/same.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(!p.is_custom());
+    assert!(p.rooms.is_empty());
+}
+
+#[test]
+fn an_unreferenced_room_profile_is_not_custom() {
+    // A stray `physics/<id>.toml` that no room names is package data, not a medley (#1063).
+    let files = with_pack(|f| {
+        f.push((
+            "physics/stray.toml".into(),
+            b"preset = \"A1\"\n[numbers]\nrun_speed = 4\n".to_vec(),
+        ));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(!p.is_custom(), "an unreferenced profile is not a medley");
+    assert!(p.rooms.is_empty(), "{:?}", p.rooms);
+}
+
+#[test]
+fn a_room_profile_that_reverts_to_the_preset_is_a_medley() {
+    // The game's profile is custom and a room goes back to stock A1: two engines in one package.
+    let files = with_pack(|f| {
+        set(f, "physics.toml", "preset = \"A1\"\n[numbers]\nrun_speed = 5\n");
+        stage1_uses(f, "stock");
+        f.push(("physics/stock.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert_eq!(p.differs, vec!["numbers.run_speed".to_owned()]);
+    assert_eq!(p.rooms.len(), 1);
+    assert_eq!(p.rooms[0].id, "stock");
+    assert_eq!(p.rooms[0].differs, vec!["numbers.run_speed".to_owned()]);
 }

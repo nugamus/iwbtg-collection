@@ -1,0 +1,166 @@
+# REUSE licensing information for IWBTG Collection (REUSE Specification 3.3).
+#
+# Every file is annotated by path here; source and asset files carry no SPDX headers.
+# When several tables match a file, the last matching table wins, so the broad code
+# table comes first and the narrower documentation, font and game-content tables follow.
+#
+# Licence policy (README.md, docs/roadmap.md): code is MIT, documentation
+# is CC-BY-4.0, bundled fonts are OFL-1.1, and game content belongs to its creators and is
+# not covered by the repository licences (see LICENSES/LicenseRef-Game-Content.txt).
+
+version = 1
+
+# ---------------------------------------------------------------- code
+[[annotations]]
+path = [
+  "crates/**/*.rs",
+  "crates/**/*.toml",
+  "crates/**/*.rhai",
+  "crates/**/*.py",
+  "crates/**/*.wgsl",
+  "crates/**/*.html",
+  "crates/**/*.csv",
+  "crates/**/*.inputs",
+  "crates/**/*.txt",
+  ".cargo/**",
+  ".claude/**",
+  ".github/**",
+  "workspace/**",
+  "progress/**",
+  "migrations/**",
+  "scripts/**",
+  "Cargo.toml",
+  "Cargo.lock",
+  "deny.toml",
+  "rust-toolchain.toml",
+  "rustfmt.toml",
+  "about.toml",
+  "about.hbs",
+  "REUSE.toml",
+  "NOTICE",
+  ".gitignore",
+  "**/.gitignore",
+  ".gitattributes",
+]
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "MIT"
+
+# The generated licence list quotes the licence texts of third-party crates; one of them
+# carries an SPDX tag of its own. Override so the quoted tags are not read as this file's.
+[[annotations]]
+path = "THIRD_PARTY_LICENSES"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "MIT"
+
+# ---------------------------------------------------------------- documentation
+[[annotations]]
+path = [
+  "docs/**",
+  "README.md",
+  "CLAUDE.md",
+  ".github/CONTRIBUTING.md",
+  ".github/SECURITY.md",
+]
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# The licence text.
+[[annotations]]
+path = "LICENSE-MIT"
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "MIT"
+
+# ---------------------------------------------------------------- bundled fonts
+# The OFL-*.txt files are the licence notices shipped next to the fonts; each keeps the
+# copyright line of the font it belongs to.
+[[annotations]]
+path = [
+  "crates/client/assets/fonts/Barlow-*.ttf",
+  "crates/client/assets/fonts/BarlowCondensed-*.ttf",
+  "crates/client/assets/fonts/OFL-Barlow.txt",
+  "progress/fonts/Barlow-*.ttf",
+  "progress/fonts/BarlowCondensed-*.ttf",
+  "progress/fonts/OFL-Barlow.txt",
+]
+SPDX-FileCopyrightText = "2017 The Barlow Project Authors (https://github.com/jpt/barlow)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = [
+  "crates/client/assets/fonts/InterArrows-*.ttf",
+  "crates/client/assets/fonts/OFL-Inter.txt",
+]
+SPDX-FileCopyrightText = "2020 The Inter Project Authors (https://github.com/rsms/inter)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = [
+  "crates/client/assets/fonts/NotoSansJP-subset.ttf",
+  "crates/client/assets/fonts/OFL-NotoSansJP.txt",
+]
+SPDX-FileCopyrightText = "2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = [
+  "crates/client/assets/fonts/NotoSansSymbols2-subset.ttf",
+  "crates/client/assets/fonts/OFL-NotoSansSymbols2.txt",
+]
+SPDX-FileCopyrightText = "2022 The Noto Project Authors (https://github.com/notofonts/symbols)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = [
+  "crates/client/assets/fonts/PixelifySans.ttf",
+  "crates/client/assets/fonts/OFL-PixelifySans.txt",
+]
+SPDX-FileCopyrightText = "2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)"
+SPDX-License-Identifier = "OFL-1.1"
+
+# ---------------------------------------------------------------- game content
+# Packages and their assets are game content, not covered by the code or documentation
+# licences. The showcase and test fixtures are original work made for this repository;
+# the credits of each package name their creators.
+[[annotations]]
+path = [
+  "crates/client/showcase.pkg/**",
+  "crates/client/tests/fixtures/**",
+  "crates/format/tests/valid/**",
+  "crates/format/tests/invalid/**",
+]
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "LicenseRef-Game-Content"
+
+# The client's own delicious fruit (main menu, the fruit fallback): the engine's cherry, from
+# waka's I wanna Little Trap conversion; the fruit is Kayin's (I Wanna Be The Guy). Credited in
+# crates/client/assets/ui/CREDITS.md (user decision 2026-11-26, #1608); no licence is granted.
+[[annotations]]
+path = "crates/client/assets/ui/cherry.png"
+SPDX-FileCopyrightText = [
+  "Kayin (the delicious fruit, I Wanna Be The Guy)",
+  "waka (I wanna Little Trap conversion)",
+]
+SPDX-License-Identifier = "LicenseRef-Game-Content"
+
+[[annotations]]
+path = "crates/client/assets/ui/CREDITS.md"
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Five sprites of the showcase come from a fangame: the Kid is Kayin's character and
+# sprite (I Wanna Be The Guy), taken from waka's I wanna Little Trap conversion.
+# Credited in crates/client/showcase.pkg/CREDITS.md; no licence is granted for them.
+[[annotations]]
+path = [
+  "crates/client/showcase.pkg/sprites/kid_idle.png",
+  "crates/client/showcase.pkg/sprites/kid_run.png",
+  "crates/client/showcase.pkg/sprites/kid_jump.png",
+  "crates/client/showcase.pkg/sprites/kid_fall.png",
+  "crates/client/showcase.pkg/sprites/kid_bullet.png",
+]
+SPDX-FileCopyrightText = [
+  "Kayin (the Kid sprite, I Wanna Be The Guy)",
+  "waka (I wanna Little Trap conversion)",
+]
+SPDX-License-Identifier = "LicenseRef-Game-Content"

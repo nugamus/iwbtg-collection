@@ -15,7 +15,7 @@ A package holds readable text and media, never code ([principle 1](README.md)). 
 | Where | Allowed |
 | --- | --- |
 | top | `<id>.toml` (`game.toml`, `physics.toml`) and Markdown (`CREDITS.md`) |
-| `objects/`, `timelines/`, `paths/`, `rooms/` | `.toml` (also `rooms/<id>.tiles.toml`) |
+| `objects/`, `timelines/`, `paths/`, `rooms/`, `particles/`, `physics/` | `.toml` (also `rooms/<id>.tiles.toml`) |
 | `scripts/` | `.rhai` |
 | `sprites/`, `backgrounds/`, `fonts/`, `art/` | `.png` and `.toml` |
 | `sounds/`, `music/` | `.ogg` and `.toml` |
@@ -39,6 +39,8 @@ The reader is written for files from strangers. Before it inflates anything it c
 
 Then for each file: it inflates to exactly its stated size (reading stops one byte past it, so a file cannot claim to be small and fill memory), its CRC-32 matches, its data does not overlap another file's (the overlapping-files zip bomb) and ends before the directory, and its name appears once, also ignoring ASCII case (`CREDITS.md` and `Credits.md` would be one file on Windows and macOS).
 
+`unpack_selected` reads only the entries a caller names: the directory, the limits and every local header and data range are still checked, but an entry it does not name is not inflated, CRC-checked or `check_entry`-checked. The client's game-select preview uses it for `game.toml`, the key art, the first ranked room and the background images its art uses, and the `cherry` sprite (#1022); opening the game still runs the full reader.
+
 ## The zip subset
 
 Written: zip 2.0, files in path order, deflate when that is smaller and stored otherwise, UTF-8 names (flag bit 11), the fixed date 1980-01-01, no extra fields, no comments. Text files (`.toml`, `.rhai`, `.md`) are written with LF line ends. So the same package always packs to the same bytes, from a Windows or a Unix checkout.
@@ -51,4 +53,5 @@ The code is our own (`crates/format/src/iwbz.rs`), on `flate2` and `crc32fast`, 
 
 - `iwbtg pkg pack <dir> [-o <file>] [--trace-mode]` checks the package and writes the `.iwbz` ([CLI](../architecture/cli.md)).
 - `iwbtg pkg unpack <file> <dir>` writes it back out into a new or empty folder.
+- `iwbtg pkg publish <dir> --catalog-dir <folder> [--trace-mode]` packs and writes `<content_hash>.iwbz` plus a `catalog.json` entry for a static server ([server](../server.md#game-downloads), #806).
 - Every command that takes a package folder also takes an `.iwbz`, and so does the client ([import](../architecture/client/import.md)).

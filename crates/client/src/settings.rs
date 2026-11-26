@@ -65,6 +65,11 @@ pub struct Settings {
     /// The results page shows where you died in a stage (`[results] heatmap`, #654; off by
     /// default, `--results-heatmap` sets it).
     pub results_heatmap: bool,
+    /// Show screen shake (`[accessibility] shake`, #106). On by default: the toggle is for
+    /// players who need it off, and off is the changed state.
+    pub shake: bool,
+    /// Show full-screen flashes (`[accessibility] flashes`, #106). On by default, as for shake.
+    pub flashes: bool,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -89,6 +94,8 @@ impl Default for Settings {
             auto_retry: false,
             slow_speed: crate::practice::SLOW_SPEEDS[0],
             results_heatmap: false,
+            shake: true,
+            flashes: true,
             bindings: Table::new(),
         }
     }
@@ -161,6 +168,25 @@ fn fmt_ratio(r: Option<(u32, u32)>) -> String {
 }
 
 impl Settings {
+    /// Whether screen shake is shown (`[accessibility] shake`, #106). The client's effect reads
+    /// this; nothing in the sim does.
+    #[allow(
+        dead_code,
+        reason = "the render-site gating lands after #1023 frees view.rs (#106)"
+    )]
+    pub fn shake(&self) -> bool {
+        self.shake
+    }
+
+    /// Whether full-screen flashes are shown (`[accessibility] flashes`, #106).
+    #[allow(
+        dead_code,
+        reason = "the render-site gating lands after #1023 frees view.rs (#106)"
+    )]
+    pub fn flashes(&self) -> bool {
+        self.flashes
+    }
+
     /// Reads settings text. Every problem is pushed to `warnings`; the entry keeps its default.
     pub fn parse(text: &str, warnings: &mut Vec<String>) -> Settings {
         let mut s = Settings::default();
@@ -198,8 +224,13 @@ impl Settings {
                 ("retry", Value::Table(t)) => s.read_retry(t, warnings),
                 ("practice", Value::Table(t)) => s.read_practice(t, warnings),
                 ("results", Value::Table(t)) => s.read_results(t, warnings),
+                ("accessibility", Value::Table(t)) => s.read_accessibility(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
-                ("display" | "audio" | "hud" | "retry" | "practice" | "results" | "bindings", _) => {
+                (
+                    "display" | "audio" | "hud" | "retry" | "practice" | "results" | "accessibility"
+                    | "bindings",
+                    _,
+                ) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
                 _ => warnings.push(format!("unknown entry `{key}`, ignored")),
@@ -308,6 +339,18 @@ impl Settings {
         }
     }
 
+    fn read_accessibility(&mut self, t: &Table, w: &mut Vec<String>) {
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("shake", Value::Boolean(b)) => self.shake = *b,
+                ("shake", _) => w.push("accessibility.shake must be true or false".into()),
+                ("flashes", Value::Boolean(b)) => self.flashes = *b,
+                ("flashes", _) => w.push("accessibility.flashes must be true or false".into()),
+                _ => w.push(format!("unknown entry `accessibility.{key}`, ignored")),
+            }
+        }
+    }
+
     fn read_hud(&mut self, t: &Table, w: &mut Vec<String>) {
         for (key, value) in t {
             match (key.as_str(), value) {
@@ -360,6 +403,9 @@ impl Settings {
         practice.insert("slow_speed".into(), i64::from(self.slow_speed).into());
         let mut results = Table::new();
         results.insert("heatmap".into(), self.results_heatmap.into());
+        let mut accessibility = Table::new();
+        accessibility.insert("shake".into(), self.shake.into());
+        accessibility.insert("flashes".into(), self.flashes.into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         if !self.name.is_empty() {
@@ -371,6 +417,7 @@ impl Settings {
         root.insert("retry".into(), retry.into());
         root.insert("practice".into(), practice.into());
         root.insert("results".into(), results.into());
+        root.insert("accessibility".into(), accessibility.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -492,6 +539,8 @@ mod tests {
             auto_retry: true,
             slow_speed: 50,
             results_heatmap: true,
+            shake: false,
+            flashes: false,
             hud_show: HudShow {
                 input: false,
                 leaderboard: false,
@@ -565,6 +614,55 @@ heatmap = \"yes\"
         );
         assert!(!s.results_heatmap);
         assert_eq!(w.len(), 1, "{w:?}");
+    }
+
+    #[test]
+    fn shake_and_flashes_are_on_by_default_and_read_from_the_file() {
+        let d = Settings::default();
+        assert!(d.shake() && d.flashes(), "the toggles start on");
+        let (s, w) = parse(
+            "[accessibility]
+shake = false
+flashes = false
+",
+        );
+        assert!(!s.shake() && !s.flashes());
+        assert!(w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[accessibility]
+shake = \"off\"
+flashes = 0
+",
+        );
+        assert!(s.shake() && s.flashes(), "bad entries keep the defaults");
+        assert_eq!(w.len(), 2, "{w:?}");
+        let (s, w) = parse("accessibility = true\n");
+        assert!(s.shake() && s.flashes());
+        assert_eq!(w.len(), 1, "a section that is not a table warns: {w:?}");
+    }
+
+    /// A file written before the toggles existed reads with them on, and writes them back.
+    #[test]
+    fn an_old_file_without_accessibility_keeps_shake_and_flashes_on() {
+        let (s, w) = parse(
+            "version = 1
+[display]
+fullscreen = false
+[audio]
+master_volume = 40
+",
+        );
+        assert!(
+            s.shake() && s.flashes(),
+            "no migration needed: the defaults apply"
+        );
+        assert!(w.is_empty(), "{w:?}");
+        assert_eq!((s.master_volume, s.fullscreen), (40, false), "the rest reads");
+        let text = s.to_toml();
+        assert!(text.contains("[accessibility]"), "{text}");
+        let (back, w) = parse(&text);
+        assert!(back.shake() && back.flashes());
+        assert!(w.is_empty(), "{w:?}");
     }
 
     #[test]

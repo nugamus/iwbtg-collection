@@ -40,11 +40,39 @@ pub enum Icon {
     Arrow,
     /// A player with no avatar (`Leaderboard.dc.html`).
     Person,
+    /// Time Attack's stopwatch in the toolbar's mode switch (`Toolbar.dc.html`, 20 px).
+    TimeAttack,
+    /// Classic's floppy disk in the toolbar's mode switch (20 px).
+    Classic,
+    /// The toolbar's notifications bell (22 px).
+    Bell,
+    /// The toolbar's settings gear (22 px).
+    Gear,
+    /// The outlined person of the toolbar's Sign in button (16 px).
+    SignIn,
+    /// The main menu's buttons (`MainMenu.dc.html`, 32 px): Play's triangle.
+    MenuPlay,
+    /// Browse: an arrow down onto a line.
+    MenuBrowse,
+    /// Replays: a clock turning back.
+    MenuReplays,
+    /// Settings: a sun-like gear.
+    MenuSettings,
+    /// Exit: a door with an arrow out.
+    MenuExit,
+    /// Back: a chevron.
+    MenuBack,
+    /// Time Attack's stopwatch, at the menu's size.
+    MenuTimeAttack,
+    /// Classic's floppy disk, at the menu's size.
+    MenuClassic,
+    /// Race: a flag.
+    MenuRace,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 12] = [
+    pub const ALL: [Icon; 26] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -57,6 +85,20 @@ impl Icon {
         Icon::MusicBars,
         Icon::Arrow,
         Icon::Person,
+        Icon::TimeAttack,
+        Icon::Classic,
+        Icon::Bell,
+        Icon::Gear,
+        Icon::SignIn,
+        Icon::MenuPlay,
+        Icon::MenuBrowse,
+        Icon::MenuReplays,
+        Icon::MenuSettings,
+        Icon::MenuExit,
+        Icon::MenuBack,
+        Icon::MenuTimeAttack,
+        Icon::MenuClassic,
+        Icon::MenuRace,
     ];
 
     /// The size of the view box the shapes are drawn in.
@@ -66,7 +108,18 @@ impl Icon {
             Icon::Random => (16.0, 16.0),
             Icon::MusicBars => (21.0, 18.0),
             Icon::Arrow => (26.0, 26.0),
-            Icon::Person => (16.0, 16.0),
+            Icon::Person | Icon::SignIn => (16.0, 16.0),
+            Icon::TimeAttack | Icon::Classic => (20.0, 20.0),
+            Icon::Bell | Icon::Gear => (22.0, 22.0),
+            Icon::MenuPlay
+            | Icon::MenuBrowse
+            | Icon::MenuReplays
+            | Icon::MenuSettings
+            | Icon::MenuExit
+            | Icon::MenuBack
+            | Icon::MenuTimeAttack
+            | Icon::MenuClassic
+            | Icon::MenuRace => (32.0, 32.0),
             _ => (14.0, 14.0),
         }
     }
@@ -129,6 +182,44 @@ impl Icon {
                 Dot(8.0, 5.5, 3.0),
                 Fill("M2.5 15c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5z".into()),
             ],
+            Icon::TimeAttack => vec![Stroke(
+                "M 10 4.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M 10 7.5V11l2.2 1.4M 8 2h4M 15 4.5l1.3-1.3",
+                1.8,
+            )],
+            Icon::Classic => vec![Stroke("M 4 3h9.5L16 5.5V17H4zM 7 3v4.5h6V3M 7 17v-5h6v5", 1.8)],
+            Icon::Bell => vec![Stroke(
+                "M 6 15.5V10a5 5 0 0 1 10 0v5.5l1.5 1.5h-13zM 9.2 19a2 2 0 0 0 3.6 0",
+                1.8,
+            )],
+            Icon::Gear => vec![
+                Stroke("M 11 8a3 3 0 1 0 0 6a3 3 0 1 0 0-6", 1.8),
+                Stroke(
+                    "M 11 2.5v2.4M 11 17.1v2.4M 2.5 11h2.4M 17.1 11h2.4M 5 5l1.7 1.7M 15.3 15.3L17 17M 5 17l1.7-1.7M 15.3 6.7L17 5",
+                    1.8,
+                ),
+            ],
+            Icon::SignIn => vec![
+                Stroke("M 8 2.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6", 1.6),
+                Stroke("M 2.5 14c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5", 1.6),
+            ],
+            Icon::MenuPlay => vec![Stroke("M 11 7l14 9-14 9z", 2.2)],
+            Icon::MenuBrowse => vec![Stroke("M 16 5v13M 10.5 12.5L16 18l5.5-5.5M 6 25h20", 2.2)],
+            Icon::MenuReplays => vec![Stroke(
+                "M 7.5 16a8.5 8.5 0 1 0 2.8-6.3M 7 6v4.5h4.5M 16 11.5v5l3.5 2",
+                2.2,
+            )],
+            Icon::MenuSettings => vec![Stroke(
+                "M 16 12a4 4 0 1 0 0 8a4 4 0 1 0 0-8M 16 4v3M 16 25v3M 4 16h3M 25 16h3M 7.5 7.5l2.1 2.1M 22.4 22.4l2.1 2.1M 7.5 24.5l2.1-2.1M 22.4 9.6l2.1-2.1",
+                2.2,
+            )],
+            Icon::MenuExit => vec![Stroke("M 14 6H7v20h7M 19.5 10.5L25 16l-5.5 5.5M 25 16H13", 2.2)],
+            Icon::MenuBack => vec![Stroke("M 19 8l-8 8 8 8", 2.2)],
+            Icon::MenuTimeAttack => vec![Stroke(
+                "M 16 9a9 9 0 1 0 0 18a9 9 0 1 0 0-18M 16 13v5l3 2M 13 4.5h6M 23 9l2-2",
+                2.2,
+            )],
+            Icon::MenuClassic => vec![Stroke("M 6 5h15.5L26 9.5V27H6zM 10 5v7h10V5M 10 27v-8h12v8", 2.2)],
+            Icon::MenuRace => vec![Stroke("M 8 27V5M 8 6h15l-3.5 5 3.5 5H8", 2.2)],
         }
     }
 }

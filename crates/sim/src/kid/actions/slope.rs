@@ -1,4 +1,4 @@
-//! Slope actions: `slope_jump` and `downhill_snap` (docs/plans/sim-core.md 5.3). WP5c owns it.
+//! Slope actions: `slope_jump` and `downhill_snap` (docs/architecture/sim/kid.md).
 //! Spec: kid/A1.md (poronkusema, get-the-rainbow-feather, rori, fairy-tale).
 
 use serde::Deserialize;

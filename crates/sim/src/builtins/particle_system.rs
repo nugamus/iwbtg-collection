@@ -42,31 +42,40 @@ const SPECS: &[ParamSpec] = &[
         name: "system",
         ty: ParamType::List(&ParamType::Particles),
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_start",
         ty: ParamType::Enum(LIFECYCLE),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_start_except",
         ty: ParamType::List(&ParamType::Room),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "on_room_start_destroys_instance",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_end",
         ty: ParamType::Enum(LIFECYCLE),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_destroy",
         ty: ParamType::Enum(LIFECYCLE),
         required: false,
+        legacy: None,
     },
 ];
 

@@ -1,9 +1,9 @@
 //! The `physics.toml` sections that only families A2-A5, B and C use: `[ice]`, `[slope]`,
-//! `[ladder]`, `[flip]` (docs/plans/sim-core.md 5.2, 5.3).
+//! `[ladder]`, `[flip]` (docs/architecture/sim/kid.md).
 //!
-//! Split out of `physics.rs` (WP5a) so WP5b and WP5c add their fields without editing WP5a's
-//! file. WP0 declares; WP5c owns this file. WP5b's only field here is the `yflag` flip model,
-//! which WP0 already lists in [`FlipKind`]; anything else WP5b needs goes through WP5c.
+//! Split out of `physics.rs` so the family-specific sections stay separate. The only family B
+//! field here is the `yflag` flip model, which [`FlipKind`] already lists; the remaining
+//! sections belong to families A2-A5 and C.
 
 use serde::Deserialize;
 
@@ -150,6 +150,94 @@ pub enum Downhill {
     FairyTale,
 }
 
+/// `[slope] model`: the standard name for the downhill snap model, the same value as
+/// `[slope] downhill`. `block_step`, `mirror_contact` and `keep_hspeed` remain separate keys.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlopeKind {
+    /// No downhill snap.
+    #[default]
+    None,
+    /// Poronkusema's downhill snap.
+    #[serde(alias = "por")]
+    Poronkusema,
+    /// Rainbow's downhill snap.
+    Rainbow,
+    /// Fairy-tale's downhill snap.
+    FairyTale,
+}
+
+impl SlopeKind {
+    /// The `[slope] downhill` value this model names.
+    pub fn downhill(self) -> Downhill {
+        match self {
+            SlopeKind::None => Downhill::None,
+            SlopeKind::Poronkusema => Downhill::Por,
+            SlopeKind::Rainbow => Downhill::Rainbow,
+            SlopeKind::FairyTale => Downhill::FairyTale,
+        }
+    }
+}
+
+/// `[slope]` as written: a written section replaces the preset's whole (as it did before the
+/// standard names), starting from the rule defaults. `model` is the standard spelling of
+/// `downhill`; a written `downhill` wins over it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct SlopeRulesDraft {
+    /// `model = "none" | "poronkusema" | "rainbow" | "fairy_tale"`.
+    pub model: Option<SlopeKind>,
+    /// `block_step`.
+    pub block_step: Option<BlockSlopeStep>,
+    /// `step`.
+    pub step: Option<Real>,
+    /// `mirror_contact`.
+    pub mirror_contact: Option<MirrorContact>,
+    /// `downhill`.
+    pub downhill: Option<Downhill>,
+    /// `jump_probe`.
+    pub jump_probe: Option<Real>,
+    /// `air_sprite_probe`.
+    pub air_sprite_probe: Option<Real>,
+    /// `keep_hspeed`.
+    pub keep_hspeed: Option<bool>,
+}
+
+impl SlopeRulesDraft {
+    /// The section the profile resolves to: the rule defaults with every written field over
+    /// them. A written section replaces the preset's whole.
+    pub fn resolve(self) -> SlopeModel {
+        let mut out = SlopeModel::default();
+        if let Some(model) = self.model {
+            out.downhill = model.downhill();
+        }
+        if let Some(v) = self.block_step {
+            out.block_step = v;
+        }
+        if let Some(v) = self.step {
+            out.step = v;
+        }
+        if let Some(v) = self.mirror_contact {
+            out.mirror_contact = v;
+        }
+        if let Some(v) = self.downhill {
+            out.downhill = v;
+        }
+        if let Some(v) = self.jump_probe {
+            out.jump_probe = v;
+        }
+        if let Some(v) = self.air_sprite_probe {
+            out.air_sprite_probe = v;
+        }
+        if let Some(v) = self.keep_hspeed {
+            out.keep_hspeed = v;
+        }
+        out
+    }
+}
+
 /// `[ladder]`: ladder entry (kid/A1.md Step action 2).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
@@ -171,8 +259,7 @@ pub enum LadderEntry {
     UpOnly,
 }
 
-/// `[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields
-/// (`mask_flipped`, ...).
+/// `[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -184,7 +271,7 @@ pub struct FlipModel {
     pub solidblock_no_refresh: bool,
 }
 
-/// The flip models of plan 5.3, by their `physics.toml` names.
+/// The flip models (docs/architecture/sim/kid.md), by their `physics.toml` names.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -192,10 +279,10 @@ pub enum FlipKind {
     /// The game has no gravity flip.
     #[default]
     None,
-    /// Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`, WP5c).
+    /// Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`).
     SwapObject,
-    /// Family B: the yflag (WP5b).
+    /// Family B: the yflag.
     Yflag,
-    /// Family C: the sign of grav (WP5c).
+    /// Family C: the sign of grav.
     GravSign,
 }

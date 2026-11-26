@@ -1,5 +1,5 @@
-//! Built-in `platform` (mechanics `platform`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/platform.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! Built-in `platform` (mechanics `platform`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/platform.md). Tier 1.
 //!
 //! The one-way platform has no events: it is not solid, usually invisible, its mask is a strip
 //! (32x8 rows 0-7 in rely) and the kid's own "Collision with platform" event does the work. The
@@ -19,11 +19,13 @@ const SPECS: &[ParamSpec] = &[
         name: "width",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "parent_kind",
         ty: ParamType::Enum(PARENTS),
         required: false,
+        legacy: None,
     },
 ];
 

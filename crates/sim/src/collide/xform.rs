@@ -1,4 +1,4 @@
-//! Masks under scale, mirror and rotation (docs/plans/sim-core.md 3.4, C3, C4).
+//! Masks under scale, mirror and rotation (docs/architecture/sim/collision.md, C3, C4).
 //!
 //! This is the transform of the **collision** mask, which is not the same as the reported
 //! `bbox_*` box (`bbox::reported_box`): facing left, the kid collides on `x-5..x+5` while
@@ -19,7 +19,6 @@
 //!   `floor(u / |scale|)`, and the box is exactly the set of offsets that sample inside the
 //!   mask. Scale 0 has no pixels. Order: scale and mirror first, then rotation.
 //!
-//! WP3 owns.
 
 use crate::def::IRect;
 use crate::error::SimError;

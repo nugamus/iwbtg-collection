@@ -1,5 +1,4 @@
-//! Family B kid state and globals (kid/B.md: `cur_jumps` counter, yflag, reverse). WP0 declares
-//! them empty; WP5b owns and adds the fields.
+//! Family B kid state and globals (kid/B.md: `cur_jumps` counter, yflag, reverse).
 
 use serde::{Deserialize, Serialize};
 

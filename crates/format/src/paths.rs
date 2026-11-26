@@ -1,5 +1,4 @@
-//! Path files to `PathDef` (docs/plans/sim-core.md 8.2 step 7, 8.3; docs/format/paths.md).
-//! WP0 creates the file; WP7b owns it.
+//! Path files to `PathDef` (docs/format/paths.md).
 //!
 //! `paths/<id>.toml`: `points = [[x, y], [x, y, speed], ...]` (the speed factor defaults to
 //! 100, GM's default), `closed`, `smooth` and `precision` (default 4). At least two points. A
@@ -33,7 +32,7 @@ const fn default_precision() -> u32 {
 const DEFAULT_SPEED: f64 = 100.0;
 
 /// Reads every path file (step 7). The result's index is the `PathId`; ids are the file stems in
-/// path order. `load::load_game` (WP7a) calls this.
+/// path order. `load::load_game` calls this.
 pub fn load(files: &PackageFiles, diags: &mut Vec<Diagnostic>) -> Vec<PathDef> {
     let mut out = Vec::new();
     for (path, bytes) in files.iter() {

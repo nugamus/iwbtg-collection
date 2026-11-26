@@ -204,11 +204,22 @@ impl<'a> Loader<'a> {
                         base = Some(Builtin::Inert);
                     }
                     None => {
+                        // The accepted set is the kind names plus the additive behaviour bases
+                        // (docs/format/builtins.md, decision 0005); name both so a typo of
+                        // either is diagnosable.
+                        let bases: Vec<&str> = iwbtg_sim::def::traits::BEHAVIOUR_BASES
+                            .iter()
+                            .map(|(name, _, _)| *name)
+                            .collect();
                         self.error(
                             path,
                             text,
                             b.span(),
-                            format!("`{}` is not a built-in kind", b.get_ref()),
+                            format!(
+                                "`{}` is not a built-in kind or a behaviour base ({})",
+                                b.get_ref(),
+                                bases.join(", ")
+                            ),
                         );
                         return;
                     }
@@ -270,6 +281,17 @@ impl<'a> Loader<'a> {
         kind.persistent = o
             .persistent
             .unwrap_or_else(|| objects::default_persistent(kind.base));
+        if let Some(name) = &o.timeline {
+            match self.timeline_ids.get(name.get_ref()).copied() {
+                Some(id) => kind.timeline = Some(id),
+                None => self.error(
+                    path,
+                    text,
+                    name.span(),
+                    format!("unknown timeline `{}`", name.get_ref()),
+                ),
+            }
+        }
         for (key, value) in &o.params {
             match param_value(value.get_ref()) {
                 Ok(p) => {
@@ -286,7 +308,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
@@ -298,7 +324,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
@@ -365,12 +395,12 @@ impl<'a> Loader<'a> {
         let specs = match self.spec_cache.get(&base) {
             Some(s) => *s,
             None => {
-                let s = pending_call(&mut self.pending, || builtins::param_specs(base));
+                let s = builtins::param_specs(base);
                 self.spec_cache.insert(base, s);
                 s
             }
         };
-        specs?.iter().find(|s| s.name == key).map(|s| s.ty)
+        specs.iter().find(|s| s.name == key).map(|s| s.ty)
     }
 
     /// Turns a text param into a room, kind or sound reference when the base's spec says so; a
@@ -600,25 +630,23 @@ impl<'a> Loader<'a> {
     pub(super) fn event_sets(&mut self, physics: &PhysicsProfile) {
         for i in 0..self.kinds.len() {
             let kind = self.kinds[i].clone();
-            let set = if kind.base == Builtin::Kid {
-                pending_call(&mut self.pending, || iwbtg_sim::kid::event_set(physics))
+            let mut set = if kind.base == Builtin::Kid {
+                iwbtg_sim::kid::event_set(physics)
             } else {
-                pending_call(&mut self.pending, || builtins::event_set(kind.base, &kind))
+                builtins::event_set(kind.base, &kind)
             };
-            if let Some(mut set) = set {
-                // A derived kind (`<kind>[...]`) listens to what its kind's script does.
-                let root = u32::try_from(i)
-                    .ok()
-                    .and_then(|i| self.rank_kind.get(&KindId(i)))
-                    .and_then(|r| r.index());
-                let name = root
-                    .and_then(|r| self.kinds.get(r))
-                    .map_or(&kind.name, |r| &r.name);
-                if let Some(masks) = self.collides.get(name) {
-                    set.collisions.extend(masks.iter().copied());
-                }
-                self.kinds[i].events = set;
+            // A derived kind (`<kind>[...]`) listens to what its kind's script does.
+            let root = u32::try_from(i)
+                .ok()
+                .and_then(|i| self.rank_kind.get(&KindId(i)))
+                .and_then(|r| r.index());
+            let name = root
+                .and_then(|r| self.kinds.get(r))
+                .map_or(&kind.name, |r| &r.name);
+            if let Some(masks) = self.collides.get(name) {
+                set.collisions.extend(masks.iter().copied());
             }
+            self.kinds[i].events = set;
         }
     }
 
@@ -663,6 +691,7 @@ impl<'a> Loader<'a> {
             e.animation_end |= s.animation_end;
             e.room_start |= s.room_start;
             e.room_end |= s.room_end;
+            e.moments.extend(s.moments);
         }
     }
 

@@ -1,5 +1,4 @@
-//! Param validation against `builtins::param_specs` (docs/plans/sim-core.md 8.2 step 7).
-//! WP0 creates the file; WP7b owns it.
+//! Param validation against `builtins::param_specs` (docs/format/builtins.md).
 //!
 //! Every kind's params, and every placed instance's params merged over its kind's (a placed
 //! instance overrides), are checked: each key must be a param of the base built-in, its value
@@ -9,6 +8,15 @@
 //!
 //! Kinds with no spec (`kid`, `inert`, scripted, probe) are skipped. In `LoadMode::Trace`
 //! converter output may not match the specs yet, so the problems are warnings.
+//!
+//! A package may still use a **move** param (the survey's one-game parameters): the loader keeps
+//! each as a documented format-0 legacy alias so old packages and their `gameplay_hash` do not
+//! change (#1076, #1375). Format 1 keeps the format-0 parameter set (`docs/format/v1.md`), so the
+//! warning applies whenever the param is accepted, whatever the format. A use by a package whose
+//! id is not one of the alias's games warns and names the replacing issue; the alias, not the
+//! use, is the thing to remove later (#795/#928).
+
+use std::collections::BTreeSet;
 
 use iwbtg_sim::builtins::{self, ParamSpec, ParamType};
 use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, ParamValue, Params};
@@ -126,21 +134,67 @@ const fn skipped(b: Builtin) -> bool {
     )
 }
 
+/// A package's legacy-alias warnings (#1076, #1375).
+struct LegacyCheck<'a> {
+    package_id: &'a str,
+    /// Kinds and params already warned about, so a placed instance does not repeat its kind.
+    seen: BTreeSet<(usize, &'static str)>,
+}
+
+impl LegacyCheck<'_> {
+    /// Warns about a survey **move** param used outside the games its legacy alias allows. One
+    /// warning per kind and param: the kind's own params are checked first, then the placed
+    /// instances that set it, so the file is the kind's or the room's.
+    fn check(
+        &mut self,
+        specs: &[ParamSpec],
+        params: &Params,
+        kind: usize,
+        who: &str,
+        file: &str,
+        diags: &mut Vec<Diagnostic>,
+    ) {
+        for key in params.0.keys() {
+            let Some(spec) = specs.iter().find(|s| s.name == key) else {
+                continue;
+            };
+            let Some(legacy) = spec.legacy else { continue };
+            if legacy.allows(self.package_id) || !self.seen.insert((kind, spec.name)) {
+                continue;
+            }
+            report(
+                diags,
+                Severity::Warning,
+                file,
+                format!(
+                    "{who}: param `{key}` is a format-0 legacy alias for {} and moves in #{} \
+                     (removed at a format major); package `{}` is not one of those games",
+                    legacy.games.join(", "),
+                    legacy.issue,
+                    self.package_id
+                ),
+            );
+        }
+    }
+}
+
 /// Checks every kind's and placed instance's params against `builtins::param_specs` of its
-/// base (step 7), after `load::load_game` (WP7a) has built the definition. Problems are
+/// base (step 7), after `load::load_game` has built the definition. Problems are
 /// diagnostics: errors, or warnings when `trace` (converter output).
 pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     let severity = if trace { Severity::Warning } else { Severity::Error };
-    let mut pending = std::collections::BTreeSet::new();
-    let mut specs_of = |b: Builtin| crate::load::pending_call(&mut pending, || builtins::param_specs(b));
+    let specs_of = |b: Builtin| builtins::param_specs(b);
     let init_of = |b: Builtin, p: &Params| {
         let p = p.clone();
-        let mut pending = std::collections::BTreeSet::new();
-        crate::load::pending_call(&mut pending, || builtins::init_state(b, &p))
+        builtins::init_state(b, &p)
     };
     let mut placed: Vec<bool> = vec![false; def.kinds.len()];
     let mut kind_bad: Vec<bool> = vec![false; def.kinds.len()];
     let mut seen: Vec<(KindId, Params)> = Vec::new();
+    let mut legacy = LegacyCheck {
+        package_id: &def.id,
+        seen: BTreeSet::new(),
+    };
     // The kind's own params.
     for (i, k) in def.kinds.iter().enumerate() {
         if skipped(k.base) {
@@ -150,10 +204,9 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
             }
             continue;
         }
-        let Some(specs) = specs_of(k.base) else {
-            continue;
-        };
+        let specs = specs_of(k.base);
         let who = format!("`{}` ({})", k.name, k.base.name());
+        legacy.check(specs, &k.params, i, &who, &kind_file(k), diags);
         for msg in check_set(specs, &k.params, &who) {
             kind_bad[i] = true;
             report(diags, severity, &kind_file(k), msg);
@@ -175,10 +228,9 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
                 }
                 continue;
             }
-            let Some(specs) = specs_of(k.base) else {
-                continue;
-            };
+            let specs = specs_of(k.base);
             let who = format!("an instance of `{}` ({})", k.name, k.base.name());
+            legacy.check(specs, &inst.params, idx, &who, &file, diags);
             let mut bad = kind_bad.get(idx).copied().unwrap_or(false);
             for msg in check_set(specs, &inst.params, &who) {
                 bad = true;
@@ -192,7 +244,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
                 continue;
             }
             seen.push((inst.kind, all.clone()));
-            if let Some(Err(e)) = init_of(k.base, &all) {
+            if let Err(e) = init_of(k.base, &all) {
                 report(diags, severity, &file, format!("{who}: {e}"));
             }
         }
@@ -205,10 +257,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
         {
             continue;
         }
-        if specs_of(k.base).is_none() {
-            continue;
-        }
-        if let Some(Err(e)) = init_of(k.base, &k.params) {
+        if let Err(e) = init_of(k.base, &k.params) {
             // A param the kind does not set: required outright (`required`) or only together with
             // others (an edge warp needs `room_to` or per-edge rooms). A placed instance supplies
             // them, so an unplaced default kind is not an error for lacking them.

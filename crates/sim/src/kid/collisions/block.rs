@@ -1,5 +1,5 @@
 //! The `block_standard` collision run: horizontal contact, vertical contact with the landing
-//! refresh, diagonal case (docs/plans/sim-core.md 5.3). WP5a owns it.
+//! refresh, diagonal case (docs/architecture/sim/kid.md).
 //!
 //! Spec: kid/A1.md "Collision with block (block is solid)". The pipeline has already put the kid
 //! back at its previous position (the solid put-back, `events::collision_phase`) and moves it by
@@ -14,7 +14,7 @@
 //! 3. `place_free(x + hspeed, y + vspeed)` false: `hspeed = 0`.
 //!
 //! The reversed kid of family B (`flip.model = "yflag"`) refreshes the jump on the ceiling side
-//! instead (`vspeed <= 0`); xia's flipped kid is WP5c.
+//! instead (`vspeed <= 0`); xia's flipped kid is the family C case.
 
 use serde::Deserialize;
 
@@ -57,19 +57,17 @@ fn block_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimErr
 /// (`slope::SlopeRun::BlockSlopeStep`).
 pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
     check_flip(ctx, me)?;
-    // The `slope_mirror` row is the collision with a slope that carries only that class.
-    let mirror_row = ctx.w.get(other).is_some_and(|o| {
-        o.classes.intersects(ClassMask::SLOPE_MIRROR) && !o.classes.intersects(ClassMask::BLOCK)
-    });
-    horizontal(
-        ctx,
-        me,
-        if mirror_row {
-            SlopeRow::Mirror
-        } else {
-            SlopeRow::Other
-        },
-    )?;
+    // The `slope` (`slope_mirror`) row is the collision with a slope that carries only that
+    // class; a block, or anything else, is the block row.
+    let only = |o: &crate::world::Instance, c: ClassMask| {
+        o.classes.intersects(c) && !o.classes.intersects(ClassMask::BLOCK)
+    };
+    let row = match ctx.w.get(other) {
+        Some(o) if only(o, ClassMask::SLOPE_MIRROR) => SlopeRow::Mirror,
+        Some(o) if only(o, ClassMask::SLOPE) => SlopeRow::Rise,
+        _ => SlopeRow::Other,
+    };
+    horizontal(ctx, me, row)?;
     vertical(ctx, me, true)?;
     diagonal(ctx, me)
 }
@@ -79,14 +77,16 @@ pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId, other: InstId) -> Resu
 pub(crate) enum SlopeRow {
     /// The plain `block` rule, no slope step.
     None,
-    /// `block_slope_step` against a block or a `slope`.
+    /// `block_slope_step` against a block (or anything that is not a slope only).
     Other,
+    /// `block_slope_step` against a `slope` (rising right; rainbow's nanameblockL).
+    Rise,
     /// `block_slope_step` against a `slope_mirror`.
     Mirror,
 }
 
 fn check_flip(ctx: &Ctx, me: InstId) -> Result<(), SimError> {
-    // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are WP5c's.
+    // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are family C's.
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
     if state(ctx, me)?.flipped && !rev {
         return Err(SimError::unsupported(
@@ -109,7 +109,9 @@ fn missing() -> SimError {
 /// Step 1, horizontal contact. With `slope_step` the `[slope] block_step` rule applies: `free_spot`
 /// (rainbow) adds the step-up after the contact when the matching slope is `step` px ahead and the
 /// spot `step` up is free; `replace` (rori, fairy-tale) steps up instead of the contact when the
-/// shifted kid overlaps the matching slope.
+/// shifted kid overlaps the matching slope. Both follow the per-event rule (kid/A1-2.md A1-160,
+/// A1-172): the block event steps up on both sides, a `slope`'s event only on a right hit and a
+/// `slope_mirror`'s only on a left hit.
 pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(), SimError> {
     let slope_step = row != SlopeRow::None;
     let phys = ctx.physics();
@@ -122,12 +124,17 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(),
     let rules = &phys.slope;
     let step = rules.step;
     if slope_step && rules.block_step == BlockSlopeStep::Replace {
-        let up = if gm_lt(hs, Real::ZERO, n) {
-            Some((-step, ClassMask::SLOPE_MIRROR))
-        } else if gm_gt(hs, Real::ZERO, n) {
-            Some((step, ClassMask::SLOPE))
-        } else {
-            None
+        // A1-172 (rori, fairy-tale): the block event steps up on both sides, `slope`'s event only
+        // on a right hit and `slope_mirror`'s only on a left hit — a right hit on the mirror is
+        // the contact `mirror_contact` picks below. A peak of two slopes therefore contacts
+        // instead of climbing.
+        let up = match row {
+            SlopeRow::Rise if gm_gt(hs, Real::ZERO, n) => Some((step, ClassMask::SLOPE)),
+            SlopeRow::Mirror | SlopeRow::Other if gm_lt(hs, Real::ZERO, n) => {
+                Some((-step, ClassMask::SLOPE_MIRROR))
+            }
+            SlopeRow::Other if gm_gt(hs, Real::ZERO, n) => Some((step, ClassMask::SLOPE)),
+            _ => None,
         };
         if let Some((dx, class)) = up
             && place_meeting(ctx, me, x + hs, y, Target::Class(class))?
@@ -161,7 +168,15 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(),
         Real::new(hs.get().abs()),
     )?;
     ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
-    if slope_step && rules.block_step == BlockSlopeStep::FreeSpot {
+    // Rainbow: the block event steps up on both sides; the slope events repeat it only on their
+    // uphill side, a right hit on a `slope` and a left hit on a `slope_mirror` (kid/A1-2.md
+    // A1-160). So a right hit on the mirror's corner at a peak only contacts (a1-slope-b f52-94).
+    let uphill = match row {
+        SlopeRow::Rise => right,
+        SlopeRow::Mirror => !right,
+        SlopeRow::None | SlopeRow::Other => true,
+    };
+    if slope_step && uphill && rules.block_step == BlockSlopeStep::FreeSpot {
         let (x, y, _, _) = pos(ctx, me).ok_or_else(missing)?;
         let (dx, class) = if right {
             (step, ClassMask::SLOPE)

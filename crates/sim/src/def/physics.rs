@@ -1,21 +1,20 @@
-//! The kid's physics profile, `physics.toml` (docs/plans/sim-core.md 5.1, 5.2).
+//! The kid's physics profile, `physics.toml` (docs/architecture/sim/kid.md).
 //!
-//! WP0 declares the skeleton: every section is an empty struct. WP5a owns the file and adds the
-//! fields of 5.2 and 5.3 (WP5b asks WP5a for its fields in WP5a's sections). The `[ice]`,
-//! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs` (WP5c). Every struct
+//! Every section is an explicit struct with named fields. The `[ice]`,
+//! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs`. Every struct
 //! denies unknown fields, so a typo in a profile is a load error, not a silently ignored key.
 
 use serde::{Deserialize, Deserializer};
 
 use super::class::ClassMask;
-use super::ids::{SoundId, SpriteId};
+use super::ids::{ScriptId, SoundId, SpriteId};
 use crate::input::Action;
 use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
 
 pub use super::physics_ext::{
     BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules,
-    MirrorContact, SlopeModel,
+    MirrorContact, SlopeKind, SlopeModel, SlopeRulesDraft,
 };
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
@@ -84,6 +83,21 @@ pub struct PhysicsProfile {
     pub sprites: KidSprites,
     /// `[sounds]`: the kid's sounds by role (resolved from names at load).
     pub sounds: KidSounds,
+    /// `[script]`: the script file whose functions the event lists may run at a slot, with the
+    /// custom variable names that script may read and write (decision 0004).
+    pub script: KidScript,
+}
+
+/// `[script]`: the kid profile's script file and the variables it may use (decision 0004).
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidScript {
+    /// `file`: `scripts/<id>.rhai`, resolved by the loader to the script's index. `None` when the
+    /// profile names no script, in which case no event list may have a script slot.
+    pub file: Option<ScriptId>,
+    /// `vars`: names the script may read and write as `this.<name>`. Names are package content and
+    /// enter `gameplay_hash`; a name not listed here is an undeclared-variable error.
+    pub vars: Vec<String>,
 }
 
 macro_rules! profile_section {
@@ -99,7 +113,7 @@ macro_rules! profile_section {
 }
 
 profile_section! {
-    /// `[water]` (WP5a).
+    /// `[water]`.
     WaterRules;
 }
 
@@ -171,7 +185,7 @@ pub enum VineKeys {
     /// This tick's key press edge (A1, A2, B).
     #[default]
     Edges,
-    /// Game-side latched flags (wanna, rori, fairy-tale, showdown; WP5c).
+    /// Game-side latched flags (wanna, rori, fairy-tale and showdown).
     LatchedFlags,
 }
 
@@ -185,8 +199,8 @@ pub struct KidInput {
     pub vine_keys: VineKeys,
 }
 
-/// `[events]`: ordered action lists per event (plan 5.2). Collisions, keys, alarms and the
-/// boundary arrive with the collision runs and death (WP5a.3, WP5a.4).
+/// `[events]`: ordered action lists per event (docs/architecture/sim/kid.md). Collisions, keys, alarms and the
+/// boundary arrive with the collision runs and death.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct KidEvents {
@@ -208,7 +222,7 @@ pub struct KidEvents {
     pub boundary: BoundaryModel,
 }
 
-/// `events.boundary`: how the kid handles the room edge (plan 5.3 edge row).
+/// `events.boundary`: how the kid handles the room edge (docs/architecture/sim/kid.md edge row).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -223,9 +237,9 @@ pub enum BoundaryModel {
     /// whatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and
     /// subtracts 600 (not 608) at the bottom.
     IntersectOriginFixed,
-    /// Outside Room kills the kid unless a room changer overlaps (family B, WP5b).
+    /// Outside Room kills the kid unless a room changer overlaps (family B).
     OutsideRoomKill,
-    /// The origin test runs in End Step (WP5c).
+    /// The origin test runs in End Step.
     EndStepOrigin,
 }
 
@@ -274,6 +288,31 @@ fn action_name<'de, D: Deserializer<'de>>(d: D) -> Result<Action, D::Error> {
     Action::from_name(&n).ok_or_else(|| serde::de::Error::custom(format!("unknown action `{n}`")))
 }
 
+/// One script slot in a kid event list (`{ do = "script", fn = "dash" }`, decision 0004). The
+/// function is looked up in the profile's `[script] file`: no argument in a list event, `other`
+/// in a collision slot, with `this` bound to the kid.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KidScriptSlot {
+    /// Must be `"script"`.
+    #[serde(rename = "do")]
+    pub action: ScriptSlotDo,
+    /// The function of the profile's `[script] file`.
+    #[serde(rename = "fn")]
+    pub function: String,
+}
+
+/// The only value of a kid slot's `do`: `"script"`. A named table keeps a typo from being read as
+/// some other action.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptSlotDo {
+    /// A script function.
+    Script,
+}
+
 /// One `events.collisions` row: the kid runs `run` when it collides with an instance of class
 /// `with`.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -296,9 +335,9 @@ pub enum AirJump {
     /// The `djump` flag (A1-A5).
     #[default]
     Djump,
-    /// The family B counter (WP5b).
+    /// The family B counter.
     CurJumps,
-    /// `djump` then `tjump` (showdown, WP5c).
+    /// `djump` then `tjump` (showdown).
     DjumpThenTjump,
 }
 
@@ -312,10 +351,41 @@ pub enum WaterAir {
     /// A water 2 one pixel below allows the air jump even without `djump` (A1).
     #[default]
     Water2WithoutFlag,
-    /// Family B (WP5b).
+    /// Family B.
     WaterUnlimited,
-    /// Family C (WP5c).
+    /// Family C.
     Water3Keeps,
+}
+
+/// `[water] model`: the standard name for the water air-jump rule, the same value as
+/// `[jump] water_air` (docs/format/physics.md "Standard names and aliases").
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaterModel {
+    /// Water never allows the air jump.
+    #[default]
+    None,
+    /// Water 2 one pixel below allows the air jump even without `djump` (A1).
+    #[serde(alias = "water2_without_flag")]
+    JumpRefresh,
+    /// Water allows any number of air jumps (family B).
+    #[serde(alias = "water_unlimited")]
+    FullJump,
+    /// Water 2 and 3 allow the air jump and water 3 keeps `djump` (family C).
+    Water3Keeps,
+}
+
+impl WaterModel {
+    /// The `[jump] water_air` value this model names.
+    pub fn water_air(self) -> WaterAir {
+        match self {
+            WaterModel::None => WaterAir::None,
+            WaterModel::JumpRefresh => WaterAir::Water2WithoutFlag,
+            WaterModel::FullJump => WaterAir::WaterUnlimited,
+            WaterModel::Water3Keeps => WaterAir::Water3Keeps,
+        }
+    }
 }
 
 /// An extra ground-jump condition besides the classes.
@@ -403,10 +473,38 @@ pub enum GravityReapply {
     /// Every Step, unless the kid is on a ladder (A1: Step action 2.4).
     #[default]
     Step,
-    /// Other models (WP5b, WP5c).
+    /// Other models.
     EndStepSlope,
     /// Only at Create.
     CreateOnly,
+}
+
+/// `[gravity] model`: the standard name for the gravity reapply rule, the same value as
+/// `[gravity] reapply`. Gravity's orientation when it flips is `[flip] model`, not this.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GravityModel {
+    /// Gravity is the constant `numbers.gravity`, reapplied every Step (A1).
+    #[default]
+    Constant,
+    /// Same as `constant`.
+    Step,
+    /// Gravity is set by the End Step slope code (family B).
+    EndStepSlope,
+    /// Gravity is set only at Create (A4, A5, C).
+    CreateOnly,
+}
+
+impl GravityModel {
+    /// The `[gravity] reapply` value this model names.
+    pub fn reapply(self) -> GravityReapply {
+        match self {
+            GravityModel::Constant | GravityModel::Step => GravityReapply::Step,
+            GravityModel::EndStepSlope => GravityReapply::EndStepSlope,
+            GravityModel::CreateOnly => GravityReapply::CreateOnly,
+        }
+    }
 }
 
 /// `[gravity]`.
@@ -456,9 +554,9 @@ pub enum PlatformTake {
     /// The platform's `vspeed` (A1).
     #[default]
     Vspeed,
-    /// The platform's `y - yprevious` (family B, WP5b).
+    /// The platform's `y - yprevious` (family B).
     DeltaY,
-    /// Family C (WP5c).
+    /// Family C.
     YspeedFlipped,
 }
 
@@ -472,8 +570,42 @@ pub enum VineModel {
     /// Left vine below `left_below`, right vine exactly `right_equal` (A, B).
     #[default]
     DistanceAsym,
-    /// Both sides within one pixel (C, WP5c).
+    /// Both sides within one pixel (C).
     DistanceSymEarly,
+}
+
+/// `[vine] model` as written: the standard model names, with `latched_keys` also selecting the
+/// key-reading model (`[input] vine_keys = "latched_flags"`).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VineMode {
+    /// No vines.
+    #[default]
+    None,
+    /// Left vine below `left_below`, right vine exactly `right_equal` (A, B).
+    DistanceAsym,
+    /// The game's latched key flags drive the vine keys (A3); the distance rule is asymmetric.
+    LatchedKeys,
+    /// Both sides within one pixel (C).
+    #[serde(alias = "distance_sym_early")]
+    SymmetricEarly,
+}
+
+impl VineMode {
+    /// The distance model this mode names.
+    pub fn vine_model(self) -> VineModel {
+        match self {
+            VineMode::None => VineModel::None,
+            VineMode::DistanceAsym | VineMode::LatchedKeys => VineModel::DistanceAsym,
+            VineMode::SymmetricEarly => VineModel::DistanceSymEarly,
+        }
+    }
+
+    /// True when the mode reads the game's latched key flags (A3).
+    pub fn latches_keys(self) -> bool {
+        matches!(self, VineMode::LatchedKeys)
+    }
 }
 
 /// `[vine]`.
@@ -531,7 +663,7 @@ pub struct KidSounds {
     pub death: Option<SoundId>,
 }
 
-/// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
+/// `[sprites]`: the kid's sprites by role. Package files give names; the loader resolves
 /// them to ids. A role the game does not have stays `None` and the action leaves the sprite
 /// alone.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
@@ -601,7 +733,7 @@ pub struct DeathRules {
     /// In a `Select` room a kill goes to the same room again and destroys the kid, and nothing
     /// else happens (rely's special case).
     pub select_room_reset: bool,
-    /// Death stops the music. Not built (WP10); `true` is `Unsupported`.
+    /// Death stops the music. Not built; `true` is `Unsupported`.
     pub stop_music: bool,
     /// The blood emitter and GAMEOVER use the first kid's position and gravity instead of the
     /// killed kid's (family B with several kids, R21).
@@ -697,7 +829,9 @@ fn class_names_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ClassMask>,
 draft_section! {
     /// `[numbers]` as written.
     KidNumbersDraft => KidNumbers {
-        jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real, max_fall_speed: Real,
+        jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real,
+        #[serde(alias = "max_fall")]
+        max_fall_speed: Real,
         release_mult: Real, sprite_threshold: Real, image_speed_idle: Real, image_speed_run: Real,
         air_wall_probe: Real,
     }
@@ -729,10 +863,47 @@ draft_section! {
     /// `[fall_cap]` as written.
     FallCapDraft => FallCap { rule: FallCapRule }
 }
-draft_section! {
-    /// `[gravity]` as written.
-    GravityRulesDraft => GravityRules { reapply: GravityReapply, block_landing_zeroes: bool }
+/// `[gravity]` as written. `model` is the standard spelling of `reapply`; a written `reapply`
+/// wins over it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct GravityRulesDraft {
+    /// `reapply = "step"`.
+    pub reapply: Option<GravityReapply>,
+    /// `model = "constant" | "step" | "end_step_slope" | "create_only"`.
+    pub model: Option<GravityModel>,
+    /// `block_landing_zeroes = true`.
+    pub block_landing_zeroes: Option<bool>,
 }
+
+impl GravityRulesDraft {
+    /// The base with every field written here replacing the base's. `model` applies before an
+    /// explicit `reapply`, so `reapply` wins when both are written.
+    pub fn over(self, mut base: GravityRules) -> GravityRules {
+        if let Some(model) = self.model {
+            base.reapply = model.reapply();
+        }
+        if let Some(reapply) = self.reapply {
+            base.reapply = reapply;
+        }
+        if let Some(zeroes) = self.block_landing_zeroes {
+            base.block_landing_zeroes = zeroes;
+        }
+        base
+    }
+}
+
+/// `[water]` as written. Its only standard key is `model`, which names the same value as
+/// `[jump] water_air`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct WaterRulesDraft {
+    /// `model = "none" | "jump_refresh" | "full_jump" | "water3_keeps"`.
+    pub model: Option<WaterModel>,
+}
+
 draft_section! {
     /// `[platform]` as written.
     PlatformRulesDraft => PlatformRules {
@@ -740,11 +911,58 @@ draft_section! {
         reversed_snap: Real,
     }
 }
-draft_section! {
-    /// `[vine]` as written.
-    VineRulesDraft => VineRules {
-        walk_ignores_vines: bool, model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
-        drop: Real, probe_down_fixed: bool,
+/// `[vine]` as written. `model` is the standard spelling of the vine model; `latched_keys` also
+/// selects the key-reading model, which `apply` writes into `[input] vine_keys`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct VineRulesDraft {
+    /// `walk_ignores_vines`.
+    pub walk_ignores_vines: Option<bool>,
+    /// `model = "none" | "distance_asym" | "latched_keys" | "symmetric_early"`.
+    pub model: Option<VineMode>,
+    /// `left_below`.
+    pub left_below: Option<Real>,
+    /// `right_equal`.
+    pub right_equal: Option<Real>,
+    /// `slide`.
+    pub slide: Option<Real>,
+    /// `kick`.
+    pub kick: Option<[Real; 2]>,
+    /// `drop`.
+    pub drop: Option<Real>,
+    /// `probe_down_fixed`.
+    pub probe_down_fixed: Option<bool>,
+}
+
+impl VineRulesDraft {
+    /// The base with every field written here replacing the base's.
+    pub fn over(self, mut base: VineRules) -> VineRules {
+        if let Some(walk) = self.walk_ignores_vines {
+            base.walk_ignores_vines = walk;
+        }
+        if let Some(model) = self.model {
+            base.model = model.vine_model();
+        }
+        if let Some(v) = self.left_below {
+            base.left_below = v;
+        }
+        if let Some(v) = self.right_equal {
+            base.right_equal = v;
+        }
+        if let Some(v) = self.slide {
+            base.slide = v;
+        }
+        if let Some(v) = self.kick {
+            base.kick = v;
+        }
+        if let Some(v) = self.drop {
+            base.drop = v;
+        }
+        if let Some(v) = self.probe_down_fixed {
+            base.probe_down_fixed = v;
+        }
+        base
     }
 }
 draft_section! {
@@ -767,8 +985,19 @@ draft_section! {
     KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real, idle_needs_block: bool }
 }
 
+/// `[script]` as written: the loader resolves `file` to a [`ScriptId`] and interns `vars`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidScriptDraft {
+    /// `file = "<id>"`: `scripts/<id>.rhai`.
+    pub file: Option<String>,
+    /// `vars = ["dash_dir"]`.
+    pub vars: Option<Vec<String>>,
+}
+
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of
-/// `crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
+/// `crates/format`; `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
 /// preset's profile with every field written here put over it. The sections of families that
 /// have not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -789,17 +1018,21 @@ pub struct PhysicsProfileDraft {
     pub fall_cap: Option<FallCapDraft>,
     /// `[gravity]`.
     pub gravity: Option<GravityRulesDraft>,
-    /// `[platform]`.
+    /// `[platform]` (standard alias `[platforms]`).
+    #[serde(alias = "platforms")]
     pub platform: Option<PlatformRulesDraft>,
-    /// `[vine]`.
+    /// `[vine]` (standard alias `[vines]`).
+    #[serde(alias = "vines")]
     pub vine: Option<VineRulesDraft>,
     /// `[water]`.
-    pub water: Option<WaterRules>,
+    pub water: Option<WaterRulesDraft>,
     /// `[ice]`.
     pub ice: Option<IceRules>,
-    /// `[slope]`.
-    pub slope: Option<SlopeModel>,
-    /// `[ladder]`.
+    /// `[slope]` (standard alias `[slopes]`).
+    #[serde(alias = "slopes")]
+    pub slope: Option<SlopeRulesDraft>,
+    /// `[ladder]` (standard alias `[ladders]`).
+    #[serde(alias = "ladders")]
     pub ladder: Option<LadderRules>,
     /// `[flip]`.
     pub flip: Option<FlipModel>,
@@ -812,10 +1045,12 @@ pub struct PhysicsProfileDraft {
     /// `[misc]`.
     pub misc: Option<KidMiscDraft>,
     /// `[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;
-    /// the loader (WP7b) resolves these names to ids and fills them in.
+    /// the loader resolves these names to ids and fills them in.
     pub sprites: Option<KidSpriteNames>,
     /// `[sounds]`: sound names; the loader resolves them to ids like the sprite names.
     pub sounds: Option<KidSoundNames>,
+    /// `[script]`: the slot script file and its custom variables (decision 0004).
+    pub script: Option<KidScriptDraft>,
 }
 
 /// `[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the

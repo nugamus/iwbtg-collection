@@ -1,6 +1,5 @@
 //! `physics.toml` to `PhysicsProfileDraft`, then `kid::presets::apply`; legacy drafts map to
-//! their family preset with a warning (docs/plans/sim-core.md 8.2 step 7, 5.4). WP0 creates the
-//! file; WP7b owns it.
+//! their family preset with a warning (docs/format/physics.md).
 //!
 //! A file in the form of `docs/format/physics.md` is read strictly (unknown keys are errors with
 //! a position). A legacy draft, the form the research converter wrote before the profile was
@@ -12,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use iwbtg_sim::def::physics::WalkRead;
-use iwbtg_sim::def::physics::{KidSoundNames, KidSpriteNames, PhysicsProfileDraft};
+use iwbtg_sim::def::physics::{KidScriptDraft, KidSoundNames, KidSpriteNames, PhysicsProfileDraft};
 use iwbtg_sim::def::{KidFamily, PhysicsProfile};
 use iwbtg_sim::kid::presets;
 use toml::Spanned;
@@ -35,6 +34,8 @@ pub struct PhysicsLoad {
     pub sprites: KidSpriteNames,
     /// `[sounds]` as written.
     pub sounds: KidSoundNames,
+    /// `[script]` as written: `file` and `vars` (decision 0004). `None` for a legacy draft.
+    pub script: Option<KidScriptDraft>,
     /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
     /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
     pub legacy: bool,
@@ -51,12 +52,26 @@ pub struct PhysicsStanding {
     pub family: KidFamily,
     /// The fields that differ, in profile order (`numbers.gravity`, `events.step`).
     pub differs: Vec<String>,
+    /// Room profiles `physics/<id>.toml` that a built room names and that differ from the game's
+    /// profile, in id order (#970, #1063). Any makes the package a medley and custom physics.
+    pub rooms: Vec<RoomPhysicsStanding>,
+}
+
+/// A room profile `physics/<id>.toml` that a built room names and that differs from the game's
+/// resolved profile (#970, #1063, docs/format/engine.md "Custom physics").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomPhysicsStanding {
+    /// The profile id: the file name without `.toml`.
+    pub id: String,
+    /// The fields that differ, in profile order.
+    pub differs: Vec<String>,
 }
 
 impl PhysicsStanding {
-    /// True when the profile differs from the pack's family preset.
+    /// True when the game's profile differs from the pack's family preset, or a room profile a
+    /// built room names differs from the game's profile (a medley).
     pub fn is_custom(&self) -> bool {
-        !self.differs.is_empty()
+        !self.differs.is_empty() || !self.rooms.is_empty()
     }
 
     /// What a matching profile prints: the pack id, or `<family> preset` without a pack.
@@ -69,21 +84,38 @@ impl PhysicsStanding {
 }
 
 /// Compares the game's resolved profile with the family preset of the pack
-/// `manifest.engine_pack` names (`kid::presets::defaults`). Without a pack the profile's own
+/// `manifest.engine_pack` names (`kid::presets::defaults`), and every room profile a built room
+/// names with the game's resolved profile (#970, #1063). Without a pack the profile's own
 /// `preset` is the family. `Real` equality is bitwise, so this compares exactly the numbers the
-/// sim runs. Room profiles (`physics/<id>.toml`) are not part of the game's profile and are not
-/// compared here.
-pub fn standing(files: &PackageFiles, manifest: &Manifest, profile: &PhysicsProfile) -> PhysicsStanding {
+/// sim runs. `rooms` holds each named `physics/<id>.toml` with its id; a room profile that
+/// matches the game's file is not passed (the loader shares the game's profile for it).
+pub fn standing(
+    files: &PackageFiles,
+    manifest: &Manifest,
+    profile: &PhysicsProfile,
+    rooms: &[(&str, &PhysicsProfile)],
+) -> PhysicsStanding {
     let pack = manifest.engine_pack.as_ref().map(|p| p.get_ref().clone());
     let family = pack
         .as_deref()
         .and_then(|pack| engine_pack::family(files, pack))
         .unwrap_or(profile.preset);
     let base = presets::defaults(family);
+    let rooms = rooms
+        .iter()
+        .filter_map(|(id, room)| {
+            let differs = differing_fields(room, profile);
+            (!differs.is_empty()).then(|| RoomPhysicsStanding {
+                id: (*id).to_owned(),
+                differs,
+            })
+        })
+        .collect();
     PhysicsStanding {
         pack,
         family,
         differs: differing_fields(profile, &base),
+        rooms,
     }
 }
 
@@ -241,13 +273,15 @@ fn differing_fields(actual: &PhysicsProfile, base: &PhysicsProfile) -> Vec<Strin
         base.misc,
         [fade_in, fade_step, idle_needs_block]
     );
+    // A profile with slots or vars differs from the pack preset, which has neither.
+    differ_section!(out, "script", actual.script, base.script, [file, vars]);
     out
 }
 
 /// Reads the profile file at `path` (step 7). `trace` is `LoadMode::Trace`: a legacy `rules` that
 /// names no family falls back to A1 with a warning instead of an error. `None` when it cannot be read; every problem is a
 /// diagnostic, and a legacy draft maps to its family preset with a warning. `load::load_game`
-/// (WP7a) calls this.
+/// calls this.
 pub fn load(
     files: &PackageFiles,
     path: &str,
@@ -275,11 +309,14 @@ pub fn load(
     };
     let sprites = draft.sprites.clone().unwrap_or_default();
     let sounds = draft.sounds.clone().unwrap_or_default();
+    // The loader resolves the script file name to an id after `apply`; keep the name here.
+    let script = draft.script.clone();
     let profile = presets::apply(&mut draft);
     Some(PhysicsLoad {
         profile,
         sprites,
         sounds,
+        script,
         legacy: false,
     })
 }
@@ -346,6 +383,7 @@ fn legacy_or_error(
         profile,
         sprites: KidSpriteNames::default(),
         sounds: KidSoundNames::default(),
+        script: None,
         legacy: true,
     })
 }
@@ -363,7 +401,7 @@ fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
             p.input.walk == WalkRead::DirectLatch,
             "needs `[input] walk = \"direct_latch\"`",
         )),
-        // No switch in the profile, or the client has no such layer (plan 5.4).
+        // No switch in the profile, or the client has no such layer (docs/architecture/sim/kid.md).
         "ad_align" => Some((false, "has no switch in the profile yet (`misc.ad_nudge`)")),
         "disable_cancels" => Some((false, "has no switch in the profile yet (`jump.cancel`)")),
         "sub_frame_tap" => Some((false, "has no switch in the profile yet (`input.tap_fix`)")),
@@ -374,13 +412,15 @@ fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
         | "vdiet"
         | "water_full_jump_1f"
         | "water1_low_check"
-        | "restart_f2_same_frame" => Some((false, "is never on in this client (plan 5.4)")),
+        | "restart_f2_same_frame" => {
+            Some((false, "is never on in this client (docs/architecture/sim/kid.md)"))
+        }
         _ => None,
     }
 }
 
-/// The `required` trick validator (plan 5.4): a trick marked `required` needs its switch on.
-/// `manifest_text` is the text of `game.toml`, for positions.
+/// The `required` trick validator (docs/architecture/sim/kid.md): a trick marked `required` needs its
+/// switch on. `manifest_text` is the text of `game.toml`, for positions.
 pub fn check_tricks(
     tricks: &BTreeMap<Spanned<String>, Spanned<TrickSetting>>,
     profile: &PhysicsProfile,
@@ -409,6 +449,32 @@ pub fn check_tricks(
 mod tests {
     use super::*;
     use crate::tricks::{TRICKS, TrickType};
+
+    /// The loader accepts the standard names and resolves them to exactly the profile the legacy
+    /// names resolve to, so no value (and therefore no `gameplay_hash` of an unchanged file)
+    /// moves.
+    #[test]
+    fn standard_names_load_to_the_same_profile_as_the_legacy_names() {
+        let profile = |text: &str| {
+            let mut files = PackageFiles::new();
+            files
+                .insert("physics.toml", text.as_bytes().to_vec())
+                .expect("insert");
+            let mut diags = Vec::new();
+            let loaded = load(&files, "physics.toml", false, &mut diags).expect("loads");
+            assert!(diags.is_empty(), "{} diagnostics", diags.len());
+            loaded.profile
+        };
+        let legacy = profile(
+            "preset = \"A1\"\n[numbers]\nmax_fall_speed = 5.0\n\
+             [vine]\nmodel = \"distance_sym_early\"\n",
+        );
+        let standard = profile(
+            "preset = \"A1\"\n[numbers]\nmax_fall = 5.0\n\
+             [vines]\nmodel = \"symmetric_early\"\n",
+        );
+        assert_eq!(legacy, standard);
+    }
 
     #[test]
     fn every_switch_key_has_a_case() {

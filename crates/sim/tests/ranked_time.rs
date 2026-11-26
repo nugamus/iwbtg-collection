@@ -3,7 +3,9 @@
 //!
 //! Hand-built worlds as in `wp8b_timing`: a persistent probe walker that changes rooms, and probe
 //! instances of region kinds. "Tick k" below is the tick that starts with `World::tick == k`;
-//! `run_start` fires in tick 0 (split tick 1), so ticks 1 and on are the timer's.
+//! `run_start` fires in tick 0 (split tick 1), so ticks 1 and on are the timer's. The fixture
+//! starts the ranked timer as if the player had input on tick 0
+//! (`the_ranked_timer_waits_for_the_first_input` covers the wait itself).
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, RoomDef, RoomId};
@@ -61,6 +63,8 @@ fn fx(mode: PlayMode, timing: TimingDef, route: &[(u64, u32)], scene_until: Opti
         scene,
     };
     fx.w.mode = mode;
+    // As if the player had input on tick 0: the ranked timer is running from tick 1.
+    fx.w.timing.timer_started = true;
     let mut s = ProbeState::new("W", None);
     for &(at, room) in route {
         s.steps.push(
@@ -203,6 +207,26 @@ fn region_holds_says_whether_the_next_tick_is_frozen() {
             assert_eq!(skipped, 0, "Play original has no regions");
         }
     }
+}
+
+#[test]
+fn the_ranked_timer_waits_for_the_first_input() {
+    // Stripped: an idle screen counts nothing until the player acts; that tick is the first
+    // timed one.
+    let mut f = fx(PlayMode::Stripped, TimingDef::default(), &[], None);
+    f.w.timing.timer_started = false;
+    f.run(3);
+    assert_eq!(f.time(), (0, 0), "no input yet: the timer waits");
+    f.tick(press(Action::Jump.bit()));
+    assert_eq!(f.time(), (1, 0), "the first input's tick starts the timer");
+    f.run(2);
+    assert_eq!(f.time(), (3, 0));
+
+    // Play original counts from its start trigger whatever the input does.
+    let mut f = fx(PlayMode::Original, TimingDef::default(), &[], None);
+    f.w.timing.timer_started = false;
+    f.run(3);
+    assert_eq!(f.time(), (2, 0), "ticks 1 and 2");
 }
 
 #[test]

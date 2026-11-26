@@ -1,18 +1,16 @@
-//! Family presets: fill a draft profile's defaults from its `preset` (docs/plans/sim-core.md
-//! 5.1). WP5a owns it (WP5b and WP5c add their family's defaults here by asking WP5a).
+//! Family presets: fill a draft profile's defaults from its `preset` (docs/architecture/sim/kid.md).
 //!
 //! The A1 preset is the reference game, rely-the-needle-4-2 (kid/A1.md): rely's numbers, event
 //! lists and classes. Games of the same family override what differs (little-trap has no
-//! `platform_gravity_zero`, and so on). The `ladder` action that starts rely's Step list in plan
-//! 5.2 is WP5c; until it lands the Step list starts with `gravity` instead (#232). `ad_nudge`
-//! and `flip_swap`, dormant in rely, are left out for the same reason. The other families
-//! return the A1 profile with their `preset` recorded: WP5c replaces those arms. Family B is
-//! kaenbyou (kid/B.md).
+//! `platform_gravity_zero`, and so on). The `ladder` action is not in A1's Step list yet, so the
+//! list starts with `gravity` (#232); `ad_nudge` and `flip_swap`, dormant in rely, are left out
+//! for the same reason. The other families return the A1 profile with their `preset` recorded.
+//! Family B is kaenbyou (kid/B.md).
 
 use crate::def::physics::{
     AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, IceModel, IceRules,
     JumpCancel, KeyOn, KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys,
-    VineModel, WalkRead, WaterAir,
+    VineMode, VineModel, WalkRead, WaterAir,
 };
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
@@ -397,7 +395,7 @@ fn b() -> PhysicsProfile {
     p
 }
 
-/// Family A1, reference game rely-the-needle-4-2 (kid/A1.md; plan 5.2 example).
+/// Family A1, reference game rely-the-needle-4-2 (kid/A1.md; docs/architecture/sim/kid.md example).
 fn a1() -> PhysicsProfile {
     let mut p = PhysicsProfile {
         preset: KidFamily::A1,
@@ -507,6 +505,20 @@ fn a1() -> PhysicsProfile {
 pub fn apply(p: &mut PhysicsProfileDraft) -> PhysicsProfile {
     let d = std::mem::take(p);
     let mut out = defaults(d.preset.unwrap_or_default());
+    // Standard `model` selectors that name a value in another section. The overlays below run
+    // after this, so a field written explicitly in that other section wins.
+    // `[vines] model = "latched_keys"` names `[input] vine_keys = "latched_flags"` (A3).
+    if let Some(s) = &d.vine
+        && s.model.is_some_and(VineMode::latches_keys)
+    {
+        out.input.vine_keys = VineKeys::LatchedFlags;
+    }
+    // `[water] model` names `[jump] water_air`.
+    if let Some(s) = &d.water
+        && let Some(model) = s.model
+    {
+        out.jump.water_air = model.water_air();
+    }
     if let Some(s) = d.numbers {
         out.numbers = s.over(out.numbers);
     }
@@ -531,14 +543,12 @@ pub fn apply(p: &mut PhysicsProfileDraft) -> PhysicsProfile {
     if let Some(s) = d.vine {
         out.vine = s.over(out.vine);
     }
-    if let Some(s) = d.water {
-        out.water = s;
-    }
+    // `[water]` has no field of its own: its `model` went into `[jump] water_air` above.
     if let Some(s) = d.ice {
         out.ice = s;
     }
     if let Some(s) = d.slope {
-        out.slope = s;
+        out.slope = s.resolve();
     }
     if let Some(s) = d.ladder {
         out.ladder = s;
@@ -558,6 +568,79 @@ pub fn apply(p: &mut PhysicsProfileDraft) -> PhysicsProfile {
     if let Some(s) = d.misc {
         out.misc = s.over(out.misc);
     }
+    if let Some(s) = d.script {
+        // The vars are profile content; `file` is a name, and the loader resolves it to an id.
+        out.script.vars = s.vars.unwrap_or_default();
+    }
     // `d.sprites` holds names; the loader resolves them to ids.
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::def::physics::Downhill;
+
+    fn applied(text: &str) -> PhysicsProfile {
+        let mut draft: PhysicsProfileDraft = toml::from_str(text).expect("profile parses");
+        apply(&mut draft)
+    }
+
+    /// The standard names and the legacy names resolve to exactly the same profile.
+    #[test]
+    fn standard_names_resolve_like_the_legacy_names() {
+        let legacy = applied(
+            "preset = \"A1\"\n[numbers]\nmax_fall_speed = 5.0\n\
+             [vine]\nmodel = \"distance_sym_early\"\n\
+             [platform]\nsnap = 7.0\n\
+             [ladder]\nentry = \"up_only\"\n\
+             [slope]\ndownhill = \"rainbow\"\n",
+        );
+        let standard = applied(
+            "preset = \"A1\"\n[numbers]\nmax_fall = 5.0\n\
+             [vines]\nmodel = \"symmetric_early\"\n\
+             [platforms]\nsnap = 7.0\n\
+             [ladders]\nentry = \"up_only\"\n\
+             [slopes]\ndownhill = \"rainbow\"\n",
+        );
+        assert_eq!(legacy, standard);
+        assert_eq!(standard.numbers.max_fall_speed, r(5.0));
+        assert_eq!(standard.vine.model, VineModel::DistanceSymEarly);
+        assert_eq!(standard.slope.downhill, Downhill::Rainbow);
+    }
+
+    /// Each `model =` selector names the existing tuning field the presets already set.
+    #[test]
+    fn model_selectors_map_onto_the_tuning_fields() {
+        let p = applied(
+            "preset = \"A1\"\n\
+             [gravity]\nmodel = \"create_only\"\n\
+             [water]\nmodel = \"full_jump\"\n\
+             [vines]\nmodel = \"latched_keys\"\n\
+             [slope]\nmodel = \"poronkusema\"\n",
+        );
+        assert_eq!(p.gravity.reapply, GravityReapply::CreateOnly);
+        assert_eq!(p.jump.water_air, WaterAir::WaterUnlimited);
+        assert_eq!(p.input.vine_keys, VineKeys::LatchedFlags);
+        assert_eq!(p.vine.model, VineModel::DistanceAsym);
+        assert_eq!(p.slope.downhill, Downhill::Por);
+    }
+
+    /// A field written explicitly in the section the model maps into wins over the model.
+    #[test]
+    fn an_explicit_field_wins_over_the_model_selector() {
+        let p = applied(
+            "preset = \"A1\"\n\
+             [gravity]\nmodel = \"create_only\"\nreapply = \"step\"\n\
+             [jump]\nwater_air = \"none\"\n\
+             [water]\nmodel = \"full_jump\"\n\
+             [input]\nvine_keys = \"edges\"\n\
+             [vines]\nmodel = \"latched_keys\"\n\
+             [slope]\nmodel = \"rainbow\"\ndownhill = \"none\"\n",
+        );
+        assert_eq!(p.gravity.reapply, GravityReapply::Step);
+        assert_eq!(p.jump.water_air, WaterAir::None);
+        assert_eq!(p.input.vine_keys, VineKeys::Edges);
+        assert_eq!(p.slope.downhill, Downhill::None);
+    }
 }

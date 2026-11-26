@@ -6,26 +6,27 @@ This page describes how the client repo is built: the crates, the simulation, ho
 
 Related: [0001 script language](decisions/0001-script-language.md), [0002 data syntax](decisions/0002-data-syntax.md), [format v0](format/v0.md), [format principles](format/README.md), [server](server.md), [roadmap](roadmap.md).
 
-Facts about GameMaker 8 behavior come from the engine spec, `research/specs/engines/gm8/CLONE_SPEC.md` (not written yet). Where this page names a GM8 rule, the spec is the authority. Anything marked **OPEN** waits for it.
+Facts about GameMaker 8 behavior come from the engine spec, `research/specs/engines/gm8/CLONE_SPEC.md` (not written yet). Where this page names a GM8 rule, the spec is the authority. An evidence gap is F1 if it can change feel: it waits for a user/spec answer. F2/F3 gaps use the standard model and are logged.
 
 ## Goals
 
 - One simulation, `crates/sim`, runs the game on the client, the leaderboard server and the CLI.
 - The simulation is deterministic: the same package and inputs give bit-identical state on x86_64 Windows (MSVC), WASM and x86_64 Linux (the server).
-- A port reproduces the original's positions tick for tick. Traces of the original prove it.
+- A port reproduces what a player can feel — positions, timing and outcomes on a played path — not the original's internal structure. A feel contract proves it; traces are evidence where they exist.
 - Agents write and maintain all code. Clarity, tooling and guardrails come before cleverness.
 
 ## Crates
 
-One Cargo workspace in `client/`, `license = "MIT OR Apache-2.0"`, toolchain pinned to an exact stable in `rust-toolchain.toml`.
+One Cargo workspace in `client/`, `license = "MIT"`, toolchain pinned to an exact stable in `rust-toolchain.toml`.
 
 | Crate | What it does | Depends on |
 |---|---|---|
 | `crates/sim` | The deterministic simulation: world, built-ins, kid, collision, tick pipeline, script host, replays, state hash. No Bevy, no IO, no threads, no clock. `#![forbid(unsafe_code)]`. | `rhai` (exact pin), `libm` (exact pin, no default features), `blake3`, `smallvec`, `postcard`, `serde`. Optional later: `rustc_apfloat` (see [numbers](architecture/sim/numbers.md#number-handling)). |
 | `crates/format` | Reads, validates, hashes and writes game packages. Turns TOML files into `sim::def::GameDef`. Parses from an in-memory map of path to bytes (`PackageFiles`), so the client, the server and WASM share one code path with no filesystem. | `sim`, `toml`, `toml_edit`, `serde`, `serde_spanned`, `schemars` (optional `schema` feature: docs and tests only, never in the client or server; `cargo test -p xtask` enforces it, #794), `png`, `blake3`, `sha2`. |
-| `crates/tools` | The `iwbtg` command-line tool (see below). Later also the music preview picker and the level editor. | `sim`, `format`. |
+| `crates/removal` | The signed removal-list format: the strict JSON envelope, its checks, the canonical text a signature covers, and signing. Shared by the server (validator) and the CLI (producer), so the two cannot drift ([server](server.md#removal-list), #1537). | `serde`, `serde_json`, `ed25519-dalek`, `hex`, `sha2`. |
+| `crates/tools` | The `iwbtg` command-line tool (see below). Later also the music preview picker and the level editor. | `sim`, `format`, `removal`. |
 | `crates/client` | The Bevy app: game select, rendering, input, audio, settings. Owns one `sim::Sim`, feeds it one input frame per tick and draws its snapshots. | `sim`, `format`, `bevy`. |
-| `crates/server` | Phase 8. Leaderboard backend. Verifies replays by running `sim` in a child process ([server](server.md)). | `sim`, `format`, `axum`, `sqlx`. |
+| `crates/server` | Phase 8. Leaderboard backend. Verifies replays by running `sim` in a child process ([server](server.md)). | `sim`, `format`, `removal`, `axum`, `sqlx`. |
 
 The sim never parses text and never touches files. `format` hands it a validated `GameDef`. The client and server hand it input frames.
 ## Pages
@@ -37,12 +38,13 @@ Each lane edits its own page, so parallel PRs don't collide here (#518).
 - [The simulation](architecture/sim.md): sim module layout, sim purity, world model, tick pipeline, number handling, collision, scripts and the script API, random numbers, state hash, sound model.
 - [Input and replay format](architecture/replay.md): actions and input frames, the `.iwbr` replay file, `.inputs` test files, verification, versions.
 - [Comparing traces with the original](architecture/traces.md): recorder behavior, CSV columns, mapping and diff.
+- [Feel contracts](architecture/feel-contracts.md): scenario + assertions as evidence, the runner, and how they relate to traces, golden hashes, replays and boards.
 - [Testing strategy](architecture/testing.md).
 - [Versioning](architecture/versioning.md): `SIM_VERSION`, `engine_rev`, `gameplay_hash` and format; what a board keys on, the freeze point and the bump check.
 
 ## Open items
 
-Every GM rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict is tracked with its switch, default and settling trace in the [plan's register](plans/sim-core.md#15-unknown-and-inferred-register). The items below are the broad ones.
+Every GM rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict is tracked with its switch, default and settling trace in the [sim register](architecture/sim.md#register). The items below are the broad ones.
 
 - **OPEN:** exact GM8 event order, collision handling for solid instances, destroy timing, room-change timing and 8.0 versus 8.1 differences. Source: `research/specs/engines/gm8/CLONE_SPEC.md`.
 - **OPEN:** comparison epsilon, truthiness boundary, rounding and conversion rules, motion coupling details. Source: the same spec.

@@ -1,8 +1,8 @@
 # Lane: research
 
-Works in the main `research/` checkout, one agent at a time: crawls, downloads, extraction, traces and the converter need `archive/`, `extracted/`, `db/` and `tools/`, which exist only there. Read `research/CLAUDE.md` first; its safety rules override everything here.
+Works in the main `iwbtg-collection-research/` checkout, one agent at a time: crawls, downloads, extraction, traces and the converter need `archive/`, `extracted/`, `db/` and `tools/`, which exist only there. Read `iwbtg-collection-research/CLAUDE.md` first; its safety rules override everything here.
 
-**Owns:** `research/` (specs, scraper, converter, traces, knowledge).
+**Owns:** `iwbtg-collection-research/` (specs, scraper, converter, traces, knowledge).
 
 ## Build and test
 

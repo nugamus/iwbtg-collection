@@ -1,6 +1,5 @@
-//! Built-in `game_clear` (mechanics `game_clear`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/game_clear.md): raises the `run_end` timing trigger. Tier 2. WP0 creates
-//! the file; WP6b owns it.
+//! Built-in `game_clear` (mechanics `game_clear`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/game_clear.md): raises the `run_end` timing trigger. Tier 2.
 //!
 //! A touch by either kid sets `global.clear` and runs the game's saveGame script, then raises
 //! `run_end` (timing row 16). The save is `save::save_now` from the touching kid with the game's
@@ -27,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "save_with_position",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "saved_position",
         ty: ParamType::Enum(POSITION),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

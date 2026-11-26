@@ -31,12 +31,15 @@ pub(super) fn plugin(app: &mut App) {
 pub struct ReducedMotion(pub bool);
 
 /// An easing curve from 0 to 1.
+#[allow(clippy::enum_variant_names, reason = "the easing curves' usual names")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ease {
     /// Fast start, long soft landing: `1 - (1 - t)^5`.
     OutQuint,
     /// Overshoots and settles: the pop of a row that widens.
     OutElastic,
+    /// A sharper landing than OutQuint: `1 - 2^(-10t)` (the main menu's fruit and band, m5).
+    OutExpo,
 }
 
 impl Ease {
@@ -51,6 +54,13 @@ impl Ease {
                 }
                 let period = std::f32::consts::TAU / 3.0;
                 2f32.powf(-10.0 * t) * ((10.0 * t - 0.75) * period).sin() + 1.0
+            }
+            Ease::OutExpo => {
+                if t >= 1.0 {
+                    1.0
+                } else {
+                    1.0 - 2f32.powf(-10.0 * t)
+                }
             }
         }
     }
@@ -204,7 +214,7 @@ mod tests {
 
     #[test]
     fn curves_start_at_zero_and_end_at_one() {
-        for ease in [Ease::OutQuint, Ease::OutElastic] {
+        for ease in [Ease::OutQuint, Ease::OutElastic, Ease::OutExpo] {
             assert_eq!(ease.at(0.0), 0.0, "{ease:?}");
             assert_eq!(ease.at(1.0), 1.0, "{ease:?}");
         }

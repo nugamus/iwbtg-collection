@@ -1,5 +1,5 @@
-//! Built-in `drop_platform` (mechanics `drop_platform`; docs/plans/sim-core.md 6.1;
-//! docs/format/builtins/drop_platform.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `drop_platform` (mechanics `drop_platform`; docs/architecture/sim/builtins.md;
+//! docs/format/builtins/drop_platform.md). Tier 2.
 //!
 //! A platform that falls or rises when the kid stands on it. The kid is the first kid in the
 //! room. `mode`:
@@ -37,16 +37,19 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

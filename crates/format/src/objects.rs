@@ -1,14 +1,15 @@
 //! Object files: base, params, sprite, mask, solid, visible, depth, persistent, classes
-//! (docs/plans/sim-core.md 8.2 step 3, 8.3; docs/format/objects.md).
+//! (docs/format/objects.md).
 //!
 //! `objects/<id>.toml` defines `@<id>`: a preset (`base` plus params) or a scripted object
 //! (`script`, with an optional `base`). Keys other than the reserved ones below are params of the
-//! base built-in, checked against `builtins::param_specs` by `params::check` (WP7b).
+//! base built-in, checked against `builtins::param_specs` by `params::check`.
 //!
-//! Collision classes stand in for GM parents (plan 1.1): each built-in has default classes
-//! ([`default_classes`]), some params pick a class ([`param_classes`]), and `counts_as` adds
-//! more. The defaults are Design, read off the class names and the plan 6.1 table; a built-in
-//! owner who needs another default changes it here.
+//! Collision classes stand in for GM parents (docs/architecture/sim/world.md): each built-in has
+//! default classes ([`default_classes`]), some params pick a class ([`param_classes`]), and
+//! `counts_as` adds more. The defaults are Design, read off the class names and the built-in
+//! table in `docs/architecture/sim/builtins.md`; a built-in owner who needs another default
+//! changes it here.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -26,7 +27,7 @@ use crate::manifest::toml_error;
 use crate::number::Number;
 
 /// Keys of an object file that are not params.
-pub const RESERVED_KEYS: [&str; 12] = [
+pub const RESERVED_KEYS: [&str; 13] = [
     "base",
     "script",
     "sprite",
@@ -38,6 +39,7 @@ pub const RESERVED_KEYS: [&str; 12] = [
     "counts_as",
     "collides_with",
     "roles",
+    "timeline",
     "params",
 ];
 
@@ -62,12 +64,14 @@ pub struct ObjectFile {
     pub depth: Option<Spanned<f64>>,
     /// GM `persistent`; default false.
     pub persistent: Option<bool>,
-    /// Extra collision classes (plan 1.1): named classes or package class names.
+    /// Extra collision classes (docs/architecture/sim/world.md): named classes or package class names.
     pub counts_as: Vec<Spanned<String>>,
     /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
     pub collides_with: Vec<Spanned<String>>,
     /// Legacy converter key (`roles = ["block"]`), read only in `LoadMode::Trace` (CR10).
     pub roles: Vec<Spanned<String>>,
+    /// Timeline id (`timelines/<id>.toml`) the kind's instances start at Create.
+    pub timeline: Option<Spanned<String>>,
     /// Params, in key order.
     pub params: BTreeMap<String, Spanned<toml::Value>>,
 }
@@ -121,6 +125,7 @@ pub fn parse_object(id: &str, path: &str, text: &str) -> Result<ObjectFile, Diag
             "counts_as" => out.counts_as = strings("counts_as", value)?,
             "collides_with" => out.collides_with = strings("collides_with", value)?,
             "roles" => out.roles = strings("roles", value)?,
+            "timeline" => out.timeline = Some(string("timeline", value)?),
             "params" => match value.get_ref() {
                 toml::Value::Table(t) => {
                     for (k, v) in t {
@@ -148,7 +153,7 @@ pub fn parse_object(id: &str, path: &str, text: &str) -> Result<ObjectFile, Diag
 }
 
 /// A number from a data value: an integer, a float or `{ bits = "..." }`. Non-finite values are
-/// refused (plan 10.2).
+/// refused (docs/architecture/sim/numbers.md).
 pub fn number(v: &toml::Value) -> Result<f64, String> {
     let n = match v {
         toml::Value::Integer(i) => {
