@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T16:03:37Z",
+ "generated_at": "2026-11-26T16:36:43Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -172,13 +172,13 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 47,
-   "closed": 23,
+   "open": 46,
+   "closed": 24,
    "total": 70,
-   "pct_closed": 32.9,
-   "size_points": 122,
+   "pct_closed": 34.3,
+   "size_points": 121,
    "sizes": {
-    "size:S": 23,
+    "size:S": 22,
     "size:M": 17,
     "size:L": 6,
     "unknown": 1
@@ -263,15 +263,15 @@
  "activity": {
   "totals": {
    "issues": 964,
-   "open": 274,
-   "closed": 690,
-   "pct_closed": 71.6
+   "open": 273,
+   "closed": 691,
+   "pct_closed": 71.7
   },
   "open_prs": 1,
   "process": {
    "triage": 59,
-   "in-progress": 15,
-   "agent-ready": 119,
+   "in-progress": 14,
+   "agent-ready": 118,
    "needs-user": 27,
    "blocked": 25,
    "revisit": 1
@@ -291,7 +291,7 @@
    },
    {
     "area": "area:server",
-    "count": 42
+    "count": 41
    },
    {
     "area": "area:editor",
@@ -323,6 +323,22 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1545,
+    "title": "Auth: server-rendered password reset forms",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1545",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T16:29:27Z",
+    "closed_at": "2026-11-26T16:29:26Z",
+    "created_at": "2026-11-25T11:28:17Z"
+   },
    {
     "number": 1618,
     "title": "UI: Classic shelf (m5 A4, group 2)",
@@ -430,21 +446,6 @@
     "updated_at": "2026-11-26T14:39:35Z",
     "closed_at": "2026-11-26T14:39:35Z",
     "created_at": "2026-11-17T18:09:48Z"
-   },
-   {
-    "number": 773,
-    "title": "Auto-retry toggle placement: mod select footer (artboard) or HUD (product.md)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/773",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:client"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T14:39:33Z",
-    "closed_at": "2026-11-26T14:39:33Z",
-    "created_at": "2026-11-13T18:52:59Z"
    }
   ],
   "in_progress": [
@@ -731,7 +732,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 272,
+  "closed_7d": 273,
   "opened_7d": 304,
   "burnup": [
    {
@@ -752,7 +753,7 @@
    {
     "week": "2026-11-30",
     "created": 964,
-    "closed": 690
+    "closed": 691
    }
   ]
  },
