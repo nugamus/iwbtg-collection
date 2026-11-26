@@ -109,6 +109,9 @@ pub const STATE_FNS: &[&str] = &[
     "path_end",
     // It can run any package script function (#1533).
     "script_execute",
+    // They change or replace the instance's timeline run (#1386).
+    "start_timeline",
+    "stop_timeline",
     // They write the hashed view state (#1531).
     "set_view_xview",
     "set_view_yview",
@@ -310,6 +313,8 @@ pub enum Names {
     Room,
     /// A path id.
     Path,
+    /// A timeline id.
+    Timeline,
     /// A collision query target: a role (named class), `"all"` or a kind (`script::collide`).
     Target,
 }
@@ -329,6 +334,8 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     // The instance argument moves the path name to index 1: for a method call the receiver is
     // not in `args`, so `this.path_start("line", ...)` checks `args[0]`.
     ("path_start", 1, Names::Path),
+    // The instance argument moves the timeline name to index 1, as for path_start.
+    ("start_timeline", 1, Names::Timeline),
     // The index is argument 0, the kind literal argument 1.
     ("set_view_object", 1, Names::Kind),
     ("place_meeting", 3, Names::Target),
@@ -346,6 +353,7 @@ pub fn resolves(def: &GameDef, what: Names, name: &str) -> bool {
         Names::Sound => def.sounds.iter().any(|s| s.name == name),
         Names::Room => def.rooms.iter().any(|r| r.name == name),
         Names::Path => def.paths.iter().any(|p| p.name == name),
+        Names::Timeline => def.timelines.iter().any(|t| t.name == name),
         Names::Target => super::collide::resolves(def, name),
     }
 }
@@ -357,6 +365,7 @@ impl Names {
             Names::Sound => "sound",
             Names::Room => "room",
             Names::Path => "path",
+            Names::Timeline => "timeline",
             Names::Target => "role or kind",
         }
     }

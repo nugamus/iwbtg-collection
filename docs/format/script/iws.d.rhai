@@ -460,7 +460,11 @@ fn sqr(_: ?) -> float;
 
 fn sqrt(_: ?) -> float;
 
+fn start_timeline(_: Instance, _: string) -> ();
+
 fn stop_music() -> ();
+
+fn stop_timeline(_: Instance) -> ();
 
 fn string(_: ?) -> string;
 

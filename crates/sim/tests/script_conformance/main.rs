@@ -25,6 +25,8 @@ mod param;
 mod paths;
 #[path = "strings.rs"]
 mod strings;
+#[path = "timelines.rs"]
+mod timelines;
 #[path = "views.rs"]
 mod views;
 

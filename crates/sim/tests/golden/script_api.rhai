@@ -71,6 +71,13 @@ fn step() {
         let followed = view_object(0);
         this.phase = this.phase + view_current();
     }
+    // Timelines (#1386): start one and stop it the same tick; no moment can run.
+    if t == 1.0 {
+        this.start_timeline("api_tl");
+    }
+    if t == 1.0 {
+        stop_timeline(this);
+    }
     // Paths (#1530): start once, read and write every property, then end it.
     if t == 1.0 {
         this.path_start("api_line", 4.0, "stop", false);

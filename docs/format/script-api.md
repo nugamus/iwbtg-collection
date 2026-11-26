@@ -222,7 +222,9 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `sin(?) -> float` (can fail) (cost: 1): Sine of an angle in radians (software libm).
 - `sqr(?) -> float` (can fail) (cost: 1): `x` squared.
 - `sqrt(?) -> float` (can fail) (cost: 1): Square root.
+- `start_timeline(Instance, string) -> ()` (can fail) (cost: 1): `i.start_timeline(timeline)` starts a package timeline on `i` at position 0, replacing any running one; the timeline's `loop` flag is applied as the kind's `timeline` key and the trigger action apply it. The moments then run in the row-3 timeline phase, starting the tick after the call. An unknown timeline is an error; a literal is checked at load.
 - `stop_music() -> ()` (can fail) (cost: 1): Stops the music track that is playing, if any.
+- `stop_timeline(Instance) -> ()` (can fail) (cost: 1): `i.stop_timeline()` stops advancing `i`'s timeline (GM `timeline_running = false`); its position and speed stay. A no-op when no timeline runs.
 - `string(?) -> string` (can fail) (cost: 1): `string(x)`: a real as GM8 writes it (an integer with no decimals, anything else with exactly two, rounded ties-to-even), a bool as 1/0, or a string unchanged.
 - `string_char_at(?, ?) -> string` (can fail) (cost: 1): `string_char_at(s, index)`: the character at 1-based `index`, or "" outside the string.
 - `string_copy(?, ?, ?) -> string` (can fail) (cost: 1): `string_copy(s, index, count)`: up to `count` characters of `s` from 1-based `index` (a shorter tail when it runs past the end).

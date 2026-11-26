@@ -22,13 +22,14 @@ use crate::alarm;
 use crate::collide::bounce::{Against, move_bounce};
 use crate::def::class::{kind_classes, kind_params, picks_other_kind};
 use crate::def::script::ValueModel;
-use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
+use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId, TimelineId};
 use crate::error::SimError;
 use crate::kid::{self, KidState, api::KillCause};
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::script::ScriptOutput;
+use crate::timeline;
 use crate::world::{InstId, Instance, KindState, SpawnInit, World};
 
 type Res<T> = Result<T, Box<rhai::EvalAltResult>>;
@@ -701,6 +702,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
         });
         register_audio(engine, shared, docs);
         register_rooms(engine, shared, docs);
+        register_timelines(engine, shared, docs);
         let s = Rc::clone(shared);
         docs.add("kill_kid", "Kills the kid as a script death.");
         engine.register_fn("kill_kid", move || -> Res<()> {
@@ -1121,6 +1123,54 @@ fn register_rooms(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
             s.with_ctx(|ctx| ctx.request_room(req))
         });
     }
+}
+
+/// `start_timeline(i, timeline)` and `stop_timeline(i)` (#1386, census rank 25). A start is the
+/// same `timeline::start_with_def` the kind's `timeline` key and the trigger action use, at
+/// position 0, so a script-started timeline runs its moments on the same tick as a built-in's
+/// (the row-3 clock `timeline::advance` implements).
+fn register_timelines(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
+    let s = Rc::clone(shared);
+    docs.add(
+        "start_timeline",
+        "`i.start_timeline(timeline)` starts a package timeline on `i` at position 0, replacing any running one; the timeline's `loop` flag is applied as the kind's `timeline` key and the trigger action apply it. The moments then run in the row-3 timeline phase, starting the tick after the call. An unknown timeline is an error; a literal is checked at load.",
+    );
+    engine.register_fn(
+        "start_timeline",
+        move |i: &mut Inst, name: ImmutableString| -> Res<()> {
+            let i = *i;
+            s.with_world(|w, host| {
+                let tl = timeline_id(&host.def, &name)?;
+                let inst = live_mut(w, i)?;
+                timeline::start_with_def(&mut inst.timeline, &host.def, tl, Real::ZERO).map_err(sim_err)
+            })?
+        },
+    );
+    let s = Rc::clone(shared);
+    docs.add(
+        "stop_timeline",
+        "`i.stop_timeline()` stops advancing `i`'s timeline (GM `timeline_running = false`); its position and speed stay. A no-op when no timeline runs.",
+    );
+    engine.register_fn("stop_timeline", move |i: &mut Inst| -> Res<()> {
+        let i = *i;
+        s.with_world(|w, _| {
+            let inst = live_mut(w, i)?;
+            if let Some(run) = inst.timeline.as_mut() {
+                run.running = false;
+            }
+            Ok(())
+        })?
+    });
+}
+
+/// A package timeline by name (its index in `GameDef::timelines`).
+fn timeline_id(def: &crate::def::GameDef, name: &str) -> Res<TimelineId> {
+    def.timelines
+        .iter()
+        .position(|t| t.name == name)
+        .and_then(|i| u32::try_from(i).ok())
+        .map(TimelineId)
+        .ok_or_else(|| runtime_error(format!("unknown timeline `{name}`")))
 }
 
 /// A room of the package by id (its path stem, as room params name it).
