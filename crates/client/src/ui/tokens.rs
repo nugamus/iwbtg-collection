@@ -55,6 +55,13 @@ pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.14);
 /// Mod pills: the artboard's `rgba(255,255,255,.16)`, raised like [`SECONDARY`] so the pill
 /// clears 3:1 (3.34:1 over the gameplay dim, 3.95:1 over the ground; #1476).
 pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.16);
+/// The on/off switch button's surface (`ButtonKind::Switch`, [`switch`] in `widgets.rs`). The
+/// artboard's `rgba(255,255,255,.06)` was `white(0.06)` — about 0.010 alpha in linear light,
+/// 1.15 to 1.19:1 against the grounds — far below WCAG 1.4.11's 3:1 (the nominal 0.06 alone is
+/// only 2.1:1 over the ground). Raised to [`SECONDARY`]'s alpha so the control's own boundary
+/// clears it (3.05:1 over the lightest gameplay dim, 3.58:1 over the ground; #1492, #1476). A
+/// deliberate departure from the artboard for the user's batch review.
+pub const SWITCH: Color = Color::srgba(1.0, 1.0, 1.0, 0.14);
 
 /// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`, as [`dark`]`(.., 0.62)` (#713).
 #[allow(dead_code, reason = "other players' rows: the Global scope (#484)")]
@@ -385,6 +392,7 @@ mod tests {
         for (name, token) in [
             ("SECONDARY", SECONDARY),
             ("CHIP", CHIP),
+            ("SWITCH", SWITCH),
             ("KEY_IDLE", KEY_IDLE),
             ("BUTTON_IDLE", BUTTON_IDLE),
         ] {
@@ -403,6 +411,26 @@ mod tests {
             "the mark on the avatar: {:.2}",
             contrast(AVATAR_MARK, AVATAR_EMPTY)
         );
+    }
+
+    /// #1492: the switch's knob is the state indicator, so it must clear 3:1 against its track in
+    /// both states, not only the surface against the ground. The track is drawn over [`SWITCH`],
+    /// which is drawn over each ground; the knob is ink in both states.
+    #[test]
+    fn the_switch_knob_clears_non_text_contrast_on_its_track() {
+        use crate::ui::widgets::{knob_fill, track_fill};
+        for ground in SURFACE_GROUNDS {
+            let surface = rendered_over(SWITCH, ground);
+            for on in [false, true] {
+                let track = rendered_over(track_fill(on), surface);
+                let ratio = contrast(knob_fill(), track);
+                assert!(
+                    ratio >= 3.0,
+                    "switch knob on the {} track over {ground:?}: {ratio:.2}",
+                    if on { "on" } else { "off" }
+                );
+            }
+        }
     }
 
     /// The pairs documented as decorative stay below 3:1 by design; this pins why they are not
