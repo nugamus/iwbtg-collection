@@ -1,44 +1,52 @@
-//! The pause menu (#479; docs/product.md, Pause; artboards `Pause169`, `Pause43`, `PauseBox`):
-//! the game's own PAUSE box, drawn in game pixels over the frozen, darkened game.
+//! The pause menu (#479, #624; docs/product.md, Pause; m5 `D13`, `D14`, `D16`, `Pause.dc.html`):
+//! a page over the darkened game, in the client's own language.
 //!
 //! Escape (or Start on a controller) opens it and closes it again: it is the run screen
 //! `RunScreen::Paused` (shell, #839), entered from and left to `RunScreen::Playing`. While it is
-//! open the sim does not tick (it ticks only in `Playing`), the music and sounds hold, and the
-//! backdrop and HUD keep running. The run's timer does not stop: every fixed-clock tick spent paused while the
-//! map's timer runs (started, not ended) is counted and added to the HUD's time
-//! (`hud::Paused::ticks`); the paused line `Paused · timer running` shows in run info.
+//! open the sim does not tick (it ticks only in `Playing`), the music and sounds hold, the backdrop
+//! keeps running and the HUD steps aside (`hud::Suspended`): the page has the window. In Time
+//! Attack the run's timer does not stop: every fixed-clock tick spent paused while the map's timer
+//! runs (started, not ended) is counted and added to the HUD's time (`hud::Paused::ticks`), and
+//! the status pill says `Timer running`. Classic stops game time (`Game time stopped`).
 //!
-//! The items: Continue; Retry from save (what R does: the game's own restart, pressed on the
-//! next tick); Restart run (the quick-retry key, `retry.rs`); Quit (leaves the run without a
-//! results screen, `shell::leave`: back to the `--select` list, else closes the client; the run
-//! is not cleared, so no clear goes into the stats). Up and Down (and the keys bound to up and
-//! down) move the selector, Enter, Space or the keys bound to jump or accept
+//! The items, by mode ([`Item::list`]): Continue; Retry from save (what R does: the game's own
+//! restart, pressed on the next tick); Restart run (Time Attack: the quick-retry key, `retry.rs`);
+//! Quit to game select, or Back to the shelf in Classic (leaves the run without a results screen,
+//! `shell::leave`; the run is not cleared, so no clear goes into the stats). Once the run is over
+//! a minute old, Restart run and Quit ask for a 0.6 s hold of the key, button or click that picked
+//! them (the row fills red), so a stray press cannot throw a long run away. Up and Down (and the
+//! keys bound to up and down) move the selector, Enter, Space or the keys bound to jump or accept
 //! pick, the mouse hovers and clicks. On a controller the D-pad or left stick moves, A (south)
-//! picks and B (east) or Start continues. While the menu is open R and the quick-retry key (and
-//! their controller inputs) pick their item at once.
+//! picks and B (east) or Start continues; the hints then show the pad's glyphs. While the menu is
+//! open R and the quick-retry key (and their controller inputs) pick their item at once.
 //!
-//! The selector is the delicious fruit: the package's sprite `cherry` (its first two frames) when
-//! it has one, else the delicious fruit the client carries (`assets/ui/cherry.png`). The game's own P-key pause is sim input and stays
-//! the game's (docs/architecture/client.md, Pause menu).
+//! The right side is the run card: the game, the mode or map and mods, three numbers (Time
+//! Attack: run time, your PB on this board and deaths; Classic: this session, deaths and where
+//! you are), this session's deaths by room (`stats::SessionLog`) and the game's controls with the
+//! player's bindings. The selector is the delicious fruit: the package's sprite `cherry` (its
+//! first two frames) when it has one, else the delicious fruit the client carries
+//! (`assets/ui/cherry.png`). The game's own P-key pause is sim input and stays the game's
+//! (docs/architecture/client.md, Pause menu).
+
+mod page;
 
 use bevy::audio::AudioSink;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui_widgets::{Activate, Button};
+use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use iwbtg_format::files::PackageFiles;
 use iwbtg_sim::input::Action;
 use iwbtg_sim::world::SimStatus;
 
 use crate::bindings::{Bindings, PadInput};
-use crate::hud::{HudLayout, Paused};
+use crate::hud::{Paused, Suspended};
 use crate::input::{Collector, key_code};
 use crate::package::{SpriteImage, decode_png};
 use crate::shell::RunScreen;
-use crate::ui::fonts::{Family, Type};
-use crate::ui::motion::{Ease, OffsetX, Tween};
-use crate::ui::tokens;
-use crate::ui::widgets::text;
+use crate::ui::fonts::Type;
+use crate::ui::motion::{OffsetX, Tween};
+use crate::ui::shape::Shape;
 use crate::view::Game;
 use crate::locale;
 
@@ -62,24 +70,63 @@ pub enum Item {
 
 impl Item {
     pub const ALL: [Item; 4] = [Item::Continue, Item::RetryFromSave, Item::RestartRun, Item::Quit];
+    /// Classic has no run to restart: its items.
+    pub const CLASSIC: [Item; 3] = [Item::Continue, Item::RetryFromSave, Item::Quit];
 
-    pub fn label(self) -> &'static str {
+    /// The items of a mode, top to bottom.
+    pub fn list(classic: bool) -> &'static [Item] {
+        if classic { &Item::CLASSIC } else { &Item::ALL }
+    }
+
+    pub fn label(self, classic: bool) -> &'static str {
         match self {
             Item::Continue => locale::text("pause_continue"),
             Item::RetryFromSave => locale::text("pause_retry_from_save"),
             Item::RestartRun => locale::text("pause_restart_run"),
-            Item::Quit => locale::text("pause_quit"),
+            Item::Quit if classic => locale::text("pause_back_to_shelf"),
+            Item::Quit => locale::text("pause_quit_to_select"),
         }
     }
 
-    fn index(self) -> usize {
-        Item::ALL.iter().position(|i| *i == self).unwrap_or(0)
+    /// The line under the label.
+    pub fn sub(self, classic: bool) -> &'static str {
+        match (self, classic) {
+            (Item::Continue, _) => "",
+            (Item::RetryFromSave, true) => locale::text("pause_retry_sub_classic"),
+            (Item::RetryFromSave, false) => locale::text("pause_retry_sub"),
+            (Item::RestartRun, _) => locale::text("pause_restart_sub"),
+            (Item::Quit, true) => locale::text("pause_back_to_shelf_sub"),
+            (Item::Quit, false) => locale::text("pause_quit_sub"),
+        }
     }
 
-    /// The next item down (`+1`) or up (`-1`), wrapping round.
-    fn step(self, by: i32) -> Item {
-        let n = Item::ALL.len() as i32;
-        Item::ALL[(self.index() as i32 + by).rem_euclid(n) as usize]
+    /// The key or button that picks it, on the row's right.
+    pub fn glyph(self, _classic: bool, pad: bool) -> String {
+        match (self, pad) {
+            (Item::Continue, false) => "Esc".to_owned(),
+            (Item::Continue, true) => "B".to_owned(),
+            (Item::RetryFromSave, false) => "R".to_owned(),
+            (Item::RetryFromSave, true) => "Y".to_owned(),
+            (Item::RestartRun, false) => locale::format("pause_hold_key", &[("key", &"`")]),
+            (Item::RestartRun, true) => locale::format("pause_hold_key", &[("key", &"Back")]),
+            (Item::Quit, _) => String::new(),
+        }
+    }
+
+    /// Throws the run away: asks for a hold once the run is long.
+    pub fn destructive(self) -> bool {
+        matches!(self, Item::RestartRun | Item::Quit)
+    }
+
+    fn index(self, classic: bool) -> usize {
+        Item::list(classic).iter().position(|i| *i == self).unwrap_or(0)
+    }
+
+    /// The next item of the mode down (`+1`) or up (`-1`), wrapping round.
+    fn step(self, by: i32, classic: bool) -> Item {
+        let list = Item::list(classic);
+        let n = list.len() as i32;
+        list[(self.index(classic) as i32 + by).rem_euclid(n) as usize]
     }
 }
 
@@ -131,7 +178,34 @@ pub struct Menu {
     held: Vec<Entity>,
     /// `--pause-preview`: open at [`PREVIEW_TICK`] with this item selected.
     preview: Option<Item>,
+    /// The run is Classic (set when the menu opens): its items, card and accent.
+    pub classic: bool,
+    /// The menu was last driven by a controller: the hints show its glyphs.
+    pub pad: bool,
+    /// A destructive item being held to confirm.
+    hold: Option<Hold>,
+    /// The run is older than [`HOLD_AFTER_SECONDS`]: destructive items need a hold.
+    long: bool,
 }
+
+/// A destructive item waiting for its hold: what picked it and how long it has been held.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Hold {
+    item: Item,
+    source: HoldSource,
+    seconds: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HoldSource {
+    Key(KeyCode),
+    Pad(PadInput),
+    Mouse,
+}
+
+/// How long a destructive item is held, once the run is older than [`HOLD_AFTER_SECONDS`].
+pub const HOLD_SECONDS: f32 = 0.6;
+pub const HOLD_AFTER_SECONDS: f64 = 60.0;
 
 /// Whether the run screen is the pause menu.
 fn is_open(screen: Option<&State<RunScreen>>) -> bool {
@@ -153,15 +227,6 @@ pub(crate) struct Fruit(pub(crate) Handle<Image>);
 pub(crate) const FRUIT: UVec2 = UVec2::new(21, 24);
 /// The selector shows each frame this long (`pb-cherry 640ms steps(2)`).
 const FRUIT_FRAME_SECONDS: f32 = 0.32;
-/// An item that is not selected: `#8d909e`.
-const IDLE_INK: Color = Color::srgb_u8(0x8d, 0x90, 0x9e);
-/// The selected item moves this far right (game px), OutQuint.
-const SHIFT: f32 = 4.0;
-const SHIFT_SECONDS: f32 = 0.3;
-/// The dim over the game: `rgba(0,0,0,.5)`.
-const DIM: f32 = 0.5;
-/// The box's fill: `rgba(0,0,0,.94)`.
-const BOX_FILL: f32 = 0.94;
 /// `--pause-preview` opens the menu at this sim tick, once the timer has run a little.
 const PREVIEW_TICK: u64 = 25;
 
@@ -189,6 +254,7 @@ impl Plugin for PausePlugin {
                         s.is_some_and(|s| matches!(s.get(), RunScreen::Playing | RunScreen::Paused))
                     }),
                     mouse,
+                    hold,
                     act,
                     hold_audio,
                     publish,
@@ -213,10 +279,14 @@ pub(crate) fn reset(world: &mut World) {
 }
 
 /// Each fixed-clock tick while the menu is open: one more tick on the timer when the map's timer
-/// runs (the sim would have counted it) and the sim is running.
+/// runs (the sim would have counted it), the sim is running and the run is Time Attack.
 fn count(game: NonSend<Game>, mut menu: ResMut<Menu>) {
     let world = game.sim.world();
     let t = &world.timing;
+    // Classic stops game time (m5 D14): only Time Attack's timer runs on.
+    if game.sim.options().mode == iwbtg_sim::stripped::PlayMode::Original {
+        return;
+    }
     if world.status != SimStatus::Running || !t.started || t.ended {
         return;
     }
@@ -291,89 +361,179 @@ fn keys(
             pad_before[input as usize] = down;
         }
     }
+    let classic = game.sim.options().mode == iwbtg_sim::stripped::PlayMode::Original;
+    let long = run_seconds(&game) > HOLD_AFTER_SECONDS;
+    menu.long = long;
     if *screen.get() != RunScreen::Paused {
-        if let Some(item) = menu.preview
+        let opened = if let Some(item) = menu.preview
             && game.sim.world().tick >= PREVIEW_TICK
         {
             menu.preview = None;
-            menu.selected = item;
-            next.set(RunScreen::Paused);
-        } else if keys.just_pressed(PAUSE_KEY) || pad_pressed.contains(&PAUSE_PAD) {
-            menu.selected = Item::Continue;
+            Some(item)
+        } else if keys.just_pressed(PAUSE_KEY) {
+            menu.pad = false;
+            Some(Item::Continue)
+        } else if pad_pressed.contains(&PAUSE_PAD) {
+            menu.pad = true;
+            Some(Item::Continue)
+        } else {
+            None
+        };
+        if let Some(item) = opened {
+            menu.classic = classic;
+            menu.hold = None;
+            menu.selected = if Item::list(classic).contains(&item) {
+                item
+            } else {
+                Item::Continue
+            };
             next.set(RunScreen::Paused);
         }
+        return;
+    }
+    if menu.hold.is_some() {
+        // The hold runs its course in `hold`; other input waits.
         return;
     }
     let collector = collector.as_deref();
     if let Some(c) = collector {
         for &input in &pad_pressed {
+            menu.pad = true;
             let pick = match pad_command(c.bindings(), input) {
                 Some(PadCommand::Pick(item)) => Some(item),
                 Some(PadCommand::PickSelected) => Some(menu.selected),
                 Some(PadCommand::Step(by)) => {
-                    menu.selected = menu.selected.step(by);
+                    menu.selected = menu.selected.step(by, classic);
                     None
                 }
                 None => None,
             };
-            if let Some(item) = pick {
+            if let Some(item) = pick
+                && Item::list(classic).contains(&item)
+            {
                 menu.selected = item;
-                menu.picked = Some(item);
+                choose(&mut menu, item, HoldSource::Pad(input), long);
                 return;
             }
         }
     }
     for &key in keys.get_just_pressed() {
+        menu.pad = false;
         let action = bound(collector, key);
         let pick = match key {
             PAUSE_KEY => Some(Item::Continue),
             _ if quick_retry(collector, key) => Some(Item::RestartRun),
             KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => Some(menu.selected),
             KeyCode::ArrowUp => {
-                menu.selected = menu.selected.step(-1);
+                menu.selected = menu.selected.step(-1, classic);
                 None
             }
             KeyCode::ArrowDown => {
-                menu.selected = menu.selected.step(1);
+                menu.selected = menu.selected.step(1, classic);
                 None
             }
             _ => match action {
                 Some(Action::Restart) => Some(Item::RetryFromSave),
                 Some(Action::Jump | Action::Accept) => Some(menu.selected),
                 Some(Action::Up) => {
-                    menu.selected = menu.selected.step(-1);
+                    menu.selected = menu.selected.step(-1, classic);
                     None
                 }
                 Some(Action::Down) => {
-                    menu.selected = menu.selected.step(1);
+                    menu.selected = menu.selected.step(1, classic);
                     None
                 }
                 _ => None,
             },
         };
-        if let Some(item) = pick {
+        if let Some(item) = pick
+            && Item::list(classic).contains(&item)
+        {
             menu.selected = item;
-            menu.picked = Some(item);
+            choose(&mut menu, item, HoldSource::Key(key), long);
             break;
         }
     }
 }
 
-/// An item row; the mouse hovers to select and clicks to pick.
-#[derive(Component)]
-struct Row(Item);
+/// The run's age in seconds of game time.
+fn run_seconds(game: &Game) -> f64 {
+    let rate = f64::from(game.sim.def().tick_rate.max(1));
+    game.sim.world().tick as f64 / rate
+}
 
+/// Picks `item`, or starts its hold when it throws a long run away.
+fn choose(menu: &mut Menu, item: Item, source: HoldSource, long: bool) {
+    if item.destructive() && long {
+        menu.hold = Some(Hold {
+            item,
+            source,
+            seconds: 0.0,
+        });
+    } else {
+        menu.picked = Some(item);
+    }
+}
+
+/// Runs a hold: while what started it stays down the row fills; at [`HOLD_SECONDS`] the item is
+/// picked, and letting go earlier lets it be.
+fn hold(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse: Option<Res<ButtonInput<MouseButton>>>,
+    collector: Option<Res<Collector>>,
+    mut menu: ResMut<Menu>,
+) {
+    let Some(mut h) = menu.hold else {
+        return;
+    };
+    let down = match h.source {
+        HoldSource::Key(k) => keys.pressed(k),
+        HoldSource::Pad(p) => collector.as_deref().is_some_and(|c| c.pad_down(p)),
+        HoldSource::Mouse => mouse.as_deref().is_some_and(|m| m.pressed(MouseButton::Left)),
+    };
+    if !down {
+        menu.hold = None;
+        return;
+    }
+    h.seconds += time.delta_secs();
+    if h.seconds >= HOLD_SECONDS {
+        menu.hold = None;
+        menu.picked = Some(h.item);
+    } else {
+        menu.hold = Some(h);
+    }
+}
+
+use page::Row;
+
+/// The mouse hovers to select; a press on a long run's destructive item starts its hold.
 fn mouse(
-    rows: Query<(&Row, &Hovered), Changed<Hovered>>,
+    rows: Query<(&Row, &Hovered)>,
+    buttons: Option<Res<ButtonInput<MouseButton>>>,
     screen: Option<Res<State<RunScreen>>>,
     mut menu: ResMut<Menu>,
 ) {
     if !is_open(screen.as_deref()) {
         return;
     }
+    let pressed = buttons
+        .as_deref()
+        .is_some_and(|b| b.just_pressed(MouseButton::Left));
     for (row, hovered) in &rows {
-        if hovered.0 {
+        if !hovered.0 {
+            continue;
+        }
+        if menu.selected != row.0 {
             menu.selected = row.0;
+        }
+        if pressed && row.0.destructive() && menu.long && menu.hold.is_none() {
+            menu.pad = false;
+            menu.hold = Some(Hold {
+                item: row.0,
+                source: HoldSource::Mouse,
+                seconds: 0.0,
+            });
         }
     }
 }
@@ -389,9 +549,14 @@ fn on_activate(
     if let Some(mut menu) = menu
         && let Ok(row) = rows.get(activate.entity)
         && is_open(screen.as_deref())
+        && menu.hold.is_none()
     {
         menu.selected = row.0;
-        menu.picked = Some(row.0);
+        menu.pad = false;
+        // A long run's destructive item is held, not clicked (`mouse` starts that hold).
+        if !(row.0.destructive() && menu.long) {
+            menu.picked = Some(row.0);
+        }
     }
 }
 
@@ -443,231 +608,355 @@ fn hold_audio(
     }
 }
 
-/// Tells the HUD whether the menu is open and how long the run has been paused.
-fn publish(screen: Option<Res<State<RunScreen>>>, menu: Res<Menu>, mut paused: ResMut<Paused>) {
+/// Tells the HUD whether the menu is open and how long the run has been paused; the HUD steps
+/// aside while it is (the page sets the UI scale).
+fn publish(
+    screen: Option<Res<State<RunScreen>>>,
+    menu: Res<Menu>,
+    mut paused: ResMut<Paused>,
+    suspended: Option<ResMut<Suspended>>,
+    mut was_open: Local<bool>,
+) {
+    let open = is_open(screen.as_deref());
     let want = Paused {
-        open: is_open(screen.as_deref()),
+        open,
         ticks: menu.paused_ticks(),
     };
     if *paused != want {
         *paused = want;
     }
+    if open != *was_open {
+        *was_open = open;
+        if let Some(mut s) = suspended {
+            s.0 = open;
+        }
+    }
 }
 
-/// The dim over the game; the box is its child, centred.
+/// The page's root: the board it was built for and whether it is the pad's.
 #[derive(Component)]
 struct Root {
-    /// Logical UI px per game px the box was built for.
-    k: f32,
+    board: page::Board,
+    pad: bool,
+    selected_list: bool,
 }
 
-/// The selector of an item.
-#[derive(Component)]
-struct Selector(Item);
-
-/// The label of an item.
-#[derive(Component)]
-struct Label(Item);
-
-/// Spawns the menu when it opens (and again when the game's size on screen changes), places it on
-/// the game and removes it when it closes.
-#[allow(clippy::type_complexity, reason = "one Bevy system")]
-fn draw(
-    mut commands: Commands,
-    menu: Res<Menu>,
-    screen: Option<Res<State<RunScreen>>>,
-    layout: Res<HudLayout>,
-    fruit: Res<Fruit>,
-    window: Single<&Window, With<PrimaryWindow>>,
-    mut roots: Query<(Entity, &Root, &mut Node)>,
-) {
-    let l = layout.0;
-    let px = window.resolution.scale_factor() * l.content;
-    if !is_open(screen.as_deref()) || px <= 0.0 || l.game.width() <= 0.0 {
-        for (entity, ..) in &roots {
-            commands.entity(entity).despawn();
+/// What the card shows, from the run (read once when the menu opens).
+fn card(world: &mut World) -> page::Card {
+    let classic = world
+        .get_resource::<Menu>()
+        .is_some_and(|m| m.classic);
+    let game = world.non_send::<Game>();
+    let sim = &game.sim;
+    let def = sim.def();
+    let rate = def.tick_rate.max(1);
+    let world_now = sim.world();
+    let paused = world.get_resource::<Menu>().map_or(0, Menu::paused_ticks);
+    let manifest = world
+        .get_resource::<crate::shell::LoadedPackage>()
+        .and_then(|p| p.pkg.files.get("game.toml"))
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| iwbtg_format::manifest::Manifest::parse(t).ok());
+    let title = manifest
+        .as_ref()
+        .map(|m| m.title.get_ref().clone())
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| def.id.clone());
+    let extras = manifest
+        .as_ref()
+        .and_then(|m| m.controls.as_ref())
+        .map(|c| c.labels().map(|l| l.map(str::to_owned)))
+        .unwrap_or_default();
+    let map_name = manifest
+        .as_ref()
+        .and_then(|m| m.maps.iter().find(|x| x.id.get_ref() == sim.map_id()))
+        .map(|m| m.name.get_ref().clone());
+    let room = def
+        .rooms
+        .get(world_now.room.0 as usize)
+        .map_or_else(String::new, |r| r.name.clone());
+    let ranked_now = sim.ranked_ticks().saturating_add(paused);
+    let run_deaths = u64::from(world_now.engine.run.deaths);
+    let mods = world
+        .get_resource::<crate::mods::RunMods>()
+        .map_or(iwbtg_sim::mods::ModSet::NONE, |m| m.0);
+    let stats = world.get_resource::<crate::stats::Stats>();
+    let session = stats.and_then(|s| s.open_session());
+    let game_mode = stats.map(|s| s.book.game_mode(&def.id, !classic)).unwrap_or_default();
+    let rooms: Vec<(String, u32)> = session
+        .map(|s| {
+            s.deaths_by_room()
+                .into_iter()
+                .take(4)
+                .map(|(r, n)| (r.to_owned(), n))
+                .collect()
+        })
+        .unwrap_or_default();
+    let big = if classic {
+        let (seconds, deaths) = session.map_or((0.0, 0), |s| (s.seconds, s.deaths));
+        vec![
+            (
+                locale::text("pause_this_session").to_owned(),
+                crate::shell::shelf::clock(seconds),
+                locale::text("pause_game_time_stopped").to_owned(),
+            ),
+            (
+                locale::text("pause_deaths").to_owned(),
+                crate::card::grouped(deaths),
+                locale::format(
+                    "pause_in_this_game",
+                    &[("n", &crate::card::grouped(game_mode.deaths))],
+                ),
+            ),
+            (
+                locale::text("pause_where").to_owned(),
+                room.clone(),
+                String::new(),
+            ),
+        ]
+    } else {
+        let key = crate::stats::map_key(&def.id, sim.map_id());
+        let pb = stats
+            .and_then(|s| s.book.board(&key, true, &mods.codes()))
+            .and_then(|b| b.pb().map(|r| r.ticks));
+        vec![
+            (
+                locale::text("pause_run_time").to_owned(),
+                crate::stats::fmt_ticks(ranked_now, rate),
+                locale::text("pause_still_running").to_owned(),
+            ),
+            (
+                locale::text("pause_your_pb").to_owned(),
+                pb.map_or_else(|| "—".to_owned(), |t| crate::stats::fmt_ticks(t, rate)),
+                if pb.is_some() {
+                    String::new()
+                } else {
+                    locale::text("pause_no_clear_yet").to_owned()
+                },
+            ),
+            (
+                locale::text("pause_deaths").to_owned(),
+                crate::card::grouped(run_deaths),
+                locale::format(
+                    "pause_in_this_game",
+                    &[("n", &crate::card::grouped(game_mode.deaths))],
+                ),
+            ),
+        ]
+    };
+    let bindings = world
+        .get_resource::<Collector>()
+        .map(|c| c.bindings().clone())
+        .unwrap_or_default();
+    let pad = world.get_resource::<Menu>().is_some_and(|m| m.pad);
+    let glyph = |action: Action| -> Option<String> {
+        if pad {
+            bindings.pads_of(action).first().map(|p| pad_glyph(*p).to_owned())
+        } else {
+            bindings
+                .keys_of(action)
+                .first()
+                .map(|k| crate::bindings::key_name(*k))
         }
-        return;
+    };
+    let mut controls = Vec::new();
+    let mv = if pad {
+        Some("D-pad".to_owned())
+    } else {
+        match (glyph(Action::Left), glyph(Action::Right)) {
+            (Some(l), Some(r)) => Some(format!("{} {}", arrow(&l), arrow(&r))),
+            _ => None,
+        }
+    };
+    if let Some(m) = mv {
+        controls.push((m, locale::text("pause_control_move").to_owned(), false));
     }
-    // Game px to the UI's px (`UiScale` is the HUD's panel scale, `hud::place`).
-    let k = l.scale / px;
-    let rect = (
-        Val::Px(l.game.min.x / px),
-        Val::Px(l.game.min.y / px),
-        Val::Px(l.game.width() / px),
-        Val::Px(l.game.height() / px),
-    );
-    let mut found = false;
-    for (entity, root, mut node) in &mut roots {
-        if (root.k - k).abs() > 1e-4 {
-            commands.entity(entity).despawn();
+    for (action, key) in [
+        (Action::Jump, "pause_control_jump"),
+        (Action::Shoot, "pause_control_shoot"),
+        (Action::Restart, "pause_retry_from_save"),
+    ] {
+        if let Some(g) = glyph(action) {
+            controls.push((g, locale::text(key).to_owned(), false));
+        }
+    }
+    for (i, label) in extras.iter().enumerate() {
+        let Some(label) = label else {
             continue;
-        }
-        found = true;
-        if (node.left, node.top, node.width, node.height) != rect {
-            (node.left, node.top, node.width, node.height) = rect;
-        }
+        };
+        let action = [Action::Extra1, Action::Extra2, Action::Extra3, Action::Extra4][i];
+        let g = glyph(action).unwrap_or_else(|| "?".to_owned());
+        controls.push((
+            g,
+            locale::format("pause_control_extra", &[("what", label), ("n", &(i + 1))]),
+            true,
+        ));
     }
-    if found {
+    page::Card {
+        classic,
+        title,
+        map_line: if classic {
+            locale::text("mode_classic").to_owned()
+        } else {
+            map_name.unwrap_or_else(|| locale::text("mode_time_attack").to_owned())
+        },
+        mods: mods.iter().map(|d| d.code).collect(),
+        big,
+        live_note: !classic,
+        rooms_key: if classic {
+            locale::text("pause_rooms_classic").to_owned()
+        } else {
+            locale::text("pause_rooms").to_owned()
+        },
+        rooms,
+        controls,
+    }
+}
+
+/// `Left` as an arrow, else the key's name.
+fn arrow(name: &str) -> String {
+    match name {
+        "Left" => "←".to_owned(),
+        "Right" => "→".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// A controller input as the hints draw it (A, B, X, Y, LB, …).
+pub(crate) fn pad_glyph(p: PadInput) -> &'static str {
+    match p {
+        PadInput::South => "A",
+        PadInput::East => "B",
+        PadInput::West => "X",
+        PadInput::North => "Y",
+        PadInput::LeftBumper => "LB",
+        PadInput::RightBumper => "RB",
+        PadInput::LeftTrigger => "LT",
+        PadInput::RightTrigger => "RT",
+        PadInput::Select => "Back",
+        PadInput::Start => "Start",
+        PadInput::DPadUp | PadInput::DPadDown | PadInput::DPadLeft | PadInput::DPadRight => "D-pad",
+        _ => "Stick",
+    }
+}
+
+/// The status pill's text: `Game time stopped`, or `Timer running · 38:09.02`.
+fn status(world: &World) -> String {
+    let menu = world.resource::<Menu>();
+    if menu.classic {
+        return locale::text("pause_game_time_stopped_status").to_owned();
+    }
+    let game = world.non_send::<Game>();
+    let rate = game.sim.def().tick_rate.max(1);
+    let t = game.sim.ranked_ticks().saturating_add(menu.paused_ticks());
+    locale::format(
+        "pause_timer_running",
+        &[("time", &crate::stats::fmt_ticks(t, rate))],
+    )
+}
+
+/// Spawns the page when the menu opens (again when the window's board or the device changes),
+/// sets the UI scale for it, and removes it when the menu closes.
+fn draw(world: &mut World) {
+    let open = is_open(world.get_resource::<State<RunScreen>>());
+    let window = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .map(|w| w.size());
+    let roots: Vec<(Entity, page::Board, bool, bool)> = world
+        .query::<(Entity, &Root)>()
+        .iter(world)
+        .map(|(e, r)| (e, r.board, r.pad, r.selected_list))
+        .collect();
+    let Some(win) = window.filter(|w| w.x >= 1.0 && w.y >= 1.0) else {
+        return;
+    };
+    if !open {
+        for (e, ..) in roots {
+            world.entity_mut(e).despawn();
+        }
         return;
     }
-    let mut root = commands.spawn((
+    let board = page::Board::for_window(win);
+    let scale = board.scale(win);
+    if (world.resource::<UiScale>().0 - scale).abs() > 1e-4 {
+        world.resource_mut::<UiScale>().0 = scale;
+    }
+    let (pad, classic) = {
+        let m = world.resource::<Menu>();
+        (m.pad, m.classic)
+    };
+    let mut current = false;
+    for (e, b, p, c) in roots {
+        if b == board && p == pad && c == classic {
+            current = true;
+        } else {
+            world.entity_mut(e).despawn();
+        }
+    }
+    if current {
+        return;
+    }
+    let card = card(world);
+    let status = status(world);
+    let fruit = world.resource::<Fruit>().0.clone();
+    let menu = world.resource::<Menu>();
+    let page = page::page(board, menu, &card, status, fruit, pad);
+    // Centred in the window at the board's scale.
+    let (w, h) = (win.x / scale, win.y / scale);
+    world.spawn((
         Node {
             position_type: PositionType::Absolute,
-            left: rect.0,
-            top: rect.1,
-            width: rect.2,
-            height: rect.3,
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
+            width: Val::Px(w),
+            height: Val::Px(h),
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             ..default()
         },
-        // The game area darkens to 50%.
-        BackgroundColor(tokens::black(DIM)),
+        // The game at half brightness behind the page's gradient.
+        BackgroundColor(crate::ui::tokens::black(0.5)),
         GlobalZIndex(20),
-        Root { k },
+        Root {
+            board,
+            pad,
+            selected_list: classic,
+        },
         crate::shell::RUN_ONLY,
+        children![page],
     ));
-    root.with_child(pause_box(k, menu.selected, fruit.0.clone()));
 }
 
-/// The PAUSE box at `k` UI px per game px (`PauseBox.dc.html`): 300 px wide, padding 22/26/24,
-/// black at 94%, a 2 px white border and a 2 px white outline 3 px outside it, PAUSE in
-/// Pixelify Sans 34 px 700 tracked 0.18 em, then the items 32 px tall and 2 px apart.
-fn pause_box(k: f32, selected: Item, fruit: Handle<Image>) -> impl Bundle {
-    let px = |v: f32| Val::Px(v * k);
-    let heading = Type {
-        family: Family::Pixel,
-        tracking: 0.18,
-        ..Type::barlow(34.0 * k, 700)
-    };
-    (
-        Node {
-            width: px(300.0),
-            flex_direction: FlexDirection::Column,
-            row_gap: px(18.0),
-            padding: UiRect {
-                left: px(26.0),
-                right: px(26.0),
-                top: px(22.0),
-                bottom: px(24.0),
-            },
-            border: UiRect::all(px(2.0)),
-            ..default()
-        },
-        BackgroundColor(tokens::black(BOX_FILL)),
-        BorderColor::all(Color::WHITE),
-        Outline::new(px(2.0), px(3.0), Color::WHITE),
-        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
-            let px = |v: f32| Val::Px(v * k);
-            c.spawn((
-                Node {
-                    justify_content: JustifyContent::Center,
-                    // The tracking after the last letter, balanced on the left (`padding-left: .18em`).
-                    padding: UiRect::left(px(34.0 * 0.18)),
-                    ..default()
-                },
-                // `line-height: 1`.
-                children![(
-                    Text::new(locale::text("pause_title")),
-                    heading.font(),
-                    heading.spacing(),
-                    bevy::text::LineHeight::RelativeToFont(1.0),
-                    TextColor(Color::WHITE),
-                    crate::ui::shape::Ink(Color::WHITE),
-                )],
-            ));
-            c.spawn(Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(2.0),
-                ..default()
-            })
-            .with_children(|list| {
-                for item in Item::ALL {
-                    list.spawn(row(k, item, item == selected, fruit.clone()));
-                }
-            });
-        })),
-    )
-}
-
-/// The item's type: Pixelify Sans 18 px, 600 selected and 500 otherwise, tracked 0.04 em.
-fn item_type(k: f32, selected: bool) -> Type {
-    Type {
-        family: Family::Pixel,
-        tracking: 0.04,
-        ..Type::barlow(18.0 * k, if selected { 600 } else { 500 })
-    }
-}
-
-fn row(k: f32, item: Item, selected: bool, fruit: Handle<Image>) -> impl Bundle {
-    let px = |v: f32| Val::Px(v * k);
-    let shift = if selected { SHIFT * k } else { 0.0 };
-    (
-        Button,
-        Hovered::default(),
-        Row(item),
-        Node {
-            height: px(32.0),
-            align_items: AlignItems::Center,
-            column_gap: px(10.0),
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    width: px(FRUIT.x as f32),
-                    height: px(FRUIT.y as f32),
-                    flex_shrink: 0.0,
-                    ..default()
-                },
-                ImageNode {
-                    image: fruit,
-                    rect: Some(Rect::new(0.0, 0.0, FRUIT.x as f32, FRUIT.y as f32)),
-                    color: Color::WHITE.with_alpha(if selected { 1.0 } else { 0.0 }),
-                    ..default()
-                },
-                Selector(item),
-            ),
-            (
-                text(
-                    item.label(),
-                    item_type(k, selected),
-                    if selected { Color::WHITE } else { IDLE_INK }
-                ),
-                UiTransform::from_translation(Val2::px(shift, 0.0)),
-                Tween::<OffsetX>::at_rest(shift, SHIFT_SECONDS, Ease::OutQuint),
-                Label(item),
-            ),
-        ],
-    )
-}
-
-/// Follows the selection: the selected item is white, bolder and shifted right with the fruit
-/// beside it; the fruit steps between its two frames.
-#[allow(clippy::type_complexity, reason = "one pass over the box's parts")]
+/// Follows the selection and the hold: the selected row is lit, ringed and shifted right with the
+/// fruit beside it; the fruit steps between its two frames; the status keeps the time; the held
+/// row fills.
+#[allow(clippy::type_complexity, reason = "one pass over the page's parts")]
+#[allow(clippy::too_many_arguments, reason = "one pass over the page's parts")]
 fn looks(
     time: Res<Time>,
     menu: Res<Menu>,
+    game: NonSend<Game>,
     roots: Query<&Root>,
-    mut selectors: Query<(&Selector, &mut ImageNode)>,
-    mut labels: Query<(
-        &Label,
-        &mut TextColor,
-        &mut crate::ui::shape::Ink,
-        &mut TextFont,
-        &mut Tween<OffsetX>,
-    )>,
+    mut selectors: Query<(&page::Selector, &mut ImageNode)>,
+    mut plates: Query<(&page::Plate, &mut Shape, &mut Tween<OffsetX>)>,
+    mut labels: Query<(&page::Label, &mut TextColor, &mut TextFont), Without<page::Sub>>,
+    mut subs: Query<(&page::Sub, &mut TextColor), Without<page::Label>>,
+    mut fills: Query<(&page::HoldFill, &mut Node)>,
+    mut statuses: Query<&mut Text, With<page::Status>>,
+    mut live: Query<&mut Text, (With<page::LiveTime>, Without<page::Status>)>,
+    mut dots: Query<&mut BackgroundColor, With<page::StatusDot>>,
     mut clock: Local<f32>,
 ) {
-    let Some(root) = roots.iter().next() else {
+    if roots.is_empty() {
         *clock = 0.0;
         return;
-    };
+    }
     *clock += time.delta_secs();
     let frame = (*clock / FRUIT_FRAME_SECONDS) as u32 % 2;
     let x = (frame * FRUIT.x) as f32;
-    for (Selector(item), mut image) in &mut selectors {
+    for (page::Selector(item), mut image) in &mut selectors {
         let alpha = if *item == menu.selected { 1.0 } else { 0.0 };
         if (image.color.alpha() - alpha).abs() > 1e-3 {
             image.color = Color::WHITE.with_alpha(alpha);
@@ -677,18 +966,69 @@ fn looks(
             image.rect = want;
         }
     }
-    for (Label(item), mut color, mut ink, mut font, mut tween) in &mut labels {
+    for (page::Plate(item), mut shape, mut tween) in &mut plates {
         let on = *item == menu.selected;
-        let ink_want = if on { Color::WHITE } else { IDLE_INK };
-        if color.0 != ink_want {
-            color.0 = ink_want;
-            ink.0 = ink_want;
+        let fill = if on { page::plate_on() } else { page::PLATE_OFF };
+        let ring = on.then_some((2.0, page::RING));
+        if shape.fill != fill || shape.ring != ring {
+            shape.fill = fill;
+            shape.ring = ring;
         }
-        let weight = item_type(root.k, on).font().weight;
+        tween.retarget(if on { page::SHIFT } else { 0.0 });
+    }
+    for (page::Label(item), mut color, mut font) in &mut labels {
+        let on = *item == menu.selected;
+        let ink = if on { Color::WHITE } else { page::IDLE_INK };
+        if color.0 != ink {
+            color.0 = ink;
+        }
+        let weight = Type::barlow(20.0, if on { 700 } else { 600 }).font().weight;
         if font.weight != weight {
             font.weight = weight;
         }
-        tween.retarget(if on { SHIFT * root.k } else { 0.0 });
+    }
+    for (page::Sub(item), mut color) in &mut subs {
+        let ink = if *item == menu.selected {
+            page::IDLE_INK
+        } else {
+            crate::ui::tokens::MUTED
+        };
+        if color.0 != ink {
+            color.0 = ink;
+        }
+    }
+    for (page::HoldFill(item), mut node) in &mut fills {
+        let pct = match menu.hold {
+            Some(h) if h.item == *item => 100.0 * (h.seconds / HOLD_SECONDS).min(1.0),
+            _ => 0.0,
+        };
+        let want = Val::Percent(pct);
+        if node.width != want {
+            node.width = want;
+        }
+    }
+    if !menu.classic {
+        let rate = game.sim.def().tick_rate.max(1);
+        let t = crate::stats::fmt_ticks(
+            game.sim.ranked_ticks().saturating_add(menu.paused_ticks()),
+            rate,
+        );
+        let line = locale::format("pause_timer_running", &[("time", &t)]);
+        for mut text in &mut statuses {
+            if text.0 != line {
+                text.0 = line.clone();
+            }
+        }
+        for mut text in &mut live {
+            if text.0 != t {
+                text.0 = t.clone();
+            }
+        }
+        // The dot pulses once a second (`ps-live 1s ease-in-out`), held with reduced motion.
+        let a = 0.675 + 0.325 * (std::f32::consts::TAU * *clock).cos();
+        for mut bg in &mut dots {
+            bg.0 = crate::ui::tokens::ACCENT.with_alpha(a);
+        }
     }
 }
 
@@ -765,9 +1105,10 @@ mod tests {
 
     #[test]
     fn the_selection_wraps_and_items_parse() {
-        assert_eq!(Item::Continue.step(-1), Item::Quit);
-        assert_eq!(Item::Quit.step(1), Item::Continue);
-        assert_eq!(Item::RetryFromSave.step(1), Item::RestartRun);
+        assert_eq!(Item::Continue.step(-1, false), Item::Quit);
+        assert_eq!(Item::Quit.step(1, false), Item::Continue);
+        assert_eq!(Item::RetryFromSave.step(1, false), Item::RestartRun);
+        assert_eq!(Item::RetryFromSave.step(1, true), Item::Quit, "Classic has no Restart run");
         assert_eq!(parse_item("Restart"), Ok(Item::RestartRun));
         assert!(parse_item("menu").is_err());
     }
@@ -802,7 +1143,7 @@ mod tests {
         use iwbtg_sim::input::InputFrame;
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        let mut world = crate::view::test_world(&pkg);
+        let mut world = crate::view::test_world_in(&pkg, iwbtg_sim::stripped::PlayMode::Stripped);
         world.init_resource::<Menu>();
         world.run_system_once(count).unwrap();
         let started = world.non_send::<Game>().sim.world().timing.started;
@@ -837,6 +1178,64 @@ mod tests {
         assert_eq!(world.resource::<Menu>().paused_ticks(), 0);
     }
 
+    /// Classic stops game time (m5 D14): a pause adds nothing to the run's time.
+    #[test]
+    fn classic_pauses_do_not_count() {
+        use bevy::ecs::system::RunSystemOnce;
+        use iwbtg_sim::input::InputFrame;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.init_resource::<Menu>();
+        for _ in 0..200 {
+            if world.non_send::<Game>().sim.world().timing.started {
+                break;
+            }
+            world.non_send_mut::<Game>().sim.step(InputFrame::EMPTY);
+        }
+        for _ in 0..50 {
+            world.run_system_once(count).unwrap();
+        }
+        assert_eq!(world.resource::<Menu>().paused_ticks(), 0);
+    }
+
+    /// Once the run is over a minute old, Restart run and Quit wait for a 0.6 s hold of the key
+    /// that picked them; letting go earlier picks nothing.
+    #[test]
+    fn a_long_runs_destructive_items_need_a_hold() {
+        let mut menu = Menu::default();
+        choose(&mut menu, Item::Quit, HoldSource::Key(KeyCode::Enter), false);
+        assert_eq!(menu.picked.take(), Some(Item::Quit), "a short run picks at once");
+        choose(&mut menu, Item::Continue, HoldSource::Key(KeyCode::Enter), true);
+        assert_eq!(menu.picked.take(), Some(Item::Continue), "only destructive items wait");
+        let mut app = App::new();
+        app.insert_resource(Time::<()>::default());
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.add_systems(Update, hold);
+        let mut menu = Menu::default();
+        choose(&mut menu, Item::RestartRun, HoldSource::Key(KeyCode::Enter), true);
+        assert!(menu.picked.is_none() && menu.hold.is_some());
+        app.insert_resource(menu);
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Enter);
+        let step = |app: &mut App, secs: f32| {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_secs_f32(secs));
+            app.update();
+        };
+        step(&mut app, 0.3);
+        assert!(app.world().resource::<Menu>().picked.is_none(), "not yet");
+        step(&mut app, 0.35);
+        assert_eq!(app.world().resource::<Menu>().picked, Some(Item::RestartRun));
+        let mut menu = Menu::default();
+        choose(&mut menu, Item::Quit, HoldSource::Key(KeyCode::Enter), true);
+        app.insert_resource(menu);
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().release(KeyCode::Enter);
+        step(&mut app, 0.7);
+        let menu = app.world().resource::<Menu>();
+        assert!(menu.picked.is_none() && menu.hold.is_none(), "let go: nothing");
+    }
+
     /// A controller opens the menu with Start, moves with the D-pad and the stick, picks with A
     /// and continues with B or Start; Start never reaches the game (#624).
     #[test]
@@ -844,7 +1243,7 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        let mut world = crate::view::test_world(&pkg);
+        let mut world = crate::view::test_world_in(&pkg, iwbtg_sim::stripped::PlayMode::Stripped);
         world.init_resource::<ButtonInput<KeyCode>>();
         world.init_resource::<Menu>();
         on_screen(&mut world, RunScreen::Playing);

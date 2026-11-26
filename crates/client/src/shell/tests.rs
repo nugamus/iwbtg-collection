@@ -799,7 +799,18 @@ fn a_run_walks_loading_playing_paused_playing_results() {
     frames(&mut app, 1);
     assert_eq!(screen(&app), RunScreen::Paused);
     assert!(app.world().resource::<crate::hud::Paused>().open);
-    assert!(game_shows(&mut app), "the menu shows over the game");
+    {
+        // The page shows over the game; the HUD steps aside for it (m5 D13).
+        let world = app.world_mut();
+        assert!(
+            world
+                .query_filtered::<&Camera, With<GameCamera>>()
+                .iter(world)
+                .all(|c| c.is_active),
+            "the menu shows over the game"
+        );
+        assert!(world.resource::<crate::hud::Suspended>().0, "the HUD steps aside");
+    }
     let at = tick(&app);
     frames(&mut app, 10);
     assert_eq!(tick(&app), at, "no tick in the pause menu");
@@ -808,6 +819,7 @@ fn a_run_walks_loading_playing_paused_playing_results() {
     frames(&mut app, 1);
     assert_eq!(screen(&app), RunScreen::Playing);
     assert!(!app.world().resource::<crate::hud::Paused>().open);
+    assert!(game_shows(&mut app), "the HUD is back");
     frames(&mut app, 10);
     assert!(tick(&app) > at, "the game ticks again");
 

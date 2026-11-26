@@ -831,11 +831,17 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
 /// The view's run resources without a window, for tests of the systems that use them.
 #[cfg(test)]
 pub(crate) fn test_world(pkg: &Package) -> World {
+    test_world_in(pkg, iwbtg_sim::stripped::PlayMode::Original)
+}
+
+/// [`test_world`] in a play mode: `Stripped` is Time Attack.
+#[cfg(test)]
+pub(crate) fn test_world_in(pkg: &Package, mode: iwbtg_sim::stripped::PlayMode) -> World {
     let options = SimOptions {
         start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
         seed: 0,
         dll_mode: DllMode::Model,
-        mode: iwbtg_sim::stripped::PlayMode::Original,
+        mode,
         map: None,
     };
     let prepared = Sim::prepare(&pkg.def).unwrap();
