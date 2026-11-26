@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T22:21:41Z",
+ "generated_at": "2026-11-26T22:28:22Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,13 +126,13 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 24,
+   "open": 25,
    "closed": 32,
-   "total": 56,
-   "pct_closed": 57.1,
-   "size_points": 46,
+   "total": 57,
+   "pct_closed": 56.1,
+   "size_points": 47,
    "sizes": {
-    "size:S": 9,
+    "size:S": 10,
     "size:M": 7,
     "size:L": 2,
     "unknown": 6
@@ -267,11 +267,11 @@
    "closed": 700,
    "pct_closed": 71.1
   },
-  "open_prs": 3,
+  "open_prs": 6,
   "process": {
-   "triage": 76,
-   "agent-ready": 113,
-   "in-progress": 13,
+   "triage": 75,
+   "agent-ready": 114,
+   "in-progress": 14,
    "needs-user": 27,
    "blocked": 25,
    "revisit": 1
@@ -347,11 +347,10 @@
      "bug",
      "agent-ready",
      "size:M",
-     "area:client",
-     "in-progress"
+     "area:client"
     ],
     "phase": "4 · First playable",
-    "updated_at": "2026-11-26T22:17:19Z",
+    "updated_at": "2026-11-26T22:28:13Z",
     "closed_at": "2026-11-26T22:17:19Z",
     "created_at": "2026-11-20T10:09:12Z"
    },
@@ -458,6 +457,38 @@
   ],
   "in_progress": [
    {
+    "number": 1647,
+    "title": "Docs: two pages still call the showcase Kid the only game art",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1647",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T22:28:15Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:05:41Z"
+   },
+   {
+    "number": 1614,
+    "title": "Contract: name the client's credited UI art (delicious fruit) beside the showcase Kid",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1614",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T22:26:20Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T14:59:04Z"
+   },
+   {
     "number": 1386,
     "title": "Script API: start_timeline/stop_timeline (#776, census rank 25)",
     "state": "open",
@@ -519,38 +550,6 @@
     "updated_at": "2026-11-26T22:05:38Z",
     "closed_at": null,
     "created_at": "2026-11-26T22:05:00Z"
-   },
-   {
-    "number": 981,
-    "title": "Fuzz harness: cargo-fuzz crate and nightly job",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/981",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T22:04:15Z",
-    "closed_at": null,
-    "created_at": "2026-11-19T10:05:29Z"
-   },
-   {
-    "number": 1614,
-    "title": "Contract: name the client's credited UI art (delicious fruit) beside the showcase Kid",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1614",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:docs",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T21:47:58Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T14:59:04Z"
    }
   ],
   "needs_user": [
