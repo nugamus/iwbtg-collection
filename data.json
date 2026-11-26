@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T01:00:08Z",
+ "generated_at": "2026-11-26T11:49:56Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -84,12 +84,12 @@
    "closed": 216,
    "total": 252,
    "pct_closed": 85.7,
-   "size_points": 47,
+   "size_points": 48,
    "sizes": {
-    "size:S": 13,
+    "size:S": 14,
     "size:M": 6,
     "size:L": 2,
-    "unknown": 15
+    "unknown": 14
    },
    "scope": "The deterministic simulation reproduces the original mechanics tick for tick.",
    "feeds_from": "research traces, format packages, sim crate",
@@ -126,16 +126,16 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 18,
+   "open": 19,
    "closed": 23,
-   "total": 41,
-   "pct_closed": 56.1,
+   "total": 42,
+   "pct_closed": 54.8,
    "size_points": 43,
    "sizes": {
     "size:S": 8,
     "size:M": 9,
     "size:L": 1,
-    "unknown": 0
+    "unknown": 1
    },
    "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
    "feeds_from": "client crate, design mockups, games repo catalog",
@@ -149,13 +149,13 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 37,
+   "open": 38,
    "closed": 104,
-   "total": 141,
-   "pct_closed": 73.8,
-   "size_points": 130,
+   "total": 142,
+   "pct_closed": 73.2,
+   "size_points": 131,
    "sizes": {
-    "size:S": 9,
+    "size:S": 10,
     "size:M": 19,
     "size:L": 8,
     "unknown": 1
@@ -241,13 +241,13 @@
    "title": "10 · Release",
    "name": "Release",
    "state": "open",
-   "open": 19,
-   "closed": 10,
-   "total": 29,
-   "pct_closed": 34.5,
-   "size_points": 42,
+   "open": 20,
+   "closed": 11,
+   "total": 31,
+   "pct_closed": 35.5,
+   "size_points": 43,
    "sizes": {
-    "size:S": 10,
+    "size:S": 11,
     "size:M": 8,
     "size:L": 1,
     "unknown": 0
@@ -262,17 +262,17 @@
  ],
  "activity": {
   "totals": {
-   "issues": 935,
-   "open": 277,
-   "closed": 658,
-   "pct_closed": 70.4
+   "issues": 941,
+   "open": 282,
+   "closed": 659,
+   "pct_closed": 70.0
   },
-  "open_prs": 2,
+  "open_prs": 5,
   "process": {
-   "agent-ready": 126,
-   "triage": 48,
-   "in-progress": 11,
-   "needs-user": 30,
+   "agent-ready": 129,
+   "needs-user": 34,
+   "triage": 50,
+   "in-progress": 14,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 67
+    "count": 69
    },
    {
     "area": "area:server",
@@ -299,11 +299,11 @@
    },
    {
     "area": "area:infra",
-    "count": 22
+    "count": 23
    },
    {
     "area": "area:design",
-    "count": 13
+    "count": 17
    },
    {
     "area": "area:tools",
@@ -323,6 +323,21 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1569,
+    "title": "Dashboard: Script API block counts a Registered census group as not registered",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1569",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-26T11:49:42Z",
+    "closed_at": "2026-11-26T11:49:42Z",
+    "created_at": "2026-11-25T16:01:57Z"
+   },
    {
     "number": 628,
     "title": "Design: artboards in docs/design/mockups/m4 can't be rendered locally (support.js missing)",
@@ -366,7 +381,7 @@
      "in-progress"
     ],
     "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-25T15:59:49Z",
+    "updated_at": "2026-11-26T11:41:52Z",
     "closed_at": "2026-11-25T15:59:49Z",
     "created_at": "2026-11-21T12:00:40Z"
    },
@@ -428,56 +443,25 @@
     "updated_at": "2026-11-25T13:18:56Z",
     "closed_at": "2026-11-25T13:18:56Z",
     "created_at": "2026-11-25T10:10:32Z"
-   },
-   {
-    "number": 113,
-    "title": "Security review of the server before accounts go live",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/113",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T13:14:22Z",
-    "closed_at": "2026-11-25T13:14:22Z",
-    "created_at": "2026-11-02T11:55:48Z"
    }
   ],
   "in_progress": [
    {
-    "number": 1531,
-    "title": "Script API: view reads and writes (view_xview-style) (#776, census rank 16)",
+    "number": 1551,
+    "title": "Client: a new game from game select reuses the previous run's stats and jumps to results with the old time",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1531",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1551",
     "labels": [
+     "bug",
      "agent-ready",
-     "size:M",
+     "size:S",
+     "area:client",
      "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T15:55:53Z",
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T11:44:48Z",
     "closed_at": null,
-    "created_at": "2026-11-25T10:07:50Z"
-   },
-   {
-    "number": 1565,
-    "title": "Verification: share the replay verifier between iwbtg-tools and the server",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1565",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:tools",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T15:33:58Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T15:32:27Z"
+    "created_at": "2026-11-25T12:21:39Z"
    },
    {
     "number": 39,
@@ -491,41 +475,42 @@
      "in-progress"
     ],
     "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-25T12:13:47Z",
+    "updated_at": "2026-11-26T11:44:17Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:30:16Z"
    },
    {
-    "number": 43,
-    "title": "Ranked (stripped) and Play original buttons",
+    "number": 1297,
+    "title": "Probe/feel: add a save.point metric for the checkpoint entity key",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/43",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1297",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:client",
+     "area:sim",
+     "area:tools",
      "in-progress"
     ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-25T11:19:32Z",
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-26T11:43:20Z",
     "closed_at": null,
-    "created_at": "2026-11-02T11:30:26Z"
+    "created_at": "2026-11-21T12:08:10Z"
    },
    {
-    "number": 196,
-    "title": "UI translation files, English and Japanese",
+    "number": 47,
+    "title": "Design pass: settings and controls panel mockups",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/47",
     "labels": [
-     "agent-ready",
+     "needs-user",
      "size:M",
-     "area:client",
+     "area:design",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-25T00:40:35Z",
+    "updated_at": "2026-11-26T02:07:17Z",
     "closed_at": null,
-    "created_at": "2026-11-02T12:41:04Z"
+    "created_at": "2026-11-02T11:30:37Z"
    },
    {
     "number": 106,
@@ -539,100 +524,119 @@
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-24T22:25:29Z",
+    "updated_at": "2026-11-26T01:30:02Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:55:29Z"
+   },
+   {
+    "number": 1127,
+    "title": "Web build: the browser client crashes within a second of starting play",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
+    "labels": [
+     "bug",
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-26T01:29:33Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T10:09:12Z"
    }
   ],
   "needs_user": [
    {
-    "number": 195,
-    "title": "Public nightly alpha builds",
+    "number": 773,
+    "title": "Auto-retry toggle placement: mod select footer (artboard) or HUD (product.md)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/195",
-    "labels": [
-     "needs-user",
-     "size:M",
-     "area:infra"
-    ],
-    "phase": "10 · Release",
-    "updated_at": "2026-11-25T11:14:31Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T12:41:01Z"
-   },
-   {
-    "number": 1503,
-    "title": "Licence: the generated header claims MIT OR Apache-2.0 but only MIT ships",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1503",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/773",
     "labels": [
      "needs-user",
      "size:S",
-     "area:infra"
+     "area:client"
     ],
-    "phase": "10 · Release",
-    "updated_at": "2026-11-25T01:32:39Z",
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T02:07:24Z",
     "closed_at": null,
-    "created_at": "2026-11-25T00:45:27Z"
+    "created_at": "2026-11-13T18:52:59Z"
    },
    {
-    "number": 1395,
-    "title": "Format: enact the format freeze (schema guard at the freeze point, #795 follow-up)",
+    "number": 554,
+    "title": "Decide: is Hitboxes (HB) ranked, and do Mirror and Flashlight become mods?",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1395",
-    "labels": [
-     "needs-user",
-     "triage"
-    ],
-    "phase": null,
-    "updated_at": "2026-11-24T17:37:59Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T17:37:59Z"
-   },
-   {
-    "number": 426,
-    "title": "atan2 near-axis cutoff: find the recorder's rule between ratio 3.5e-16 and ordinary vectors",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/426",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/554",
     "labels": [
      "needs-user",
      "size:S",
-     "area:research"
-    ],
-    "phase": "1 · Behavior research",
-    "updated_at": "2026-11-24T16:59:34Z",
-    "closed_at": null,
-    "created_at": "2026-11-03T16:24:02Z"
-   },
-   {
-    "number": 953,
-    "title": "Decide: script error screen layout",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/953",
-    "labels": [
-     "needs-user",
-     "area:client",
+     "area:design",
      "revisit"
     ],
     "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-24T13:33:52Z",
+    "updated_at": "2026-11-26T02:07:23Z",
     "closed_at": null,
-    "created_at": "2026-11-17T18:09:48Z"
+    "created_at": "2026-11-09T23:14:50Z"
    },
    {
-    "number": 194,
-    "title": "Discord server and bug channel",
+    "number": 851,
+    "title": "Play original: no New game choice once a save exists, so the results screen never opens again",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/194",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/851",
     "labels": [
      "needs-user",
-     "size:S",
-     "area:infra"
+     "size:M",
+     "area:client"
     ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T13:33:47Z",
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T02:07:20Z",
     "closed_at": null,
-    "created_at": "2026-11-02T12:40:59Z"
+    "created_at": "2026-11-16T10:23:49Z"
+   },
+   {
+    "number": 1572,
+    "title": "Design: two play modes (Time Attack and Classic) and the app shell",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1572",
+    "labels": [
+     "needs-user",
+     "area:design"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T02:07:18Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T01:28:02Z"
+   },
+   {
+    "number": 47,
+    "title": "Design pass: settings and controls panel mockups",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/47",
+    "labels": [
+     "needs-user",
+     "size:M",
+     "area:design",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T02:07:17Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:30:37Z"
+   },
+   {
+    "number": 1577,
+    "title": "Streaming: stream-safe names, live stats file, deaths in the window title, on-screen death counter (m5 I4, I5)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1577",
+    "labels": [
+     "needs-user",
+     "area:design",
+     "triage"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-26T02:06:57Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T02:06:57Z"
    }
   ],
   "agent_ready": [
@@ -728,8 +732,8 @@
     "created_at": "2026-11-02T11:31:41Z"
    }
   ],
-  "closed_7d": 266,
-  "opened_7d": 338,
+  "closed_7d": 250,
+  "opened_7d": 284,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -748,8 +752,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 935,
-    "closed": 658
+    "created": 941,
+    "closed": 659
    }
   ]
  },
@@ -1856,11 +1860,6 @@
   "registered_functions": 79,
   "planned_groups": [
    {
-    "name": "paths (14)",
-    "counts": "37 / 153 / 11",
-    "issue": 1530
-   },
-   {
     "name": "view (16)",
     "counts": "29 / 37 / 9",
     "issue": 1531
@@ -1891,7 +1890,7 @@
     "issue": 1536
    }
   ],
-  "planned_count": 7,
+  "planned_count": 6,
   "missing": "the census's full group list (research#172) is not in this repo"
  }
 }
