@@ -7,8 +7,10 @@
 //! the player card (`card/`), the splits against the PB and the deaths per stage. It is the run
 //! screen `RunScreen::Results` (shell, #839): the sim does not tick, and `OnEnter` hides the game
 //! and the HUD and gives the backdrop the results dim (`OnExit` undoes it and drops the page).
-//! Back (or Escape) returns to the game; Retry (click, or hold R) starts a new run as the
-//! quick-retry key does; Save replay copies the run's replay to `exports/` in the data area.
+//! Back (or Escape) closes the run: back to game select, or out of the client when the package
+//! was opened from the command line without a list. A finished game is never resumed. Retry
+//! (click, or hold R) starts a new run as the quick-retry key does; Save replay copies the run's
+//! replay to `exports/` in the data area.
 //! Watch replay opens the run's replay in the viewer (`viewer.rs`, #42), Upload replay for M7.
 //!
 //! Under the deaths per stage, the death timeline (each death a tick along the run) and, when
@@ -749,11 +751,13 @@ fn act(world: &mut World) {
     };
     match action {
         Action::Back => {
-            shell::go(world, RunScreen::Playing);
-            // Keys pressed on the page never reach the game.
+            // A finished game is finished (#1553): the page leaves the run for game select, or
+            // exits when the client plays one package from the command line. `shell::leave`
+            // decides; the run screen is gone with the run.
             if let Some(mut c) = world.get_resource_mut::<crate::input::Collector>() {
                 c.take_frame();
             }
+            shell::leave(world);
         }
         Action::Retry => crate::retry::request(world),
         Action::WatchReplay => {

@@ -209,6 +209,35 @@ fn tick(app: &App) -> u64 {
     app.world().non_send::<Game>().sim.world().tick
 }
 
+/// Results' Back/Escape closes a finished run rather than resuming it (#1553): game select
+/// with a list, the client's exit without one.
+#[test]
+fn results_back_leaves_the_finished_run() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 3);
+    crate::results::preview_next(app.world_mut(), crate::results::Scenario::Pb);
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Results);
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "the finished run goes back to game select"
+    );
+
+    // Without --select the client plays one package: the finished run closes the client.
+    let mut app = app_on(true, Some("tests/fixtures/clear.pkg"));
+    frames(&mut app, 3);
+    crate::results::preview_next(app.world_mut(), crate::results::Scenario::Pb);
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Results);
+    press(&mut app, KeyCode::Escape);
+    assert_eq!(app.should_exit(), Some(AppExit::Success), "it does not resume");
+}
+
 /// A package dropped during a run replaces it in the same app (#841): the old run closes, the new
 /// one starts from its first tick with one game camera, and leaving it leaves nothing of either.
 #[test]
@@ -712,12 +741,18 @@ fn a_run_walks_loading_playing_paused_playing_results() {
     let at = tick(&app);
     frames(&mut app, 10);
     assert_eq!(tick(&app), at, "no tick on the results");
-    press(&mut app, crate::pause::PAUSE_KEY);
-    frames(&mut app, 1);
-    assert_eq!(screen(&app), RunScreen::Playing, "Escape goes back to the game");
-    assert!(game_shows(&mut app));
-
-    // A run that replaces this one opens on the card again.
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "Escape leaves the finished run for game select"
+    );
+    assert!(
+        app.world().get_resource::<State<RunScreen>>().is_none(),
+        "no run, no run screen"
+    );
+    // Back on the list, a new run opens on the card again.
     start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
     frames(&mut app, 2);
     assert_eq!(screen(&app), RunScreen::Loading);
