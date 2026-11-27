@@ -222,6 +222,9 @@ jobs:
             | while read -r old; do
                 gh release delete "$old" --yes --cleanup-tag || true
               done
+      # The notes go beside the assets, so the artifact's root is `dist/` and the `latest` job
+      # finds every file at the top of its download folder.
+      - run: cp notes.md dist/notes.md
       - uses: actions/upload-artifact@v4
         with:
           name: IWBTG-Collection-latest
@@ -229,7 +232,7 @@ jobs:
             dist/IWBTG-Collection-windows-x64.zip
             dist/sha256.txt
             dist/build.json
-            notes.md
+            dist/notes.md
           retention-days: 7
 
   latest:
