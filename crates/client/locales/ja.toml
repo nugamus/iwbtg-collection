@@ -182,3 +182,7 @@ set_death_map_desc = "リザルトで部屋に死亡地点を表示します。�
 set_shake = "画面の揺れ"
 set_shake_desc = "揺れが気になる場合はオフに（#106）。"
 set_flashes = "全画面フラッシュ"
+notif_title = "お知らせ"
+notif_clear_all = "すべて消去"
+notif_empty = "このセッションのお知らせはまだありません。"
+notif_today = "今日"

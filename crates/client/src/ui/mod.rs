@@ -13,6 +13,7 @@ pub mod icons;
 pub mod mode;
 pub mod motion;
 pub mod notice;
+pub mod notifications;
 pub mod shape;
 pub mod tokens;
 pub mod toolbar;
@@ -68,6 +69,8 @@ pub enum NoticePreview {
     Storage,
     /// A dropped package with errors (the longest drop message, cut).
     Drop,
+    /// One of each kind, and the bell's list open (m5 D2).
+    List,
 }
 
 /// Called by `main`: posts the preview notice.
@@ -81,6 +84,15 @@ pub fn configure(args: &UiArgs) {
             notice::Kind::Drop,
             "my-game.iwbz has 2 errors. The first: rooms/start.toml:3:5: unknown object kind \"spikee\"",
         ),
+        Some(NoticePreview::List) => {
+            notice::post(notice::Kind::Storage, "stats.toml: disk full");
+            notice::post(notice::Kind::Drop, "level.zip is not a game package.");
+            notice::post(
+                notice::Kind::Controls,
+                "Extra actions: Bomb (C), Teleport (unbound).",
+            );
+            notifications::open_at_start();
+        }
         None => {}
     }
 }
@@ -99,6 +111,7 @@ impl Plugin for UiKitPlugin {
             icons::plugin,
             glow::plugin,
             notice::plugin,
+            notifications::plugin,
             toolbar::plugin,
         ));
         // The game screen may have added it already.
