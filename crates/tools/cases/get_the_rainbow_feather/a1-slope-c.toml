@@ -17,10 +17,7 @@ setup = [
   { frame = 3, destroy = "class:killer", rect = [-inf, -inf, 620, 260] },
   { frame = 3, target = "kid", set = { x = 530.0, xprevious = 530.0, y = 215.0, yprevious = 215.0 } },
 ]
-# gravity (F3): the original never zeroes gravity on a landing here (every standing row reads
-# 0.4), our package still has the A1 preset's block_landing_zeroes. Converter CR26
-# (research#273) writes block_landing_zeroes = false; then drop "gravity" here.
-ignore = ["id", "sprite_index", "sprite_name", "gravity"]
+ignore = ["id", "sprite_index", "sprite_name"]
 # The F1 evidence: the peak stop and the position after it, exact in both axes.
 required = ["kid.x", "kid.y"]
 
