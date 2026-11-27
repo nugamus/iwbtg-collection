@@ -1,5 +1,6 @@
-//! The updater's two surfaces (#1606): the m5 B10 "update ready" dialog over the main menu, and
-//! the Settings → Updates row (C1) with the channel, Check now and the running build.
+//! The updater's dialog (#1606): the m5 B10 "update ready" dialog over the main menu. The
+//! Settings → Updates rows live in the settings overlay (`settings_screen.rs`, #1675), the ready
+//! notification in the bell's list, and the update button in the toolbar.
 //!
 //! Both are built from the #490 kit (tokens, `Type`, `Shape`, buttons), never one-off styles. The
 //! dialog is upright, not sheared, because it holds paragraphs (`MenuDialog.dc.html`); it names
@@ -9,22 +10,17 @@ use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy::ui_widgets::Activate;
 
-use crate::settings::{self, UpdateChannel};
 use crate::ui::fonts::Type;
 use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::Shape;
 use crate::ui::tokens;
-use crate::ui::widgets::{self, ButtonKind, Chip, text};
+use crate::ui::widgets::{self, ButtonKind, text};
 
-use super::{BUILD_COMMIT, BUILD_DATE, Dialog, Phase, ReadyUpdate, Updater, Worker, short};
+use super::{Dialog, Phase, ReadyUpdate, Updater, short};
 
 /// The dialog's root (the dim and the card).
 #[derive(Component)]
 pub struct UpdateDialog;
-
-/// The Settings → Updates panel's root.
-#[derive(Component)]
-pub(super) struct UpdatePanel;
 
 /// What a dialog or panel button does.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,13 +28,7 @@ pub(super) enum Action {
     Restart,
     Later,
     WhatsNew,
-    CheckNow,
-    Channel(UpdateChannel),
 }
-
-/// A channel chip, so the persisted choice can move the chip's own state.
-#[derive(Component)]
-pub(super) struct ChannelChip(UpdateChannel);
 
 /// The card's fill and shadow (`MenuDialog.dc.html`: `#12141d`, `0 30px 80px rgba(0,0,0,.6)`).
 fn card_fill() -> Color {
@@ -217,140 +207,21 @@ pub(super) fn spawn_dialog(
     });
 }
 
-/// Opens or closes (and when closed, despawns) the Settings → Updates panel. It is rebuilt when
-/// the updater's state changes, so Check now and the status line stay current.
-pub(super) fn panel_system(
-    mut commands: Commands,
-    panel: Res<super::Panel>,
-    updater: Res<Updater>,
-    shown: Query<Entity, With<UpdatePanel>>,
-    mut chips: Query<(&ChannelChip, &mut Chip)>,
-) {
-    let channel = settings::get().update_channel;
-    for (chip, mut state) in &mut chips {
-        let on = chip.0 == channel;
-        if state.on != on {
-            state.on = on;
-        }
-    }
-    let shown: Vec<Entity> = shown.iter().collect();
-    if !panel.open || (updater.is_changed() && !shown.is_empty()) {
-        for entity in shown {
-            commands.entity(entity).despawn();
-        }
-    }
-    if panel.open && updater.is_changed() {
-        spawn_panel(&mut commands, &updater);
-    }
-}
-
-fn spawn_panel(commands: &mut Commands, updater: &Updater) {
-    let root = overlay(commands, UpdatePanel);
-    let (card, body) = card(commands, 640.0);
-    commands.entity(root).add_child(card);
-
-    let running = match BUILD_COMMIT {
-        Some(commit) => format!(
-            "Running build: {} · {}",
-            short(commit),
-            BUILD_DATE.unwrap_or("date unknown")
-        ),
-        None => "Running build: compiled locally (no commit embedded)".to_string(),
-    };
-    let status = status_text(updater);
-    let channel = settings::get().update_channel;
-    let preview = updater.preview;
-
-    commands.entity(body).with_children(|body| {
-        body.spawn(text("Settings · Updates", Type::barlow(26.0, 700), tokens::INK));
-        body.spawn((
-            text(
-                "Latest build follow every green CI build of main. Releases follow tagged releases.",
-                Type::barlow(15.0, 400),
-                tokens::SOFT,
-            ),
-            TextLayout::linebreak(LineBreak::WordOrCharacter),
-        ));
-        body.spawn((
-            Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(10.0),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_children(|row| {
-            row.spawn(text("Channel", Type::barlow(14.0, 700), tokens::MUTED));
-            for option in UpdateChannel::ALL {
-                row.spawn((
-                    widgets::chip(option.label(), option == channel),
-                    ChannelChip(option),
-                    Action::Channel(option),
-                ));
-            }
-        });
-        body.spawn((
-            text(&running, Type::barlow(14.0, 500), tokens::SOFT),
-            TextLayout::linebreak(LineBreak::WordOrCharacter),
-        ));
-        body.spawn((
-            text(&status, Type::barlow(14.0, 500), tokens::MUTED),
-            TextLayout::linebreak(LineBreak::WordOrCharacter),
-        ));
-        body.spawn((
-            Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(10.0),
-                margin: UiRect::top(Val::Px(6.0)),
-                ..default()
-            },
-            Pickable::IGNORE,
-            children![(
-                widgets::button("Check now", ButtonKind::Secondary),
-                Action::CheckNow,
-            )],
-        ));
-        if preview {
-            body.spawn(text(
-                "Preview: this screenshot check contacts nothing.",
-                Type::barlow(13.0, 600),
-                tokens::AMBER,
-            ));
-        }
-    });
-}
-
-/// What the Settings row says the updater last did.
-fn status_text(updater: &Updater) -> String {
-    match &updater.phase {
-        Phase::Idle => updater
-            .last
-            .clone()
-            .unwrap_or_else(|| "Not checked yet.".to_string()),
-        Phase::Checking => "Checking for a newer build…".to_string(),
-        Phase::Downloading => updater
-            .last
-            .clone()
-            .unwrap_or_else(|| "Downloading a newer build…".to_string()),
-        Phase::Ready(ready) => format!(
-            "Version {} is ready ({}). Restart and update to install it.",
-            ready.build.version,
-            ready.build.short_commit()
-        ),
-        Phase::Failed(message) => message.clone(),
-    }
-}
-
 /// A click (or Enter/Space) on any updater button.
 pub(super) fn on_activate(
     activate: On<Activate>,
     action: Query<&Action>,
     mut updater: ResMut<Updater>,
     mut dialog: ResMut<Dialog>,
-    mut worker: ResMut<Worker>,
     mut commands: Commands,
     shown: Query<Entity, With<UpdateDialog>>,
+    toolbar: Query<&crate::ui::toolbar::ToolbarButton>,
 ) {
+    // The toolbar's update button shows the dialog again.
+    if toolbar.get(activate.entity) == Ok(&crate::ui::toolbar::ToolbarButton::Update) {
+        dialog.dismissed = false;
+        return;
+    }
     let Ok(action) = action.get(activate.entity) else {
         return;
     };
@@ -388,14 +259,6 @@ pub(super) fn on_activate(
             for entity in &shown {
                 commands.entity(entity).despawn();
             }
-        }
-        Action::CheckNow => {
-            if !updater.preview {
-                worker.force = true;
-            }
-        }
-        Action::Channel(channel) => {
-            settings::update(|s| s.update_channel = *channel);
         }
     }
 }

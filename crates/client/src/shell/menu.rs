@@ -867,7 +867,15 @@ fn footer() -> impl Bundle {
         children![
             rich(vec![
                 (
-                    format!("v{}", env!("CARGO_PKG_VERSION")),
+                    // The version, and the CI build it is when CI compiled it (#1675).
+                    match crate::updater::BUILD_COMMIT {
+                        Some(commit) => format!(
+                            "v{} · {}",
+                            env!("CARGO_PKG_VERSION"),
+                            crate::locale::format("menu_build", &[("commit", &crate::updater::short(commit))])
+                        ),
+                        None => format!("v{}", env!("CARGO_PKG_VERSION")),
+                    },
                     Type::barlow(13.0, 700),
                     BRIGHT
                 ),

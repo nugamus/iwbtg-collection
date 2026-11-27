@@ -126,14 +126,6 @@ impl UpdateChannel {
     /// Every channel, in the settings row's order.
     pub const ALL: [UpdateChannel; 2] = [UpdateChannel::MainBuilds, UpdateChannel::Releases];
 
-    /// The label the Settings row shows and the file writes.
-    pub fn label(self) -> &'static str {
-        match self {
-            UpdateChannel::MainBuilds => "Latest build",
-            UpdateChannel::Releases => "Releases",
-        }
-    }
-
     /// The value `[updates] channel` writes.
     pub fn as_str(self) -> &'static str {
         match self {

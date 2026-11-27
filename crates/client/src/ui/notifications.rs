@@ -85,6 +85,8 @@ pub(super) fn plugin(app: &mut App) {
 enum Hit {
     ClearAll,
     Close,
+    /// A row whose kind opens something (`Kind::opens`).
+    Open(Kind),
 }
 
 fn on_activate(
@@ -92,6 +94,7 @@ fn on_activate(
     bells: Query<&ToolbarButton>,
     hits: Query<&Hit>,
     list: Option<ResMut<Notifications>>,
+    mut commands: Commands,
 ) {
     let Some(mut list) = list else {
         return;
@@ -106,6 +109,10 @@ fn on_activate(
             list.generation = list.generation.wrapping_add(1);
         }
         Ok(Hit::Close) => list.toggle(),
+        Ok(&Hit::Open(kind)) => {
+            list.toggle();
+            commands.trigger(super::notice::Opened { kind });
+        }
         Err(_) => {}
     }
 }
@@ -286,7 +293,7 @@ fn draw(mut commands: Commands, list: Res<Notifications>, roots: Query<(Entity, 
 
 fn row(c: &mut ChildSpawner, item: &Item) {
     let tone = item.kind.tone();
-    c.spawn((
+    let mut row = c.spawn((
         Node {
             column_gap: Val::Px(14.0),
             align_items: AlignItems::Center,
@@ -296,8 +303,17 @@ fn row(c: &mut ChildSpawner, item: &Item) {
             ..default()
         },
         BackgroundColor(tokens::white(0.04)),
-    ))
-    .with_children(|c| {
+    ));
+    // A row that opens something (the update dialog) takes clicks, and its edge says so.
+    if item.kind.opens() {
+        row.insert((
+            Button,
+            Hit::Open(item.kind),
+            BorderColor::all(tone.with_alpha(0.6)),
+        ));
+        row.entry::<Node>().and_modify(|mut n| n.border = UiRect::all(Val::Px(1.0)));
+    }
+    row.with_children(|c| {
         c.spawn((
             Node {
                 width: Val::Px(44.0),
