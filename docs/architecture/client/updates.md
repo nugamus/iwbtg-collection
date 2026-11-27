@@ -7,14 +7,25 @@ workflow is `.github/workflows/latest.yml`.
 ## Publishing
 
 `latest.yml` runs on `workflow_run` when CI completes successfully for a push to `main`, and
-checks out the CI run's head SHA, so the published exe is exactly the tree CI passed. Its
-concurrency group is `latest-build` with `cancel-in-progress`, so only the newest commit builds; an
-older run is cancelled rather than allowed to publish after a newer one.
+checks out the CI run's head SHA, so the published exe is exactly the tree CI passed. Every green
+CI run of `main` gets a GitHub release of its own (#1675). CI on `main` runs one generation at a
+time with the newest push pending, so commits pushed while CI runs are tested, and released,
+together with the newest one; that release's notes list every PR since the previous build.
 
 The build job reuses `nightly.yml`'s Windows packaging (the client, `showcase.pkg`, the licence
-files) and uploads the zip and `sha256.txt`. The publish job, holding only `contents: write` and
-the default `GITHUB_TOKEN`, moves the `latest` tag to the built commit and replaces three
-assets on the release:
+files) and uploads the zip and `sha256.txt`. Builds are never cancelled, so no green commit
+loses its release. The publish job, holding only `contents: write` and the default
+`GITHUB_TOKEN`, writes `build.json` and the notes and creates the commit's own release, tagged
+`build-<CI run number>-<short sha>` and marked a **pre-release** (so GitHub's "latest release",
+which the `releases` channel reads, stays the versioned `v*` releases of `release.yml`; a
+`build-` tag never starts with `v`, so it never starts `release.yml`). Only the newest
+`BUILDS_KEPT` (50) per-commit releases are kept; older ones and their tags are deleted.
+
+The `latest` job then updates the rolling release the client reads. It is serialised
+(`concurrency: latest-rolling`, not cancelled; a newer build waiting replaces an older one
+waiting) and moves only forwards: when the commit `latest` holds is not behind this build's (the
+compare API's `ahead`), it leaves `latest` alone. Otherwise it moves the `latest` tag to the built
+commit and replaces three assets on the release:
 
 - `IWBTG-Collection-windows-x64.zip`, the packaged client;
 - `sha256.txt`, `<hash>  <zip name>` for that zip;
@@ -62,11 +73,25 @@ update**, **Later** and **What's new** (which shows up to eight titles). It only
 menu: leaving for a run despawns it, and it comes back on the menu. **Later** dismisses it for the
 session; the next start checks again.
 
-The Settings → Updates row lives in `updater/ui.rs` (channel chips, **Check now**, the running
-build's commit and date, and the last check's result). The settings screen itself is #53 and does
-not exist yet, so `updater::Panel { open }` is what that screen will open; until then
-`--updates-preview` draws the row for the screenshot check. The channel is persisted in
-`settings.rs` as `[updates] channel = "main" | "releases"`.
+Three places in the new UI host the updater (#1675):
+
+- **Settings → General** ([settings](settings.md)): **Update channel** (Latest build or
+  Releases, persisted in `settings.rs` as `[updates] channel = "main" | "releases"`; a change
+  checks at once) and **Updates**: the running build's commit and date (`updater::running_line`;
+  a locally compiled build says it never updates itself), the last check's result
+  (`updater::status_text`) and a button: **Check now** (`updater::check_now`), or **Show update**
+  when a build is ready (`updater::press` shows the dialog again). The overlay redraws when the
+  updater's state changes (`Overlay::refresh`). The browser build has no updater and no such rows.
+- **The bell's list** ([UI](ui.md)): a verified build posts `notice::Kind::UpdateReady` ("UPDATE
+  READY", blue, the update mark). Its row in the list has a blue edge and takes clicks: it
+  triggers `notice::Opened`, and the updater shows the dialog again, also after **Later**.
+- **The toolbar**: an **Update** pill (osu!lazer's top-right update button), hidden
+  (`toolbar::UpdateSlot`) until a build is ready; a click shows the dialog. The main menu's footer
+  names the running CI build (`v0.1.0 · build 493e28`).
+
+`--updates-preview` (hidden) opens the Settings overlay on General with the updater in its
+screenshot state (up to date, contacts nothing); `--update-preview dialog` draws the dialog with a
+sample build, posts the ready notification and shows the toolbar's button.
 
 ## Tests and what stays manual
 

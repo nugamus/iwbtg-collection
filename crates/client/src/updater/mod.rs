@@ -26,6 +26,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::locale;
 use crate::shell::AppScreen;
 use crate::ui::notice;
 
@@ -100,13 +101,6 @@ pub struct Dialog {
     pub expanded: bool,
 }
 
-/// Whether the Settings → Updates row is open. The settings screen (#53) opens it; until that
-/// screen exists, `--updates-preview` does (for the screenshot check).
-#[derive(Resource, Debug, Default)]
-pub struct Panel {
-    pub open: bool,
-}
-
 /// What a worker thread sends back.
 #[derive(Debug)]
 enum Event {
@@ -143,6 +137,112 @@ pub struct UpdaterArgs {
 pub enum Preview {
     /// The m5 B10 dialog over the main menu.
     Dialog,
+}
+
+/// `Version 0.1.0 is ready (493e28).`
+fn ready_line(build: &BuildInfo) -> String {
+    locale::format(
+        "update_ready",
+        &[("version", &build.version), ("commit", &build.short_commit())],
+    )
+}
+
+/// What the Settings → Updates row says the updater last did.
+pub fn status_text(updater: &Updater) -> String {
+    match &updater.phase {
+        Phase::Idle => updater
+            .last
+            .clone()
+            .unwrap_or_else(|| locale::text("update_not_checked").to_owned()),
+        Phase::Checking => locale::text("update_checking").to_owned(),
+        Phase::Downloading => updater
+            .last
+            .clone()
+            .unwrap_or_else(|| locale::text("update_checking").to_owned()),
+        Phase::Ready(ready) => ready_line(&ready.build),
+        Phase::Failed(message) => message.clone(),
+    }
+}
+
+/// The running build, for the Settings row: `Running build 493e28 · 2026-11-26`, or that it was
+/// compiled locally and never updates itself.
+pub fn running_line() -> String {
+    match BUILD_COMMIT {
+        Some(commit) => {
+            let date = BUILD_DATE.map_or("?", |d| d.get(..10).unwrap_or(d));
+            locale::format("set_updates_build", &[("commit", &short(commit)), ("date", &date)])
+        }
+        None => locale::text("set_updates_local").to_owned(),
+    }
+}
+
+/// The Settings → Updates row's button: with a verified build waiting it shows the dialog again,
+/// otherwise it checks now (on a menu; never in a run).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn press(world: &mut World) {
+    if world
+        .get_resource::<Updater>()
+        .is_some_and(|u| matches!(u.phase, Phase::Ready(_)))
+    {
+        world.resource_mut::<Dialog>().dismissed = false;
+    } else {
+        check_now(world);
+    }
+}
+
+/// Starts a check on the next menu frame (Check now, or a changed channel). A screenshot check
+/// contacts nothing.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn check_now(world: &mut World) {
+    if world.get_resource::<Updater>().is_some_and(|u| !u.preview)
+        && let Some(mut worker) = world.get_resource_mut::<Worker>()
+    {
+        worker.force = true;
+    }
+}
+
+/// The browser has no updater: the rows are not shown there.
+#[cfg(target_arch = "wasm32")]
+pub fn press(_world: &mut World) {}
+#[cfg(target_arch = "wasm32")]
+pub fn check_now(_world: &mut World) {}
+
+/// The toolbar's update button shows while a verified build waits.
+#[cfg(not(target_arch = "wasm32"))]
+fn toolbar_button(
+    updater: Res<Updater>,
+    mut slots: Query<&mut Node, With<crate::ui::toolbar::UpdateSlot>>,
+) {
+    let want = if matches!(updater.phase, Phase::Ready(_)) {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in &mut slots {
+        if node.display != want {
+            node.display = want;
+        }
+    }
+}
+
+/// The open Settings overlay redraws when the updater's state changes, so its status is current.
+#[cfg(not(target_arch = "wasm32"))]
+fn follow(updater: Res<Updater>, overlay: Option<ResMut<crate::settings_screen::Overlay>>) {
+    if updater.is_changed()
+        && !updater.is_added()
+        && let Some(mut o) = overlay
+        && o.open
+    {
+        o.refresh();
+    }
+}
+
+/// The ready notification's row in the bell's list shows the dialog again (also after Later).
+#[cfg(not(target_arch = "wasm32"))]
+fn on_opened(opened: On<notice::Opened>, mut dialog: ResMut<Dialog>) {
+    if opened.kind == notice::Kind::UpdateReady {
+        dialog.dismissed = false;
+    }
 }
 
 /// The updater's place in the module list (`main.rs`).
@@ -187,12 +287,24 @@ impl Plugin for UpdaterPlugin {
         let preview = self.args.update_preview.is_some() || self.args.updates_preview;
         app.init_resource::<Updater>()
             .init_resource::<Dialog>()
-            .init_resource::<Panel>()
             .init_resource::<Worker>();
         if self.args.updates_preview {
-            app.insert_resource(Panel { open: true });
+            // The Settings overlay opens on its General section, where the Updates rows are.
+            app.add_systems(Startup, |overlay: Option<ResMut<crate::settings_screen::Overlay>>| {
+                if let Some(mut o) = overlay {
+                    o.show();
+                }
+            });
         }
         if self.args.update_preview.is_some() {
+            let sample = sample_update();
+            notice::post(
+                notice::Kind::UpdateReady,
+                &locale::format(
+                    "update_ready_notice",
+                    &[("version", &sample.build.version), ("commit", &sample.build.short_commit())],
+                ),
+            );
             app.insert_resource(Updater {
                 phase: Phase::Ready(sample_update()),
                 preview: true,
@@ -205,9 +317,9 @@ impl Plugin for UpdaterPlugin {
                 preview: true,
             });
         }
-        app.add_systems(Update, (tick, prompt, hide_in_run).chain())
-            .add_systems(Update, ui::panel_system)
-            .add_observer(ui::on_activate);
+        app.add_systems(Update, (tick, prompt, hide_in_run, toolbar_button, follow).chain())
+            .add_observer(ui::on_activate)
+            .add_observer(on_opened);
     }
 }
 
@@ -238,7 +350,6 @@ fn tick(
     mut worker: ResMut<Worker>,
     mut updater: ResMut<Updater>,
     mut dialog: ResMut<Dialog>,
-    mut panel: ResMut<Panel>,
     screen: Option<Res<State<AppScreen>>>,
 ) {
     let pending = worker
@@ -250,7 +361,7 @@ fn tick(
         let mut finished = false;
         loop {
             match rx.try_recv() {
-                Ok(event) => finished |= apply(event, &mut updater, &mut dialog, &mut panel),
+                Ok(event) => finished |= apply(event, &mut updater, &mut dialog),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     finished = true;
@@ -296,24 +407,34 @@ fn tick(
 
 /// Applies one worker event; `true` means the worker is done.
 #[cfg(not(target_arch = "wasm32"))]
-fn apply(event: Event, updater: &mut Updater, dialog: &mut Dialog, panel: &mut Panel) -> bool {
+fn apply(event: Event, updater: &mut Updater, dialog: &mut Dialog) -> bool {
     match event {
         Event::Downloading { build } => {
-            updater.last = Some(format!("Downloading {}", short(&build.commit)));
+            updater.last = Some(locale::format(
+                "update_downloading",
+                &[("commit", &short(&build.commit))],
+            ));
             updater.phase = Phase::Downloading;
             false
         }
         Event::Ready { build, exe } => {
-            updater.last = Some(format!("Version {} is ready", build.version));
+            updater.last = Some(ready_line(&build));
+            // The bell keeps it, so a Later or a run in between does not lose the update.
+            notice::post(
+                notice::Kind::UpdateReady,
+                &locale::format(
+                    "update_ready_notice",
+                    &[("version", &build.version), ("commit", &build.short_commit())],
+                ),
+            );
             updater.phase = Phase::Ready(ReadyUpdate { build, exe });
             // A newer build prompts again even after an earlier Later.
             dialog.dismissed = false;
-            panel.open = false;
             true
         }
         Event::UpToDate => {
             net::cleanup();
-            updater.last = Some("Up to date".to_string());
+            updater.last = Some(locale::text("update_up_to_date").to_owned());
             updater.phase = Phase::Idle;
             true
         }
@@ -359,11 +480,9 @@ fn prompt(
 fn hide_in_run(
     mut commands: Commands,
     screen: Option<Res<State<AppScreen>>>,
-    mut panel: ResMut<Panel>,
-    shown: Query<Entity, Or<(With<ui::UpdateDialog>, With<ui::UpdatePanel>)>>,
+    shown: Query<Entity, With<ui::UpdateDialog>>,
 ) {
     if screen.as_deref().is_some_and(|s| *s.get() == AppScreen::Run) {
-        panel.open = false;
         for entity in &shown {
             commands.entity(entity).despawn();
         }

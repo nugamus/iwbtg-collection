@@ -46,6 +46,16 @@ pub enum Kind {
     /// An update could not be checked, verified or installed (#1606). The message is the line as
     /// it stands, and the card carries the update mark (m5 D2, E8).
     Update,
+    /// A newer build is downloaded and verified (#1606, #1675). The message names it; its row in
+    /// the bell's list opens the update dialog ([`Kind::opens`]).
+    UpdateReady,
+}
+
+/// A click on a notification whose kind [`Kind::opens`] something: whoever owns that thing
+/// observes it (the updater opens its dialog for [`Kind::UpdateReady`]).
+#[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Opened {
+    pub kind: Kind,
 }
 
 impl Kind {
@@ -57,6 +67,7 @@ impl Kind {
             Kind::Pad => locale::text("notice_controller"),
             Kind::Controls => locale::text("notice_controls"),
             Kind::Update => locale::text("notice_update"),
+            Kind::UpdateReady => locale::text("notice_update_ready"),
         }
     }
 
@@ -68,7 +79,7 @@ impl Kind {
                 let _ = message;
                 locale::text("notice_storage_body").to_string()
             }
-            Kind::Drop | Kind::Controls | Kind::Update => message.to_string(),
+            Kind::Drop | Kind::Controls | Kind::Update | Kind::UpdateReady => message.to_string(),
             Kind::Pad => {
                 let _ = message;
                 locale::text("notice_pad_body").to_string()
@@ -81,7 +92,7 @@ impl Kind {
         match self {
             Kind::Storage => tokens::AMBER,
             Kind::Drop => tokens::BEHIND,
-            Kind::Pad | Kind::Controls | Kind::Update => tokens::RANKED,
+            Kind::Pad | Kind::Controls | Kind::Update | Kind::UpdateReady => tokens::RANKED,
         }
     }
 
@@ -92,7 +103,7 @@ impl Kind {
             Kind::Drop => Icon::NoteFile,
             Kind::Pad => Icon::NotePad,
             Kind::Controls => Icon::NoteInfo,
-            Kind::Update => Icon::Update,
+            Kind::Update | Kind::UpdateReady => Icon::Update,
         }
     }
 
@@ -100,8 +111,13 @@ impl Kind {
     pub fn once(self) -> bool {
         match self {
             Kind::Storage | Kind::Pad => true,
-            Kind::Drop | Kind::Controls | Kind::Update => false,
+            Kind::Drop | Kind::Controls | Kind::Update | Kind::UpdateReady => false,
         }
+    }
+
+    /// Whether a click on its row in the bell's list opens something ([`Opened`]).
+    pub fn opens(self) -> bool {
+        self == Kind::UpdateReady
     }
 }
 

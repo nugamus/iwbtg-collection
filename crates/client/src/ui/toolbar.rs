@@ -56,6 +56,8 @@ enum TabPart {
 /// The buttons at the right end.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolbarButton {
+    /// A newer build is ready (#1606, #1675): hidden until the updater shows it.
+    Update,
     Notifications,
     Settings,
     SignIn,
@@ -101,6 +103,7 @@ pub fn toolbar(mode: Mode) -> impl Bundle {
                 flex_grow: 1.0,
                 ..default()
             },
+            update_button(),
             clock_block(),
             square(ToolbarButton::Notifications, Icon::Bell),
             square(ToolbarButton::Settings, Icon::Gear),
@@ -172,6 +175,43 @@ fn clock_block() -> impl Bundle {
         ],
     )
 }
+
+/// The update button, osu!lazer's top-right one: a blue sheared pill, `Display::None` until the
+/// updater has a verified build ([`ToolbarButton::Update`]; `updater::toolbar_button`). A click
+/// opens the update dialog.
+fn update_button() -> impl Bundle {
+    (
+        Node {
+            align_items: AlignItems::Center,
+            padding: UiRect::horizontal(Val::Px(8.0)),
+            display: Display::None,
+            ..default()
+        },
+        UpdateSlot,
+        children![(
+            ToolbarButton::Update,
+            Button,
+            Hovered::default(),
+            TabIndex(0),
+            Node {
+                height: Val::Px(36.0),
+                padding: UiRect::horizontal(Val::Px(16.0)),
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(8.0),
+                ..default()
+            },
+            Shape::fill(tokens::over(tokens::RANKED, 0.35, SHADE)).with_ring(1.5, tokens::RANKED),
+            children![
+                icon(Icon::Update, 18.0, tokens::INK),
+                text(crate::locale::text("toolbar_update"), Type::barlow(15.0, 700), tokens::INK),
+            ],
+        )],
+    )
+}
+
+/// The update button's slot: the updater sets its `display`.
+#[derive(Component)]
+pub struct UpdateSlot;
 
 /// The bell and the gear: 56 px squares with a 22 px icon.
 fn square(button: ToolbarButton, glyph: Icon) -> impl Bundle {

@@ -1,13 +1,22 @@
 name: Latest build
-# Every green CI run on `main` publishes the Windows client as one rolling release tagged
-# `latest` (#1606). The client checks that release and updates itself, so a tester never
-# compiles. Triggered by CI's success rather than a second `push` trigger so the published exe is
-# exactly the tree CI passed (the same workflow_run head SHA).
+# Every green CI run on `main` publishes the Windows client twice (#1606, #1675):
 #
-# The concurrency group cancels an older build/publish as soon as a newer main run finishes, so
-# only the newest commit ever reaches the release. The assets are replaced in place: the tag is
-# moved to the built commit, old assets are clobbered, and build.json names the commit, date,
-# version and the titles of the PRs merged since the previous build.
+# - its own release, tagged `build-<CI run number>-<short sha>` and marked a pre-release, so every
+#   green commit of main has a GitHub release of its own (the newest BUILDS_KEPT are kept);
+# - the rolling release tagged `latest`, which the client checks and updates itself from, so a
+#   tester never compiles.
+#
+# Triggered by CI's success rather than a second `push` trigger so the published exe is exactly
+# the tree CI passed (the same workflow_run head SHA). CI on main runs one generation at a time
+# with the newest push pending, so commits pushed while CI runs are tested, and released, together
+# with the newest one; the release notes list every PR since the previous build.
+#
+# Builds run side by side, never cancelled, so no green commit loses its release. Only the
+# rolling `latest` step is serialised, and it moves only forwards: a build whose commit is not
+# newer than the one `latest` holds leaves it alone. build.json names the commit, date, version
+# and the titles of the PRs merged since the previous build.
+#
+# Per-commit tags never start with `v`: `v*` tags are the versioned releases of release.yml.
 #
 # Only Windows is published for now. The web build is untouched, and nothing here needs a token
 # other than the default GITHUB_TOKEN.
@@ -18,9 +27,9 @@ on:
     branches: [main]
 permissions:
   contents: read
-concurrency:
-  group: latest-build
-  cancel-in-progress: true
+env:
+  # How many per-commit `build-*` releases stay; older ones and their tags are deleted.
+  BUILDS_KEPT: 50
 jobs:
   build:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -103,7 +112,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -182,7 +191,90 @@ jobs:
           lines += ["", f"Built from `{head}`. The client on the main menu updates itself to this build."]
           pathlib.Path("notes.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
+      - name: Publish this commit's own release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+        run: |
+          set -euo pipefail
+          tag="build-${RUN_NUMBER}-${HEAD_SHA:0:7}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag exists (a re-run): its assets are replaced"
+            gh release upload "$tag" \
+              dist/IWBTG-Collection-windows-x64.zip dist/sha256.txt dist/build.json --clobber
+          else
+            gh release create "$tag" \
+              dist/IWBTG-Collection-windows-x64.zip dist/sha256.txt dist/build.json \
+              --target "$HEAD_SHA" --prerelease --latest=false \
+              --title "IWBTG Collection — build ${RUN_NUMBER} (${HEAD_SHA:0:7})" --notes-file notes.md
+          fi
+      - name: Keep the newest per-commit releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq '.[] | select(.tag_name | startswith("build-")) | [.created_at, .tag_name] | @tsv' \
+            | sort -r | tail -n +$((BUILDS_KEPT + 1)) | cut -f2 \
+            | while read -r old; do
+                gh release delete "$old" --yes --cleanup-tag || true
+              done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IWBTG-Collection-latest
+          path: |
+            dist/IWBTG-Collection-windows-x64.zip
+            dist/sha256.txt
+            dist/build.json
+            notes.md
+          retention-days: 7
+
+  latest:
+    # The rolling release the client updates from. One at a time; a newer build waiting replaces
+    # an older one waiting, and the step below never moves `latest` backwards.
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: latest-rolling
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: IWBTG-Collection-latest
+          path: out
+      - name: Is this build newer than the one `latest` holds?
+        id: newer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p held
+          held=""
+          if gh release download latest --pattern build.json --dir held --clobber 2>/dev/null; then
+            held=$(python3 -c 'import json; print(json.load(open("held/build.json")).get("commit", ""))')
+          fi
+          newer=true
+          if [ -n "$held" ]; then
+            # `ahead`: this commit comes after the held one on main.
+            status=$(gh api "repos/$GH_REPO/compare/$held...$HEAD_SHA" --jq .status || echo unknown)
+            [ "$status" = ahead ] || newer=false
+            echo "latest holds ${held:0:7}; this build is ${HEAD_SHA:0:7}: $status"
+          fi
+          echo "newer=$newer" >> "$GITHUB_OUTPUT"
       - name: Move the tag to the built commit
+        if: steps.newer.outputs.newer == 'true'
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -190,17 +282,17 @@ jobs:
           git tag -f latest "$HEAD_SHA"
           git push --force origin refs/tags/latest
       - name: Publish the rolling release
+        if: steps.newer.outputs.newer == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "IWBTG Collection — Latest" --notes-file notes.md
+            gh release edit latest --title "IWBTG Collection — Latest" --notes-file out/notes.md
           else
             # The tag was pushed to HEAD in the step above; the release follows it.
-            gh release create latest --title "IWBTG Collection — Latest" --notes-file notes.md
+            gh release create latest --title "IWBTG Collection — Latest" --notes-file out/notes.md
           fi
           gh release upload latest \
-            dist/IWBTG-Collection-windows-x64.zip dist/sha256.txt dist/build.json --clobber
+            out/IWBTG-Collection-windows-x64.zip out/sha256.txt out/build.json --clobber

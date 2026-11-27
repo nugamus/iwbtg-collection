@@ -9,6 +9,10 @@
 //! Left and Right change the value (or move along a row of choices), Enter or Space toggles or
 //! presses, Tab jumps a section. The mouse clicks a control; the wheel scrolls.
 //!
+//! General ends with the updater's two rows (#1606, #1675; native only, the browser has no
+//! updater): the channel, and Updates with the running build, the last check and a button that
+//! checks now, or shows the update dialog when a build is ready.
+//!
 //! What a row changes takes effect at once where the client can (display mode, ratio, window
 //! size, integer scale, backdrop blur, UI scale, the HUD elements); the language, the volumes and
 //! the run's own settings (auto-retry, slow motion, death map, shake and flashes) apply to the next
@@ -23,7 +27,7 @@ use bevy::ui_widgets::{Activate, Button};
 use bevy::window::PrimaryWindow;
 
 use crate::locale;
-use crate::settings::{self, Language};
+use crate::settings::{self, Language, UpdateChannel};
 use crate::ui::fonts::Type;
 use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::Shape;
@@ -75,6 +79,8 @@ impl Section {
 pub enum Id {
     Language,
     ProfileName,
+    UpdateChannel,
+    Updates,
     Display,
     Ratio,
     WindowSize,
@@ -110,6 +116,8 @@ pub enum Kind {
     Select(String),
     /// A value and a button that is not built yet.
     Info(String),
+    /// A status and a button that does something now (Updates: Check now).
+    Action { value: String, button: String },
 }
 
 /// One row: what it is, its section, its texts and how it reads now.
@@ -123,9 +131,11 @@ pub struct Row {
 }
 
 impl Id {
-    pub const ALL: [Id; 19] = [
+    pub const ALL: [Id; 21] = [
         Id::Language,
         Id::ProfileName,
+        Id::UpdateChannel,
+        Id::Updates,
         Id::Display,
         Id::Ratio,
         Id::WindowSize,
@@ -147,7 +157,7 @@ impl Id {
 
     fn section(self) -> Section {
         match self {
-            Id::Language | Id::ProfileName => Section::General,
+            Id::Language | Id::ProfileName | Id::UpdateChannel | Id::Updates => Section::General,
             Id::Display
             | Id::Ratio
             | Id::WindowSize
@@ -170,6 +180,8 @@ impl Id {
         match self {
             Id::Language => ("set_language", "set_language_desc"),
             Id::ProfileName => ("set_profile_name", "set_profile_name_desc"),
+            Id::UpdateChannel => ("set_update_channel", "set_update_channel_desc"),
+            Id::Updates => ("set_updates", ""),
             Id::Display => ("set_display", ""),
             Id::Ratio => ("set_ratio", "set_ratio_desc"),
             Id::WindowSize => ("set_window_size", "set_window_size_desc"),
@@ -203,6 +215,16 @@ impl Id {
                 .to_owned(),
             ),
             Id::ProfileName => Kind::Info(crate::card::profile_name()),
+            Id::UpdateChannel => Kind::Chips {
+                options: names(&["set_update_main", "set_update_releases"]),
+                picked: UpdateChannel::ALL.iter().position(|c| *c == s.update_channel),
+                on: Vec::new(),
+            },
+            // The status and the button follow the updater; `draw` fills them in.
+            Id::Updates => Kind::Action {
+                value: String::new(),
+                button: locale::text("set_check_now").to_owned(),
+            },
             Id::Display => Kind::Chips {
                 options: names(&["set_windowed", "set_fullscreen"]),
                 picked: Some(usize::from(s.fullscreen)),
@@ -278,13 +300,20 @@ impl Id {
             id: self,
             section: self.section(),
             label: locale::text(label).to_owned(),
-            desc: if desc.is_empty() {
+            desc: if self == Id::Updates {
+                crate::updater::running_line()
+            } else if desc.is_empty() {
                 String::new()
             } else {
                 locale::text(desc).to_owned()
             },
             kind,
         }
+    }
+
+    /// Whether this build shows the row: the browser has no updater.
+    fn available(self) -> bool {
+        !(cfg!(target_arch = "wasm32") && matches!(self, Id::UpdateChannel | Id::Updates))
     }
 }
 
@@ -304,6 +333,7 @@ pub fn rows(s: &settings::Settings, query: &str) -> Vec<Row> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     Id::ALL
         .iter()
+        .filter(|id| id.available())
         .map(|id| id.row(s))
         .filter(|r| {
             let hay = format!("{} {} {}", r.label, r.desc, r.section.title()).to_lowercase();
@@ -322,6 +352,12 @@ pub fn change(mut s: settings::Settings, id: Id, step: i32, chip: Option<usize>)
                 Language::En => Language::Ja,
                 Language::Ja => Language::En,
             }
+        }
+        Id::UpdateChannel => {
+            let all = UpdateChannel::ALL;
+            let at = all.iter().position(|c| *c == s.update_channel).unwrap_or(0);
+            let i = chip.unwrap_or((at + 1) % all.len());
+            s.update_channel = all[i.min(all.len() - 1)];
         }
         Id::Display => {
             s.fullscreen = match (chip, step) {
@@ -374,7 +410,7 @@ pub fn change(mut s: settings::Settings, id: Id, step: i32, chip: Option<usize>)
         Id::DeathMap => s.results_heatmap = !s.results_heatmap,
         Id::Shake => s.shake = !s.shake,
         Id::Flashes => s.flashes = !s.flashes,
-        Id::ProfileName | Id::AudioOffset | Id::KeyBindings => {}
+        Id::ProfileName | Id::AudioOffset | Id::KeyBindings | Id::Updates => {}
     }
     s
 }
@@ -397,6 +433,11 @@ pub struct Overlay {
 }
 
 impl Overlay {
+    /// Draws it again (the updater's state changed under the Updates row).
+    pub fn refresh(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+    }
+
     /// Opens it (the main menu's Settings, the toolbar's gear).
     pub fn show(&mut self) {
         self.open = true;
@@ -565,6 +606,11 @@ fn keys(
                     overlay.pending = Some((row.id, if step == 0 { 1 } else { step }, None));
                 }
             }
+            Kind::Action { .. } => {
+                if pick {
+                    overlay.pending = Some((row.id, 0, None));
+                }
+            }
             Kind::Slider(..) => {
                 if step != 0 {
                     overlay.pending = Some((row.id, step, None));
@@ -679,6 +725,9 @@ fn apply_live(world: &mut World, s: &settings::Settings, id: Id) {
                 shown.0 = s.hud_show;
             }
         }
+        // A new channel checks at once; the Updates button checks or shows the ready build.
+        Id::UpdateChannel => crate::updater::check_now(world),
+        Id::Updates => crate::updater::press(world),
         _ => {}
     }
 }
@@ -728,7 +777,17 @@ fn draw(world: &mut World) {
         let o = world.resource::<Overlay>();
         (o.focus, o.chip, o.query.clone())
     };
-    let shown = rows(&s, &query);
+    let mut shown = rows(&s, &query);
+    // The Updates row reads the updater, which `rows` cannot see.
+    if let Some(updater) = world.get_resource::<crate::updater::Updater>() {
+        let ready = matches!(updater.phase, crate::updater::Phase::Ready(_));
+        for row in shown.iter_mut().filter(|r| r.id == Id::Updates) {
+            row.kind = Kind::Action {
+                value: crate::updater::status_text(updater),
+                button: locale::text(if ready { "set_update_show" } else { "set_check_now" }).to_owned(),
+            };
+        }
+    }
     let accent = crate::ui::mode::accent(world.get_resource::<crate::ui::mode::Mode>());
     world.spawn((
         Root(generation),
@@ -1110,6 +1169,27 @@ fn control(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, 
                 c.spawn(text(value, Type::barlow(15.0, 600), tokens::INK));
             }
         }
+        Kind::Action { value, button } => {
+            if !value.is_empty() {
+                c.spawn((
+                    Node {
+                        max_width: Val::Px(230.0),
+                        ..default()
+                    },
+                    children![text(value, Type::barlow(14.0, 500), tokens::SOFT)],
+                ));
+            }
+            let mut shape = Shape::fill(tokens::white(0.12));
+            if focus {
+                shape = shape.with_ring(2.0, tokens::white(0.6));
+            }
+            c.spawn((
+                Button,
+                Hit::Row(i, Some(0)),
+                crate::ui::widgets::sheared(36.0, 16.0, shape),
+                children![text(button, Type::barlow(15.0, 700), tokens::INK)],
+            ));
+        }
     });
 }
 
@@ -1157,6 +1237,9 @@ mod tests {
         assert!(scale.iter().any(|r| r.id == Id::IntegerScale) && scale.iter().any(|r| r.id == Id::UiScale));
         assert!(scale.iter().all(|r| r.id != Id::Master));
         assert!(rows(&s, "zzzz").is_empty());
+        let updates = rows(&s, "update");
+        assert!(updates.iter().any(|r| r.id == Id::UpdateChannel) && updates.iter().any(|r| r.id == Id::Updates));
+        assert!(updates.iter().all(|r| r.section == Section::General));
     }
 
     #[test]
@@ -1179,5 +1262,10 @@ mod tests {
         assert_eq!(s.ui_scale, 95);
         let s = change(s, Id::SlowSpeed, 1, Some(1));
         assert_eq!(s.slow_speed, crate::practice::SLOW_SPEEDS[1]);
+        let s = change(s, Id::UpdateChannel, 0, Some(1));
+        assert_eq!(s.update_channel, UpdateChannel::Releases);
+        let s = change(s, Id::UpdateChannel, 1, None);
+        assert_eq!(s.update_channel, UpdateChannel::MainBuilds, "Enter steps round");
+        assert_eq!(change(s.clone(), Id::Updates, 0, None), s, "the button changes no setting");
     }
 }
