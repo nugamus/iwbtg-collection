@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-27T00:19:36Z",
+ "generated_at": "2026-11-27T00:31:26Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -80,13 +80,13 @@
    "title": "3 · Sim fidelity",
    "name": "Sim fidelity",
    "state": "open",
-   "open": 34,
-   "closed": 220,
+   "open": 33,
+   "closed": 221,
    "total": 254,
-   "pct_closed": 86.6,
-   "size_points": 47,
+   "pct_closed": 87.0,
+   "size_points": 46,
    "sizes": {
-    "size:S": 13,
+    "size:S": 12,
     "size:M": 6,
     "size:L": 2,
     "unknown": 13
@@ -126,14 +126,14 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 20,
-   "closed": 39,
+   "open": 19,
+   "closed": 40,
    "total": 59,
-   "pct_closed": 66.1,
-   "size_points": 41,
+   "pct_closed": 67.8,
+   "size_points": 38,
    "sizes": {
     "size:S": 7,
-    "size:M": 6,
+    "size:M": 5,
     "size:L": 2,
     "unknown": 5
    },
@@ -263,15 +263,15 @@
  "activity": {
   "totals": {
    "issues": 991,
-   "open": 279,
-   "closed": 712,
-   "pct_closed": 71.8
+   "open": 277,
+   "closed": 714,
+   "pct_closed": 72.0
   },
-  "open_prs": 4,
+  "open_prs": 1,
   "process": {
-   "agent-ready": 104,
-   "in-progress": 7,
+   "agent-ready": 103,
    "triage": 78,
+   "in-progress": 5,
    "needs-user": 27,
    "blocked": 25,
    "revisit": 1
@@ -279,11 +279,11 @@
   "area_open": [
    {
     "area": "area:sim",
-    "count": 86
+    "count": 85
    },
    {
     "area": "area:client",
-    "count": 71
+    "count": 70
    },
    {
     "area": "area:format",
@@ -323,6 +323,37 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1673,
+    "title": "UI: the mod sheet, m5 D8 and D9 (Flashlight, Hitboxes practice, Mirror faded, Ghost switch)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1673",
+    "labels": [
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-27T00:28:59Z",
+    "closed_at": "2026-11-27T00:28:59Z",
+    "created_at": "2026-11-26T23:24:49Z"
+   },
+   {
+    "number": 1357,
+    "title": "Trace cases: close a1-slope-a and compare gravity in a1-slope-a..c after CR26 (research#279)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1357",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-27T00:24:16Z",
+    "closed_at": "2026-11-27T00:24:16Z",
+    "created_at": "2026-11-24T12:23:24Z"
+   },
    {
     "number": 53,
     "title": "Settings screen",
@@ -420,55 +451,9 @@
     "updated_at": "2026-11-26T23:03:59Z",
     "closed_at": "2026-11-26T23:03:59Z",
     "created_at": "2026-11-20T17:33:18Z"
-   },
-   {
-    "number": 1614,
-    "title": "Contract: name the client's credited UI art (delicious fruit) beside the showcase Kid",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1614",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:docs",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T22:46:45Z",
-    "closed_at": "2026-11-26T22:46:45Z",
-    "created_at": "2026-11-26T14:59:04Z"
-   },
-   {
-    "number": 1623,
-    "title": "Stats: expose the open and just-ended session (time, deaths by room, death ticks, rooms, saves) for Classic's summary",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1623",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T22:44:14Z",
-    "closed_at": "2026-11-26T22:44:14Z",
-    "created_at": "2026-11-26T15:41:11Z"
    }
   ],
   "in_progress": [
-   {
-    "number": 1673,
-    "title": "UI: the mod sheet, m5 D8 and D9 (Flashlight, Hitboxes practice, Mirror faded, Ghost switch)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1673",
-    "labels": [
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T23:25:53Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T23:24:49Z"
-   },
    {
     "number": 1624,
     "title": "UI: Classic session summary and session panel (m5 A7–A9, group 2)",
@@ -534,20 +519,19 @@
     "created_at": "2026-11-02T11:57:36Z"
    },
    {
-    "number": 1357,
-    "title": "Trace cases: close a1-slope-a and compare gravity in a1-slope-a..c after CR26 (research#279)",
+    "number": 928,
+    "title": "gameplay_hash stable across format migrations (pkg upgrade must not split boards)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1357",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/928",
     "labels": [
-     "agent-ready",
      "size:S",
-     "area:sim",
+     "area:format",
      "in-progress"
     ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-24T19:11:28Z",
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T17:53:59Z",
     "closed_at": null,
-    "created_at": "2026-11-24T12:23:24Z"
+    "created_at": "2026-11-17T16:52:13Z"
    }
   ],
   "needs_user": [
@@ -735,7 +719,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 286,
+  "closed_7d": 288,
   "opened_7d": 327,
   "burnup": [
    {
@@ -756,7 +740,7 @@
    {
     "week": "2026-11-30",
     "created": 991,
-    "closed": 712
+    "closed": 714
    }
   ]
  },
@@ -1640,12 +1624,12 @@
    "trace_cases": {
     "dir": "get_the_rainbow_feather",
     "recorded": 3,
-    "ok": 2,
-    "open": 1,
+    "ok": 3,
+    "open": 0,
     "fail": 0,
     "other": 0,
     "unclassified": 0,
-    "pass_pct": 66.7
+    "pass_pct": 100.0
    },
    "trace_case_dir": "get_the_rainbow_feather",
    "objects_in_package": 388,
@@ -1835,9 +1819,9 @@
   "games_census": 20,
   "games_traces": 18,
   "games_total": 20,
-  "trace_cases_ok": 77,
+  "trace_cases_ok": 78,
   "trace_cases_recorded": 83,
-  "trace_cases_pct": 92.8,
+  "trace_cases_pct": 94.0,
   "games_with_cases": 7,
   "package_objects_mapped": 1229,
   "package_objects_scripted": 3048,
