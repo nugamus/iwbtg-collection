@@ -24,7 +24,7 @@ use crate::ui::motion::{Ease, OffsetY, Opacity, Tween};
 use crate::ui::shape::{Shape, UiOpacity, Veil};
 use crate::ui::tokens;
 use crate::ui::widgets::{
-    ButtonKind, ModCard, ModOption, SearchField, Switch, button_with, mod_card, mod_card_off, pill, rich,
+    ButtonKind, Chip, ModCard, ModOption, SearchField, Switch, button_with, chip, mod_card, mod_card_off, pill, rich,
     selected_mod_pill, switch, text,
 };
 
@@ -315,6 +315,10 @@ fn spawn_columns(p: &mut ChildSpawnerCommands, set: ModSet, slow_speed: u8) {
                 for d in MODS.iter().filter(|d| d.kind == kind) {
                     spawn_card(c, d, color, set.contains(d.id), slow_speed);
                 }
+                // Mirror shows faded until it is built (#1574).
+                if kind == ModKind::Challenge {
+                    c.spawn(mod_card_off("MR", "Mirror", "The rooms flipped left to right.", Some("Coming later")));
+                }
             });
         }
     });
@@ -322,7 +326,7 @@ fn spawn_columns(p: &mut ChildSpawnerCommands, set: ModSet, slow_speed: u8) {
 
 fn spawn_card(c: &mut ChildSpawnerCommands, d: &ModDef, color: Color, on: bool, slow_speed: u8) {
     if !BUILT.contains(&d.id) {
-        c.spawn(mod_card_off(d.code, d.name, "Not built yet."));
+        c.spawn(mod_card_off(d.code, d.name, "Not built yet.", None));
         return;
     }
     let options: Vec<(String, bool)> = if d.id == Mod::SlowMotion {
@@ -333,13 +337,30 @@ fn spawn_card(c: &mut ChildSpawnerCommands, d: &ModDef, color: Color, on: bool, 
     } else {
         Vec::new()
     };
+    // Flashlight is new with the m5 sheet (D9).
+    let tag = (d.id == Mod::Flashlight).then_some("New");
     c.spawn((
-        mod_card(d.code, d.name, d.description, color, on, &options),
+        mod_card(d.code, d.name, d.description, color, on, &options, tag),
         Card(d.id),
     ));
 }
 
 fn spawn_footer(p: &mut ChildSpawnerCommands, auto_retry: bool) {
+    // The note over the footer (m5 D9).
+    p.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(64.0),
+            right: Val::Px(64.0),
+            bottom: Val::Px(96.0),
+            ..default()
+        },
+        children![text(
+            "Mirror comes later (#1574): it needs sim work and a check of every room that reads the kid's x. Flashlight and the ghost are drawn by the client, so a replay plays the same with or without them.",
+            Type::barlow(14.0, 400),
+            tokens::MUTED
+        )],
+    ));
     p.spawn(Node {
         position_type: PositionType::Absolute,
         left: Val::Px(64.0),
@@ -363,6 +384,7 @@ fn spawn_footer(p: &mut ChildSpawnerCommands, auto_retry: bool) {
             switch("Auto-retry", "Restart from the start after a death", auto_retry),
             AutoRetry,
         ));
+        ghost_switch(f, crate::settings::get().ghost);
         f.spawn(Node {
             flex_grow: 1.0,
             ..default()
@@ -397,6 +419,56 @@ fn spawn_footer(p: &mut ChildSpawnerCommands, auto_retry: bool) {
             SheetButton::Done,
         ));
     });
+}
+
+/// One of the Ghost switch's choices.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct GhostChoice(pub(super) crate::settings::Ghost);
+
+/// The Ghost switch (m5 D9, #64): Off, Your PB, Board #1. A ghost is drawn only, never ranked.
+fn ghost_switch(f: &mut ChildSpawnerCommands, picked: crate::settings::Ghost) {
+    use crate::settings::Ghost;
+    f.spawn((
+        Node {
+            height: Val::Px(52.0),
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(14.0),
+            padding: UiRect::new(Val::Px(18.0), Val::Px(10.0), Val::Px(0.0), Val::Px(0.0)),
+            ..default()
+        },
+        Shape::fill(tokens::white(0.06)),
+    ))
+    .with_children(|g| {
+        g.spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(1.0),
+                margin: UiRect::right(Val::Px(14.0)),
+                ..default()
+            },
+            children![
+                text("Ghost", Type::barlow(15.0, 700), tokens::INK),
+                text("drawn only, never ranked", Type::barlow(12.0, 400), tokens::MUTED),
+            ],
+        ));
+        for (ghost, label) in [(Ghost::Off, "Off"), (Ghost::Pb, "Your PB"), (Ghost::Top, "Board #1")] {
+            g.spawn((chip(label, ghost == picked), GhostChoice(ghost)));
+        }
+    });
+}
+
+/// A click on a ghost choice picks it and writes `[ghost] pick`.
+pub(super) fn on_ghost(activate: On<Activate>, mut choices: Query<(&GhostChoice, &mut Chip)>) {
+    let Ok((&GhostChoice(picked), _)) = choices.get(activate.entity) else {
+        return;
+    };
+    crate::settings::update(|s| s.ghost = picked);
+    for (choice, mut chip) in &mut choices {
+        let on = choice.0 == picked;
+        if chip.on != on {
+            chip.on = on;
+        }
+    }
 }
 
 /// `set` with `m` flipped.
@@ -621,7 +693,9 @@ mod tests {
         let set = |codes: &str| ModSet::parse(codes).unwrap();
         assert_eq!(header(ModSet::NONE, 75, "Hard"), (true, "Hard · no mods".into()));
         assert_eq!(header(set("SD,NB"), 75, "Hard"), (true, "Hard + SD + NB".into()));
-        assert_eq!(header(set("HB"), 75, "Hard"), (true, "Hard + HB".into()));
+        let (ranked, why) = header(set("HB"), 75, "Hard");
+        assert!(!ranked && why.starts_with("Hitboxes"), "a practice aid (#554): {why}");
+        assert_eq!(header(set("FL"), 75, "Hard"), (true, "Hard + FL".into()));
         let (ranked, why) = header(set("SD,SL"), 50, "Hard");
         assert!(!ranked);
         assert!(why.starts_with("Slow motion 50% is a practice assist"), "{why}");

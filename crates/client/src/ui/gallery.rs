@@ -472,6 +472,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                             tokens::MOD_PRACTICE,
                             true,
                             &speeds,
+                            None,
                         ));
                         r.spawn(selected_mod_pill("SL", tokens::MOD_PRACTICE));
                     });

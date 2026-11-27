@@ -202,6 +202,7 @@ impl Plugin for SelectPlugin {
             .add_observer(collections::create)
             .add_observer(mod_sheet::on_activate)
             .add_observer(mod_sheet::on_option)
+            .add_observer(mod_sheet::on_ghost)
             .add_systems(
                 Update,
                 (

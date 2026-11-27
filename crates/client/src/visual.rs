@@ -1,4 +1,5 @@
-//! The visual mods (#550; docs/product.md, Mods): Hitboxes (`HB`) and No background (`NB`),
+//! The client-drawn mods (#550, #554; docs/product.md, Mods): Hitboxes (`HB`), No background
+//! (`NB`) and Flashlight (`FL`),
 //! picked in the mod select sheet or with `--mods` (mods.rs) and read when a run opens. Both only change the picture: they read the sim's state and
 //! never write it, so the replay and every hash stay the same.
 //!
@@ -11,6 +12,9 @@
 //!   background layers (art.rs reads [`PlainBackdrop`]); the HUD backdrop around the game is that
 //!   grey too when it would show the room's background (screen.rs `plain_art`; package key art
 //!   stays). Tiles, instances and foreground layers stay.
+//! - Flashlight darkens the room except a circle of [`LIGHT_RADIUS`] game px around the kid
+//!   (its last sighting while it is dead), with a soft edge: a hole image at the kid and four
+//!   black panels around it, over every room layer and under the hitboxes.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -74,6 +78,8 @@ impl Plugin for VisualPlugin {
                 (|mut commands: Commands| commands.insert_resource(PlainBackdrop(PLAIN)))
                     .run_if(has(Mod::NoBackground)),
                 (|mut commands: Commands| commands.init_resource::<Hitboxes>()).run_if(has(Mod::Hitboxes)),
+                (|mut commands: Commands| commands.init_resource::<Flashlight>())
+                    .run_if(has(Mod::Flashlight)),
             )
                 .in_set(crate::shell::RunSteps::Resources),
         )
@@ -82,6 +88,7 @@ impl Plugin for VisualPlugin {
             (|world: &mut World| {
                 world.remove_resource::<PlainBackdrop>();
                 world.remove_resource::<Hitboxes>();
+                world.remove_resource::<Flashlight>();
             })
             .in_set(crate::shell::RunSteps::Resources),
         )
@@ -91,8 +98,128 @@ impl Plugin for VisualPlugin {
                 .after(crate::view::follow_view)
                 .run_if(resource_exists::<Hitboxes>)
                 .in_set(crate::shell::InRun),
+        )
+        .add_systems(
+            Update,
+            draw_flashlight
+                .after(crate::view::follow_view)
+                .run_if(resource_exists::<Flashlight>)
+                .in_set(crate::shell::InRun),
         );
     }
+}
+
+/// Flashlight's lit radius around the kid, game px.
+pub(crate) const LIGHT_RADIUS: f32 = 72.0;
+/// The soft edge inside the radius, game px.
+const LIGHT_EDGE: f32 = 18.0;
+/// The darkness: almost black. Blending is linear, so 1% of the light left reads as about 9% in
+/// sRGB: the brightest sprite (the moon) stays a faint outline.
+const DARK: Color = Color::srgba(0.0, 0.0, 0.0, 0.99);
+/// Under the hitboxes, over every room layer.
+const LIGHT_Z: f32 = HITBOX_Z - 1.0;
+
+/// Flashlight's parts: the hole at the kid and the four panels around it, and where the light
+/// last was.
+#[derive(Resource, Default)]
+pub(crate) struct Flashlight {
+    parts: Option<[Entity; 5]>,
+    at: Option<Vec2>,
+}
+
+/// The hole: a square `2 * LIGHT_RADIUS` wide, clear inside the radius less the edge, dark
+/// outside it, a smooth ramp between.
+fn hole_image() -> Image {
+    const SIZE: u32 = 128;
+    let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    let half = SIZE as f32 / 2.0;
+    let inner = 1.0 - LIGHT_EDGE / LIGHT_RADIUS;
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let d = Vec2::new(x as f32 + 0.5 - half, y as f32 + 0.5 - half).length() / half;
+            let t = ((d - inner) / (1.0 - inner)).clamp(0.0, 1.0);
+            let a = t * t * (3.0 - 2.0 * t);
+            rgba.extend_from_slice(&[0, 0, 0, (a * DARK.alpha() * 255.0).round() as u8]);
+        }
+    }
+    Image::new(
+        Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        rgba,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+/// Keeps the light on the kid: the hole at its centre, the panels covering the rest of the room.
+fn draw_flashlight(
+    mut commands: Commands,
+    game: NonSend<Game>,
+    room: Res<RoomSize>,
+    mut images: ResMut<Assets<Image>>,
+    mut light: ResMut<Flashlight>,
+    mut query: Query<(&mut Sprite, &mut Transform)>,
+) {
+    let world = game.sim.world();
+    let kid = world
+        .kid(&game.sim.rules().tick)
+        .and_then(|id| world.get(id))
+        .map(|k| Vec2::new(k.m.x().get() as f32, k.m.y().get() as f32));
+    if let Some(at) = kid {
+        light.at = Some(at);
+    }
+    let at = light.at.unwrap_or(room.0 / 2.0);
+    let parts = *light.parts.get_or_insert_with(|| {
+        let hole = images.add(hole_image());
+        let mut spawn = |image: Option<Handle<Image>>| {
+            commands
+                .spawn((
+                    Sprite {
+                        color: if hole_is(&image) { Color::WHITE } else { DARK },
+                        image: image.unwrap_or_default(),
+                        custom_size: Some(Vec2::ONE),
+                        ..default()
+                    },
+                    Anchor::CENTER,
+                    Transform::default(),
+                    crate::shell::RUN_ONLY,
+                ))
+                .id()
+        };
+        [spawn(Some(hole)), spawn(None), spawn(None), spawn(None), spawn(None)]
+    });
+    // World coordinates: the room's centre is the origin, y up.
+    let c = Vec2::new(at.x - room.0.x / 2.0, room.0.y / 2.0 - at.y);
+    let r = LIGHT_RADIUS;
+    // Far beyond any view: the panels reach this far past the hole.
+    let far = room.0.x.max(room.0.y) * 2.0 + 4096.0;
+    let rects = [
+        (c, Vec2::splat(2.0 * r)),
+        (Vec2::new(c.x, c.y + r + far / 2.0), Vec2::new(2.0 * r + 2.0 * far, far)),
+        (Vec2::new(c.x, c.y - r - far / 2.0), Vec2::new(2.0 * r + 2.0 * far, far)),
+        (Vec2::new(c.x - r - far / 2.0, c.y), Vec2::new(far, 2.0 * r)),
+        (Vec2::new(c.x + r + far / 2.0, c.y), Vec2::new(far, 2.0 * r)),
+    ];
+    for (e, (pos, size)) in parts.iter().zip(rects) {
+        if let Ok((mut sprite, mut t)) = query.get_mut(*e) {
+            if sprite.custom_size != Some(size) {
+                sprite.custom_size = Some(size);
+            }
+            let want = Transform::from_xyz(pos.x, pos.y, LIGHT_Z);
+            if *t != want {
+                *t = want;
+            }
+        }
+    }
+}
+
+/// Whether a part is the hole (it has an image).
+fn hole_is(image: &Option<Handle<Image>>) -> bool {
+    image.is_some()
 }
 
 /// What a hitbox shows.

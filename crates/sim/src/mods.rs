@@ -35,6 +35,8 @@ pub enum Mod {
     SlowMotion = 4,
     /// One tick per key press.
     FrameAdvance = 5,
+    /// Only a circle around the kid is lit (drawn by the client).
+    Flashlight = 6,
 }
 
 /// What the UI shows for a mod and whether a run with it can be ranked.
@@ -55,7 +57,7 @@ pub struct ModDef {
 }
 
 /// Every mod, in sheet order (by kind, then as listed).
-pub const MODS: [ModDef; 6] = [
+pub const MODS: [ModDef; 7] = [
     ModDef {
         id: Mod::SuddenDeath,
         code: "SD",
@@ -69,8 +71,9 @@ pub const MODS: [ModDef; 6] = [
         code: "HB",
         name: "Hitboxes",
         description: "Draw the kid's and every hazard's hitbox.",
-        kind: ModKind::Visual,
-        ranked: true,
+        // A practice aid (#554, decided 2026-11-26): it shows the exact kill boxes.
+        kind: ModKind::Practice,
+        ranked: false,
     },
     ModDef {
         id: Mod::NoBackground,
@@ -103,6 +106,14 @@ pub const MODS: [ModDef; 6] = [
         description: "Step one tick at a time.",
         kind: ModKind::Practice,
         ranked: false,
+    },
+    ModDef {
+        id: Mod::Flashlight,
+        code: "FL",
+        name: "Flashlight",
+        description: "Only a circle around the kid is lit. Drawn by the client.",
+        kind: ModKind::Challenge,
+        ranked: true,
     },
 ];
 
