@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-27T00:58:49Z",
+ "generated_at": "2026-11-27T01:30:55Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,13 +11,13 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 5,
+   "open": 6,
    "closed": 90,
-   "total": 95,
-   "pct_closed": 94.7,
-   "size_points": 19,
+   "total": 96,
+   "pct_closed": 93.8,
+   "size_points": 20,
    "sizes": {
-    "size:S": 3,
+    "size:S": 4,
     "size:M": 0,
     "size:L": 2,
     "unknown": 0
@@ -57,13 +57,13 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 30,
+   "open": 33,
    "closed": 124,
-   "total": 154,
-   "pct_closed": 80.5,
-   "size_points": 94,
+   "total": 157,
+   "pct_closed": 79.0,
+   "size_points": 97,
    "sizes": {
-    "size:S": 9,
+    "size:S": 12,
     "size:M": 15,
     "size:L": 5,
     "unknown": 1
@@ -126,14 +126,14 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 18,
-   "closed": 41,
-   "total": 59,
-   "pct_closed": 69.5,
-   "size_points": 30,
+   "open": 21,
+   "closed": 42,
+   "total": 63,
+   "pct_closed": 66.7,
+   "size_points": 31,
    "sizes": {
-    "size:S": 7,
-    "size:M": 5,
+    "size:S": 11,
+    "size:M": 4,
     "size:L": 1,
     "unknown": 5
    },
@@ -149,13 +149,13 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 31,
+   "open": 30,
    "closed": 112,
-   "total": 143,
-   "pct_closed": 78.3,
-   "size_points": 120,
+   "total": 142,
+   "pct_closed": 78.9,
+   "size_points": 119,
    "sizes": {
-    "size:S": 5,
+    "size:S": 4,
     "size:M": 17,
     "size:L": 8,
     "unknown": 1
@@ -242,9 +242,9 @@
    "name": "Release",
    "state": "open",
    "open": 19,
-   "closed": 12,
-   "total": 31,
-   "pct_closed": 38.7,
+   "closed": 13,
+   "total": 32,
+   "pct_closed": 40.6,
    "size_points": 42,
    "sizes": {
     "size:S": 10,
@@ -262,18 +262,18 @@
  ],
  "activity": {
   "totals": {
-   "issues": 991,
+   "issues": 993,
    "open": 275,
-   "closed": 716,
+   "closed": 718,
    "pct_closed": 72.3
   },
   "open_prs": 0,
   "process": {
-   "agent-ready": 103,
-   "triage": 76,
-   "needs-user": 27,
+   "triage": 68,
+   "agent-ready": 109,
+   "in-progress": 9,
+   "needs-user": 28,
    "blocked": 25,
-   "in-progress": 4,
    "revisit": 1
   },
   "area_open": [
@@ -283,11 +283,11 @@
    },
    {
     "area": "area:client",
-    "count": 68
+    "count": 67
    },
    {
     "area": "area:format",
-    "count": 44
+    "count": 45
    },
    {
     "area": "area:server",
@@ -323,6 +323,37 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1676,
+    "title": "Release: a GitHub release for every green commit on main",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1676",
+    "labels": [
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-27T01:25:02Z",
+    "closed_at": "2026-11-27T01:25:02Z",
+    "created_at": "2026-11-27T01:16:59Z"
+   },
+   {
+    "number": 1675,
+    "title": "Client: wire the #1606 updater into the m5 Settings and notifications UI (osu!lazer-style)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1675",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-27T01:25:00Z",
+    "closed_at": "2026-11-27T01:24:59Z",
+    "created_at": "2026-11-26T23:34:12Z"
+   },
    {
     "number": 1624,
     "title": "UI: Classic session summary and session panel (m5 A7–A9, group 2)",
@@ -416,12 +447,45 @@
     "updated_at": "2026-11-26T23:50:00Z",
     "closed_at": "2026-11-26T23:50:00Z",
     "created_at": "2026-11-25T00:20:56Z"
+   }
+  ],
+  "in_progress": [
+   {
+    "number": 1648,
+    "title": "Harness: xtask check skips the scripts unittest suite CI runs (UI strings test failed only in CI)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1648",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-27T01:30:17Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:06:38Z"
    },
    {
-    "number": 1386,
-    "title": "Script API: start_timeline/stop_timeline (#776, census rank 25)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1386",
+    "number": 775,
+    "title": "Scripts at scale: stress packages, projectile decision and the Rhai verdict before mass porting",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/775",
+    "labels": [
+     "size:M",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-27T01:30:14Z",
+    "closed_at": null,
+    "created_at": "2026-11-14T17:14:23Z"
+   },
+   {
+    "number": 1671,
+    "title": "Script API: timeline position/speed/loop/running properties",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1671",
     "labels": [
      "agent-ready",
      "size:S",
@@ -429,28 +493,42 @@
      "in-progress"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T23:13:33Z",
-    "closed_at": "2026-11-26T23:13:33Z",
-    "created_at": "2026-11-24T17:19:32Z"
+    "updated_at": "2026-11-27T01:26:34Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T23:06:18Z"
    },
    {
-    "number": 1606,
-    "title": "Client: update itself from CI builds of main, so testers never compile",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1606",
+    "number": 1663,
+    "title": "Format: the full valid fixture cannot be packed",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1663",
     "labels": [
      "agent-ready",
-     "size:M",
-     "area:infra",
+     "size:S",
+     "area:format",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-27T01:23:55Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:43:27Z"
+   },
+   {
+    "number": 1664,
+    "title": "Settings: frame limit row (m5 C1 Graphics)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1664",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T23:34:21Z",
-    "closed_at": "2026-11-26T23:09:33Z",
-    "created_at": "2026-11-26T14:23:04Z"
-   }
-  ],
-  "in_progress": [
+    "updated_at": "2026-11-27T01:23:34Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:44:10Z"
+   },
    {
     "number": 106,
     "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
@@ -466,56 +544,23 @@
     "updated_at": "2026-11-26T01:30:02Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:55:29Z"
-   },
-   {
-    "number": 154,
-    "title": "Server: Docker Compose with cloudflared",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/154",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T22:21:14Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:34Z"
-   },
-   {
-    "number": 155,
-    "title": "Server: tracing logs and healthchecks.io",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/155",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T21:09:22Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:36Z"
-   },
-   {
-    "number": 928,
-    "title": "gameplay_hash stable across format migrations (pkg upgrade must not split boards)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/928",
-    "labels": [
-     "size:S",
-     "area:format",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T17:53:59Z",
-    "closed_at": null,
-    "created_at": "2026-11-17T16:52:13Z"
    }
   ],
   "needs_user": [
+   {
+    "number": 1585,
+    "title": "Admin access: role, TOTP second factor and a Tailscale-only admin listener",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1585",
+    "labels": [
+     "needs-user",
+     "size:M"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-27T01:30:19Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T11:58:20Z"
+   },
    {
     "number": 195,
     "title": "Public nightly alpha builds",
@@ -590,21 +635,6 @@
     "updated_at": "2026-11-26T01:29:48Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:32:15Z"
-   },
-   {
-    "number": 498,
-    "title": "Design: game select Details tab",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/498",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:design"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T01:29:41Z",
-    "closed_at": null,
-    "created_at": "2026-11-04T03:17:03Z"
    }
   ],
   "agent_ready": [
@@ -700,8 +730,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 290,
-  "opened_7d": 327,
+  "closed_7d": 292,
+  "opened_7d": 329,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -720,8 +750,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 991,
-    "closed": 716
+    "created": 993,
+    "closed": 718
    }
   ]
  },
