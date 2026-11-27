@@ -71,12 +71,15 @@ pub struct Look {
     pub extras: [Option<String>; 4],
     /// Auto-retry is on: the mod row carries the AR mark (m5 D8).
     pub auto_retry: bool,
+    /// A Classic run: no leaderboard and no run info, only the optional session panel (m5 A7).
+    pub classic: bool,
 }
 
 impl Default for Look {
     fn default() -> Self {
         Look {
             auto_retry: false,
+            classic: false,
             unranked: false,
             mods: ModSet::NONE,
             show: HudShow::default(),
@@ -182,7 +185,7 @@ pub fn read(
     let world = sim.world();
     let mods = mods.map_or(ModSet::NONE, |m| m.0);
     let unranked = sim.options().mode == PlayMode::Original
-        || practice.is_some_and(|p| p.0)
+        || practice.as_deref().is_some_and(|p| p.0)
         || mods.unranked_by().is_some();
     let held = collector.as_ref().map_or(0, |c| {
         let f = c.last();
@@ -215,6 +218,7 @@ pub fn read(
         show: shown.0,
         extras: labels.clone(),
         auto_retry: retry.is_some_and(|r| r.auto),
+        classic: sim.options().mode == PlayMode::Original && !practice.as_deref().is_some_and(|p| p.0),
     };
     if *look != want {
         *look = want;

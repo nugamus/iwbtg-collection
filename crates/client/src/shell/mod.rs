@@ -60,6 +60,8 @@ pub enum RunScreen {
     Paused,
     /// The results page (`results/`).
     Results,
+    /// Classic's session summary (`session/`, #1624), after Back to the shelf or the ending.
+    Session,
     /// The sim halted (a script error): the script error screen (`script_error/`, #101).
     Error,
 }

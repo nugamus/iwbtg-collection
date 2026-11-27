@@ -17,6 +17,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Overlay](client/overlay.md): the F3 debug overlay (`overlay.rs`)
 - [Particles](client/particles.md): drawing `particle_system` systems (`particles/`)
 - [Pause menu](client/pause.md): `pause.rs`
+- [Session summary](client/session.md): `session/`
 - [Performance](client/perf.md): the `--perf` frame measurement (`perf.rs`, #1024)
 - [Player card](client/card.md): `card/`
 - [Practice assists](client/practice.md): slow motion and frame advance (`practice.rs`)
