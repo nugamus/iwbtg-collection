@@ -67,6 +67,7 @@ client_modules! {
     particles,
     script_error,
     updater,
+    settings_screen,
 }
 
 #[cfg(not(target_arch = "wasm32"))]

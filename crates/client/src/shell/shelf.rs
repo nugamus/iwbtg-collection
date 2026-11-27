@@ -77,8 +77,8 @@ impl Plugin for ShelfPlugin {
             .add_systems(
                 Update,
                 (
-                    search,
-                    keys,
+                    search.run_if(crate::settings_screen::closed),
+                    keys.run_if(crate::settings_screen::closed),
                     previews,
                     shelf_looks,
                     hero,

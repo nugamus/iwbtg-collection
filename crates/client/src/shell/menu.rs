@@ -266,7 +266,15 @@ impl Plugin for MenuPlugin {
             .add_observer(on_activate)
             .add_systems(
                 Update,
-                (keys, hover, follow_mode, rebuild, looks, caption, bob)
+                (
+                    keys.run_if(crate::settings_screen::closed),
+                    hover,
+                    follow_mode,
+                    rebuild,
+                    looks,
+                    caption,
+                    bob,
+                )
                     .chain()
                     .run_if(in_state(AppScreen::Menu)),
             )
@@ -1010,8 +1018,15 @@ fn choose(
         Action::Exit => {
             commands.write_message(AppExit::Success);
         }
-        // Their screens come with their groups (#50, #53, replays); Race is phase 8.
-        Action::Browse | Action::Replays | Action::Settings | Action::Race => {}
+        Action::Settings => {
+            commands.queue(|w: &mut World| {
+                if let Some(mut o) = w.get_resource_mut::<crate::settings_screen::Overlay>() {
+                    o.show();
+                }
+            });
+        }
+        // Their screens come with their groups (#50, replays); Race is phase 8.
+        Action::Browse | Action::Replays | Action::Race => {}
     }
 }
 

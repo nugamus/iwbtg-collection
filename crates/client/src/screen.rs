@@ -169,6 +169,17 @@ pub struct Screen {
     title: Option<String>,
 }
 
+impl Screen {
+    /// Takes the display mode, ratio and window preset from `s` (the settings overlay, #53).
+    pub fn set(&mut self, s: &Settings) {
+        self.fullscreen = s.fullscreen;
+        self.ratio = RATIOS.iter().position(|r| *r == s.ratio).unwrap_or(0);
+        if let Some(i) = s.window.and_then(|w| WINDOWS.iter().position(|p| *p == w)) {
+            self.window = i;
+        }
+    }
+}
+
 /// The black panel under the game and the room it is sized for.
 #[derive(Resource, Default)]
 struct Letterbox {
