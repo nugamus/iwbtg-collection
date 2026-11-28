@@ -11,7 +11,6 @@
 //! The numbers are the stats book's Classic ones (#1619). The furthest point is a room until
 //! packages declare sections, and the route line comes with m5 E7 (group 4).
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bevy::camera::visibility::RenderLayers;
@@ -34,7 +33,7 @@ use crate::ui::fonts::Type;
 use crate::ui::hints::hints;
 use crate::ui::icons::{Icon, icon};
 use crate::ui::mode::Mode;
-use crate::ui::motion::{Ease, OffsetX, Tween};
+use crate::ui::motion::{Ease, Height, OffsetX, Tween, Width};
 use crate::ui::shape::{Band, Shape, Side, Veil};
 use crate::ui::tokens;
 use crate::ui::toolbar::toolbar;
@@ -825,6 +824,10 @@ fn cover(
             ..default()
         },
         cover_shape(facts, picked, art),
+        // The picked cover grows and the others make room over `motion::SELECT` (#1685): a pick
+        // never jumps the row.
+        Tween::<Width>::at_rest(size.x, tokens::motion::SELECT, Ease::OutQuint),
+        Tween::<Height>::at_rest(size.y, tokens::motion::SELECT, Ease::OutQuint),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn((
                 text_leading(
@@ -1025,24 +1028,33 @@ fn previews(
     }
 }
 
+/// A cover's parts that follow the pick.
+type CoverParts = (
+    &'static Cover,
+    &'static mut Tween<Width>,
+    &'static mut Tween<Height>,
+    &'static mut Shape,
+    &'static Children,
+);
+
 /// The picked cover grows and gets the ring; the row slides to keep it in view.
 fn shelf_looks(
     state: Res<ShelfState>,
     lib: Res<Library>,
     facts: Res<AllFacts>,
-    mut covers: Query<(&Cover, &mut Node, &mut Shape, &Children)>,
+    mut covers: Query<CoverParts>,
     mut titles: Query<&mut TextFont, With<CoverTitle>>,
     mut row: Query<&mut Tween<OffsetX>, With<Row>>,
 ) {
     if !state.is_changed() {
         return;
     }
-    for (cover, mut node, mut shape, children) in &mut covers {
+    for (cover, mut w, mut h, mut shape, children) in &mut covers {
         let picked = cover.0 == state.pick;
         let size = if picked { COVER_PICKED } else { COVER };
-        if node.width != Val::Px(size.x) {
-            node.width = Val::Px(size.x);
-            node.height = Val::Px(size.y);
+        if (w.to - size.x).abs() > f32::EPSILON {
+            w.retarget(size.x);
+            h.retarget(size.y);
         }
         let f = facts.0.get(cover.0).cloned().unwrap_or_default();
         let mut want = cover_shape(f, picked, shape.image.clone());
@@ -1074,11 +1086,16 @@ fn hero(
     added: Query<(), Added<HeroText>>,
     mut avatar: Query<&mut BackgroundColor, With<Avatar>>,
     mut backdrop: ResMut<Backdrop>,
-    mut art: Local<HashMap<usize, Handle<Image>>>,
-    mut images: ResMut<Assets<Image>>,
     mut last: Local<Option<usize>>,
 ) {
-    // Once per pick, and again when the page is new (back on the shelf).
+    // The picked game's art fills the screen, from the library's previews (built off the UI
+    // thread: a pick never reads a package on it); until it arrives the last art stays.
+    if let Some(handle) = lib.backdrop.get(state.pick).cloned().flatten()
+        && backdrop.art.as_ref() != Some(&handle)
+    {
+        backdrop.art = Some(handle);
+    }
+    // The texts once per pick, and again when the page is new (back on the shelf).
     if *last == Some(state.pick) && added.is_empty() {
         return;
     }
@@ -1133,22 +1150,6 @@ fn hero(
     for mut bg in &mut avatar {
         bg.0 = Color::hsl(hue as f32, 0.7, 0.52);
     }
-    // The picked game's art fills the screen.
-    let pick = state.pick;
-    let handle = art
-        .entry(pick)
-        .or_insert_with(|| {
-            let (_, files) = library::read(&game.path);
-            let image = files
-                .as_ref()
-                .and_then(library::backdrop_art)
-                .unwrap_or_else(crate::ui::backdrop::fallback_image);
-            images.add(image)
-        })
-        .clone();
-    // Keep only the pick's art.
-    art.retain(|k, _| *k == pick);
-    backdrop.art = Some(handle);
 }
 
 /// The line under Your progress: the furthest room and the last finish (m5 A4).
@@ -1255,6 +1256,25 @@ mod tests {
         input.release(key);
         input.clear();
         app.update();
+    }
+
+    /// Walking the shelf respawns nothing, and the picked cover grows by tween, not by a jump
+    /// (UI foundation, #1685).
+    #[test]
+    fn walking_the_shelf_updates_it_in_place() {
+        use crate::ui::latency::node_set;
+        let mut app = screen();
+        let before = node_set(app.world_mut());
+        for key in [KeyCode::ArrowRight, KeyCode::ArrowRight, KeyCode::ArrowLeft] {
+            tap(&mut app, key);
+            assert_eq!(node_set(app.world_mut()), before, "{key:?}");
+        }
+        let pick = app.world().resource::<ShelfState>().pick;
+        let mut q = app.world_mut().query::<(&Cover, &Tween<Width>, &Tween<Height>)>();
+        for (cover, w, h) in q.iter(app.world()) {
+            let want = if cover.0 == pick { COVER_PICKED } else { COVER };
+            assert_eq!((w.to, h.to), (want.x, want.y), "cover {}", cover.0);
+        }
     }
 
     /// One cover per game; Right and Left move the pick along the shelf; Escape goes back to the

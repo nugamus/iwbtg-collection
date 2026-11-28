@@ -32,6 +32,18 @@ pub fn refresh<T: Clone + PartialEq + Send + Sync + 'static>(
     true
 }
 
+/// [`refresh`] from a system with `Commands`: queued, so it runs when the commands apply.
+pub fn queue_refresh<T: Clone + PartialEq + Send + Sync + 'static>(
+    commands: &mut Commands,
+    entity: Entity,
+    value: T,
+    build: impl FnOnce(&mut ChildSpawner, &T) + Send + 'static,
+) {
+    commands.queue(move |world: &mut World| {
+        refresh(world, entity, &value, build);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

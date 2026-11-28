@@ -44,6 +44,8 @@ const GAP: f32 = 6.0;
 const ROW_X: f32 = 470.0;
 /// The band's centre line: 470 px down (450 in the initial state).
 const CY: f32 = 470.0;
+/// The artboard's height: the middle of the page is laid out in it.
+const DESIGN_H: f32 = 1080.0;
 const CY_INITIAL: f32 = 450.0;
 /// The fruit's pixel scale: 11x alone in the middle, 7.6x beside the band.
 const FRUIT_SCALE_INITIAL: f32 = 11.0;
@@ -289,10 +291,10 @@ impl Plugin for MenuPlugin {
     }
 }
 
-/// The menu's root: everything under it goes when the level changes.
+/// The menu's root, built once per visit (it goes when the menu is left).
 #[derive(Component)]
 struct Root {
-    /// The level it was built for.
+    /// The level its slots show.
     level: Level,
 }
 
@@ -396,46 +398,132 @@ fn pick_art(paths: &[std::path::PathBuf], start: usize) -> Option<Image> {
 /// How many packages the menu reads looking for key art.
 const ART_TRIES: usize = 6;
 
-/// Builds the page when the level changes (and on entering). From the initial level the fruit
-/// slides and shrinks into place; the band's buttons grow from nothing.
-#[allow(clippy::too_many_arguments, reason = "the page's parts")]
-fn rebuild(
-    mut commands: Commands,
-    menu: Res<MainMenu>,
-    roots: Query<(Entity, &Root)>,
-    camera: Query<Entity, With<MenuCamera>>,
-    mode: Option<Res<Mode>>,
-    stats: Option<Res<crate::stats::Stats>>,
-    reduced: Option<Res<crate::ui::motion::ReducedMotion>>,
-    mut images: ResMut<Assets<Image>>,
-    mut fruit: Local<Option<Handle<Image>>>,
-) {
-    if !menu.is_changed() {
+/// The parts of the page that change with the level. Each is a slot (a full-page node that takes
+/// no pointer) whose children are built from the level alone (`ui::live`): a level change
+/// rebuilds these, and nothing else (UI foundation, #1684).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+enum Slot {
+    Glow,
+    Row,
+    Fruit,
+    Wordmark,
+}
+
+/// A part shown only at the initial level (`Initial`), or only past it (`Open`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+enum ShownAt {
+    Initial,
+    Open,
+}
+
+/// A full-page node for a part of the page: it takes no pointer, so the parts under it stay
+/// clickable.
+fn page_node() -> (Node, Pickable) {
+    (
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        Pickable::IGNORE,
+    )
+}
+
+/// Builds the page once on entering, then follows the level: the slots are rebuilt for the new
+/// level and the parts of the other level hidden. A focus change touches none of it (`looks` and
+/// `caption` update the buttons in place). From the initial level the fruit slides and shrinks
+/// into place; the band's buttons grow from nothing.
+fn rebuild(world: &mut World, mut fruit: Local<Option<Handle<Image>>>) {
+    if !world.is_resource_changed::<MainMenu>() {
         return;
     }
-    let mut from = None;
-    for (entity, root) in &roots {
-        if root.level == menu.level {
-            return;
+    let level = world.resource::<MainMenu>().level;
+    let root = world.query::<(Entity, &Root)>().iter(world).next().map(|(e, r)| (e, r.level));
+    let from = match root {
+        Some((_, built)) if built == level => return,
+        Some((e, built)) => {
+            world.entity_mut(e).insert(Root { level });
+            Some(built)
         }
-        from = Some(root.level);
-        commands.entity(entity).despawn();
-    }
-    let Ok(camera) = camera.single() else {
-        return;
+        None => {
+            let Some(camera) = world.query_filtered::<Entity, With<MenuCamera>>().iter(world).next() else {
+                return;
+            };
+            if fruit.is_none() {
+                *fruit = Some(
+                    world
+                        .resource_mut::<Assets<Image>>()
+                        .add(crate::pause::to_bevy(&crate::pause::bundled_fruit())),
+                );
+            }
+            spawn_page(world, camera, level);
+            None
+        }
     };
-    let mode = mode.as_deref().copied().unwrap_or_default();
-    let fruit = fruit
-        .get_or_insert_with(|| images.add(crate::pause::to_bevy(&crate::pause::bundled_fruit())))
-        .clone();
-    let animate = !reduced.is_some_and(|r| r.0);
+    let mode = world.get_resource::<Mode>().copied().unwrap_or_default();
+    let focus = world.resource::<MainMenu>().focus;
+    let animate = !world.get_resource::<crate::ui::motion::ReducedMotion>().is_some_and(|r| r.0);
     let slide = animate && from == Some(Level::Initial);
-    let empty = crate::stats::Book::default();
-    let book = stats.as_ref().map_or(&empty, |s| &s.book);
-    let player = Card::from_book(book, &profile_name(), COLLECTION_GAMES);
-    let level = menu.level;
     let grow = animate && from.is_some();
-    commands
+    let fruit = fruit.clone().unwrap_or_default();
+    let slots: Vec<(Entity, Slot)> = world.query::<(Entity, &Slot)>().iter(world).map(|(e, s)| (e, *s)).collect();
+    for (e, slot) in slots {
+        let fruit = fruit.clone();
+        crate::ui::live::refresh(world, e, &level, |c, level| {
+            let level = *level;
+            match slot {
+                Slot::Glow => {
+                    c.spawn(mode_glow(level, mode));
+                }
+                Slot::Row if level != Level::Initial => {
+                    c.spawn(row(level, focus, grow));
+                }
+                Slot::Row => {}
+                Slot::Fruit => {
+                    c.spawn(fruit_block(level, fruit, slide));
+                }
+                Slot::Wordmark => {
+                    c.spawn(wordmark(level, slide));
+                }
+            }
+        });
+    }
+    let initial = level == Level::Initial;
+    let mut parts = world.query::<(&ShownAt, &mut Visibility)>();
+    for (at, mut v) in parts.iter_mut(world) {
+        let want = if (*at == ShownAt::Initial) == initial {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *v != want {
+            *v = want;
+        }
+    }
+}
+
+/// The page: built once per visit to the menu. The slots are filled in by [`rebuild`].
+fn spawn_page(world: &mut World, camera: Entity, level: Level) {
+    let mode = world.get_resource::<Mode>().copied().unwrap_or_default();
+    let empty = crate::stats::Book::default();
+    let player = {
+        let book = world.get_resource::<crate::stats::Stats>().map_or(&empty, |s| &s.book);
+        Card::from_book(book, &profile_name(), COLLECTION_GAMES)
+    };
+    let shown = |at: ShownAt| {
+        (
+            at,
+            if (at == ShownAt::Initial) == (level == Level::Initial) {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            },
+        )
+    };
+    world
         .spawn((
             Root { level },
             Node {
@@ -448,37 +536,50 @@ fn rebuild(
             DespawnOnExit(AppScreen::Menu),
         ))
         .with_children(|page| {
-            page.spawn(mode_glow(level, mode));
-            if level != Level::Initial {
-                page.spawn(band());
-                page.spawn(row(level, menu.focus, grow));
-                page.spawn(caption_block());
-            }
-            page.spawn(fruit_block(level, fruit, slide));
-            page.spawn(wordmark(level, slide));
-            if level == Level::Initial {
-                page.spawn(press_any_key());
-            } else {
-                page.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(0.0),
-                        right: Val::Px(0.0),
-                        top: Val::Px(0.0),
-                        ..default()
-                    },
-                    children![toolbar(mode)],
-                ));
-                page.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        right: Val::Px(EDGE),
-                        bottom: Val::Px(EDGE_BOTTOM),
-                        ..default()
-                    },
-                    children![card(&player, Variant::Footer)],
-                ));
-            }
+            // The middle of the artboard (glow, band, fruit, caption) stays centred when a
+            // narrow window makes the page taller than 1080 design px (#1692).
+            page.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    width: Val::Percent(100.0),
+                    top: Val::Percent(50.0),
+                    height: Val::Px(DESIGN_H),
+                    margin: UiRect::top(Val::Px(-DESIGN_H / 2.0)),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|page| {
+                page.spawn((Slot::Glow, page_node()));
+                page.spawn((band(), shown(ShownAt::Open)));
+                page.spawn((Slot::Row, page_node()));
+                page.spawn((caption_block(), shown(ShownAt::Open)));
+                page.spawn((Slot::Fruit, page_node()));
+                page.spawn((Slot::Wordmark, page_node()));
+                page.spawn((press_any_key(), shown(ShownAt::Initial)));
+            });
+            page.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    right: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    ..default()
+                },
+                shown(ShownAt::Open),
+                children![toolbar(mode)],
+            ));
+            page.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    right: Val::Px(EDGE),
+                    bottom: Val::Px(EDGE_BOTTOM),
+                    ..default()
+                },
+                shown(ShownAt::Open),
+                children![card(&player, Variant::Footer)],
+            ));
             page.spawn(footer());
         });
 }
@@ -1280,6 +1381,42 @@ mod tests {
         assert_eq!(*app.world().resource::<Mode>(), Mode::Classic);
     }
 
+    /// The page is built once: moving the focus spawns and despawns nothing, and a level change
+    /// rebuilds only the level's slots (UI foundation, #1684).
+    #[test]
+    fn the_page_updates_in_place() {
+        use crate::ui::latency::node_set;
+        let mut app = app();
+        let root = app.world_mut().query_filtered::<Entity, With<Root>>().single(app.world()).expect("the page is built");
+        let lasting = |app: &mut App| -> Vec<Entity> {
+            let mut q = app.world_mut().query_filtered::<Entity, (With<ShownAt>, Without<Slot>)>();
+            let mut v: Vec<Entity> = q.iter(app.world()).collect();
+            v.sort();
+            v
+        };
+        let parts = lasting(&mut app);
+        assert_eq!(parts.len(), 5, "band, caption, press any key, toolbar, card");
+        press(&mut app, KeyCode::KeyQ);
+        let top = node_set(app.world_mut());
+        for key in [KeyCode::ArrowRight, KeyCode::ArrowRight, KeyCode::ArrowLeft] {
+            press(&mut app, key);
+            assert_eq!(node_set(app.world_mut()), top, "{key:?} moved the focus in place");
+        }
+        assert_eq!(menu(&app).focus, 1);
+        press(&mut app, KeyCode::ArrowLeft);
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(menu(&app).level, Level::Play);
+        press(&mut app, KeyCode::Escape);
+        assert_eq!(menu(&app).level, Level::Top);
+        assert!(app.world().get_entity(root).is_ok(), "the same page");
+        assert_eq!(lasting(&mut app), parts, "the lasting parts were kept");
+        let open = |app: &mut App, at: ShownAt| {
+            let mut q = app.world_mut().query::<(&ShownAt, &Visibility)>();
+            q.iter(app.world()).filter(|(a, _)| **a == at).all(|(_, v)| *v == Visibility::Inherited)
+        };
+        assert!(open(&mut app, ShownAt::Open) && !open(&mut app, ShownAt::Initial));
+    }
+
     /// The caption follows the focus, and sits under the focused mode.
     #[test]
     fn the_caption_says_what_the_focused_mode_is() {
@@ -1293,6 +1430,29 @@ mod tests {
         let (line, sub) = caption_for(Level::Play, 0, Mode::TimeAttack, facts);
         assert!(line.starts_with("The game stripped"), "Back keeps the mode's caption");
         assert_eq!(sub, "20 games · 13 cleared");
+    }
+
+    /// Every level's band, its widest button focused, ends inside the narrowest page the shell
+    /// lays out, with the shear's overhang and the right margin (#1692).
+    #[test]
+    fn the_widest_band_fits_the_narrowest_page() {
+        for level in [Level::Top, Level::Play] {
+            let actions = buttons(level);
+            let widest = (0..actions.len())
+                .map(|focus| {
+                    actions
+                        .iter()
+                        .enumerate()
+                        .map(|(i, a)| if i == focus { a.widths().1 } else { a.widths().0 })
+                        .sum::<f32>()
+                })
+                .fold(0.0, f32::max);
+            let end = ROW_X + widest + GAP * (actions.len() - 1) as f32 + BAND_H * 0.1;
+            assert!(
+                end + EDGE <= super::super::select::MIN_WIDTH,
+                "{level:?} ends at {end}"
+            );
+        }
     }
 
     /// The artboard's numbers: the fruit 160 x 182 at (150, 373) beside the band, 231 x 264 in

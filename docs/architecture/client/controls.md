@@ -6,6 +6,8 @@ Part of [the client](../client.md).
 picked game's actions with the labels its package gives the four extra actions, and rebinding of
 the global bindings.
 
+**Updating (#1686).** `rebuild` follows the panel's state in place (UI foundation, [UI](ui.md)): the game list is rebuilt only when the search changes the games shown (`live::queue_refresh` keyed on them); Up, Down, a click and the wheel only change the picked row's button kind (`ButtonLook::set_kind`) and the list column's offset; the action columns are rebuilt only when what they show changes (the picked game, the bindings, the row listening for a key, the error).
+
 `iwbtg-client --controls <folder> [--screenshot <png>]` is the entry for now, and the documented
 one: there is no settings screen yet (#47 is still a user question) and no pause-menu row (a new
 row is a visible change with no approved artboard), so the panel is opened from the command line

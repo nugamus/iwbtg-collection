@@ -34,6 +34,8 @@ pub struct MapInfo {
     pub name: String,
     /// The star rating; `None` until ratings exist (#111).
     pub stars: Option<f32>,
+    /// The map's stages by name, in order (game select's stage strip, #148).
+    pub stages: Vec<String>,
 }
 
 /// One package of the folder.
@@ -84,6 +86,7 @@ impl GameInfo {
                         SINGLE_MAP.to_owned()
                     },
                     stars: None,
+                    stages: m.stages.iter().map(|st| st.name.get_ref().clone()).collect(),
                 })
                 .collect(),
         }
@@ -181,6 +184,8 @@ struct Preview {
     /// The portrait cut of the key art for Classic's shelf ([`cover_image`]).
     cover: Image,
     fruit: Image,
+    /// The whole key art, for the backdrop behind the pick (#148).
+    backdrop: Image,
 }
 
 /// The folder's games, kept between runs: their metadata at once, and their previews (key art
@@ -198,6 +203,9 @@ pub struct Library {
     pub cover: Vec<Option<Handle<Image>>>,
     /// Each game's fruit for the Cleared mark ([`fruit_image`]); `None` as for `art`.
     pub fruit: Vec<Option<Handle<Image>>>,
+    /// Each game's whole key art for the backdrop (built off the UI thread, so a pick never
+    /// reads a package on it); `None` as for `art`.
+    pub backdrop: Vec<Option<Handle<Image>>>,
     /// The fruit drawn while a game's own has not arrived.
     pub placeholder_fruit: Handle<Image>,
     pub records: Vec<Records>,
@@ -233,6 +241,7 @@ impl Library {
                         art: strip_image(&full),
                         cover: cover_image(&full),
                         fruit: fruit_image(files.as_ref()),
+                        backdrop: full,
                     };
                     if done_tx.send(preview).is_err() {
                         break;
@@ -246,6 +255,7 @@ impl Library {
             art: Vec::new(),
             cover: Vec::new(),
             fruit: Vec::new(),
+            backdrop: Vec::new(),
             placeholder_fruit,
             records: Vec::new(),
             keys: Vec::new(),
@@ -265,6 +275,7 @@ impl Library {
             lib.art.push(None);
             lib.cover.push(None);
             lib.fruit.push(None);
+            lib.backdrop.push(None);
             lib.records.push(Records::default());
             lib.keys.push(path_key(path));
         }
@@ -299,6 +310,7 @@ impl Library {
                 self.art[i] = None;
                 self.cover[i] = None;
                 self.fruit[i] = None;
+                self.backdrop[i] = None;
                 self.revision = self.revision.wrapping_add(1);
             }
         }
@@ -339,6 +351,7 @@ impl Library {
                         self.art[preview.index] = Some(images.add(preview.art));
                         self.cover[preview.index] = Some(images.add(preview.cover));
                         self.fruit[preview.index] = Some(images.add(preview.fruit));
+                        self.backdrop[preview.index] = Some(images.add(preview.backdrop));
                         self.revision = self.revision.wrapping_add(1);
                         changed = true;
                     }

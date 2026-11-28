@@ -464,6 +464,16 @@ pub struct ButtonLook {
     press: f32,
 }
 
+impl ButtonLook {
+    /// Turns the button into another kind (a picked row becomes `ControlOn`); its fill follows
+    /// on the next frame. Writes only when it differs.
+    pub fn set_kind(&mut self, kind: ButtonKind) {
+        if self.kind != kind {
+            self.kind = kind;
+        }
+    }
+}
+
 /// A button: `label` in the kind's style. Clicks, Enter and Space send `bevy::ui_widgets::Activate`
 /// to it; Tab moves the focus ring between buttons.
 pub fn button(label: &str, kind: ButtonKind) -> impl Bundle + use<> {
