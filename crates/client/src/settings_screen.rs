@@ -1040,7 +1040,11 @@ fn panel(c: &mut ChildSpawner, shown: &[(usize, Row)], found: usize, query: &str
                     ));
                     if !query.is_empty() {
                         c.spawn(text(
-                            &locale::format("set_found", &[("n", &found)]),
+                            &if found == 1 {
+                                locale::text("set_found_one").to_owned()
+                            } else {
+                                locale::format("set_found", &[("n", &found)])
+                            },
                             Type::barlow(13.0, 400),
                             tokens::MUTED,
                         ));
