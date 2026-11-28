@@ -25,7 +25,6 @@ use crate::ui::fonts::Type;
 use crate::ui::mode::Mode;
 use crate::ui::notice;
 use crate::ui::tokens;
-use crate::ui::widgets::text;
 
 pub mod collections;
 pub mod controls;
@@ -36,6 +35,7 @@ pub mod library;
 pub mod list;
 pub mod mod_sheet;
 pub mod practice;
+pub mod ranking;
 
 use collections::Collections;
 use filters::Filters;
@@ -52,7 +52,7 @@ pub const UNDER_TOOLBAR: f32 = 48.0;
 
 /// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
 #[derive(Component)]
-struct HintText;
+pub(super) struct HintText;
 
 /// The keys hint, and the hint when the folder holds no packages.
 const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, goes back";
@@ -188,6 +188,9 @@ impl Plugin for SelectPlugin {
             )
             .add_observer(on_click)
             .add_observer(footer::on_activate)
+            .add_observer(ranking::on_activate)
+            .init_resource::<ranking::Tab>()
+            .init_resource::<ranking::Scope>()
             .add_observer(practice::open)
             .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
@@ -220,6 +223,7 @@ impl Plugin for SelectPlugin {
                         list::want_previews,
                         list::previews,
                         hero::follow,
+                        ranking::follow,
                         collections::favorite_label,
                         collections::chips,
                     )
@@ -315,30 +319,25 @@ fn enter(
     } else {
         HINT
     };
-    // The left side (#148): the title wedge, the stats and the stage strip, then the keys, the
-    // folder and the collections under them (where m5's Details and Ranking tabs go, #151).
+    // The left side (#148): the title wedge, the stats and the stage strip, then the Details
+    // and Ranking tabs (#151); Details holds the folder and the collections until #498.
     hero::spawn(commands, camera);
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(64.0),
-            top: Val::Px(586.0),
-            // Up to the list, with room for its selected panel's slide, on a narrow page too
-            // (#1692).
-            right: Val::Px(list::FROM_RIGHT + 60.0),
-            max_width: Val::Px(860.0),
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(12.0),
-            ..default()
-        },
-        UiTargetCamera(camera),
-        DespawnOnExit(AppScreen::Select),
-        children![
-            (text(hint, Type::BODY, tokens::SOFT), HintText),
-            crate::ui::widgets::ellipsis_text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
-            collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
-        ],
-    ));
+    ranking::spawn(
+        commands,
+        camera,
+        (
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(12.0),
+                ..default()
+            },
+            children![
+                crate::ui::widgets::ellipsis_text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
+                collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
+            ],
+        ),
+    );
+    footer::hint(commands, camera, hint);
     controls::spawn(commands, camera, lib, filters);
     list::spawn(commands, camera, lib, sel, shown);
     sel
@@ -580,8 +579,8 @@ mod tests {
     }
 
     /// Moving through the list updates it in place: no UI node is spawned or despawned outside
-    /// the parts that show the pick's own data (the hero's slots, which `ui::live` rebuilds when
-    /// that data changes; UI foundation, #1685, #148).
+    /// the parts that show the pick's own data (the hero's slots and the ranking panel, which
+    /// `ui::live` rebuilds when that data changes; UI foundation, #1685, #148).
     #[test]
     fn moving_the_selection_respawns_nothing() {
         use crate::ui::latency::node_set;
@@ -598,6 +597,13 @@ mod tests {
         let lasting = |app: &mut App| {
             let world = app.world_mut();
             let mut roots: Vec<Entity> = world.query_filtered::<Entity, With<hero::HeroSlot>>().iter(world).collect();
+            roots.extend(
+                world
+                    .query::<(Entity, &ranking::Part)>()
+                    .iter(world)
+                    .filter(|(_, p)| **p == ranking::Part::RankingPanel)
+                    .map(|(e, _)| e),
+            );
             let mut inside = std::collections::BTreeSet::new();
             while let Some(e) = roots.pop() {
                 if let Some(children) = world.get::<Children>(e) {

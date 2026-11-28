@@ -107,6 +107,24 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, set: ModSet, player
     ));
 }
 
+/// The keys hint over the footer's left half; while a staged start prepares it says `Opening
+/// <name>…` (the select screen's `HintText`).
+pub(super) fn hint(commands: &mut Commands, camera: Entity, hint: &str) {
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(64.0),
+            right: Val::Px(super::list::FROM_RIGHT + 60.0),
+            bottom: Val::Px(96.0),
+            ..default()
+        },
+        Pickable::IGNORE,
+        UiTargetCamera(camera),
+        DespawnOnExit(AppScreen::Select),
+        children![(text(hint, Type::barlow(14.0, 500), tokens::MUTED), super::super::select::HintText)],
+    ));
+}
+
 /// The player card for the footer, from the stats book.
 pub(super) fn player(stats: Option<&crate::stats::Stats>) -> Card {
     let empty = crate::stats::Book::default();
