@@ -291,6 +291,7 @@ impl Library {
     }
 
     /// Whether a requested preview is still on its way (tests wait on it).
+    #[cfg(test)]
     pub fn busy(&self) -> bool {
         !self.pending.is_empty()
     }
