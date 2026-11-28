@@ -230,8 +230,8 @@ fn note() -> impl Bundle + use<> {
             .with_shadow(8.0, 24.0, tokens::black(0.5)),
         UiTransform::default(),
         UiOpacity(0.0),
-        Tween::<Opacity>::new(0.0, 1.0, tokens::motion::STANDARD, Ease::OutQuint),
-        Tween::<OffsetX>::new(-24.0, 0.0, tokens::motion::STANDARD, Ease::OutQuint),
+        Tween::<Opacity>::new(0.0, 1.0, tokens::motion::PANEL, Ease::OutQuint),
+        Tween::<OffsetX>::new(-24.0, 0.0, tokens::motion::PANEL, Ease::OutQuint),
         Pickable::IGNORE,
         // Under the notices (30), over the HUD (10) and the pause overlay (20).
         GlobalZIndex(29),

@@ -56,11 +56,12 @@ const FRUIT_X: f32 = 150.0;
 const BOB: f32 = 6.0;
 const BOB_SECONDS: f32 = 1.6;
 const PULSE_SECONDS: f32 = 2.0;
-/// The fruit slides and shrinks into place (800 ms OutExpo); buttons grow from zero (500 ms
-/// OutExpo, 40 ms apart) and widen on focus (500 ms OutElastic).
-const SLIDE_SECONDS: f32 = 0.8;
-const GROW_SECONDS: f32 = 0.5;
-const WIDEN_SECONDS: f32 = 0.5;
+/// The fruit slides and shrinks into place and the buttons grow from zero (`motion::SCREEN`,
+/// OutExpo); a button widens on focus (`motion::SELECT`, OutQuint: the player waits on it, so no
+/// elastic overshoot, #1682).
+const SLIDE_SECONDS: f32 = tokens::motion::SCREEN;
+const GROW_SECONDS: f32 = tokens::motion::SCREEN;
+const WIDEN_SECONDS: f32 = tokens::motion::SELECT;
 /// The caption under the band: 520 px wide, 22 px below it, 10 px right of the focused button.
 const CAPTION_W: f32 = 520.0;
 /// Margins of the footer line and the player card.
@@ -580,7 +581,7 @@ fn band_button(index: usize, action: Action, focused: bool, grow: bool) -> impl 
     let width = if grow {
         Tween::<Width>::new(0.0, w, GROW_SECONDS, Ease::OutExpo)
     } else {
-        Tween::<Width>::at_rest(w, WIDEN_SECONDS, Ease::OutElastic)
+        Tween::<Width>::at_rest(w, WIDEN_SECONDS, Ease::OutQuint)
     };
     let label = Type::barlow(21.0, 700);
     (
@@ -1131,7 +1132,7 @@ fn looks(
         let w = if focused && action.usable() { focus } else { rest };
         if width.finished() || width.to > 0.0 {
             if width.finished() {
-                width.ease = Ease::OutElastic;
+                width.ease = Ease::OutQuint;
                 width.duration = WIDEN_SECONDS;
             }
             width.retarget(w);

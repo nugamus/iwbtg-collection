@@ -716,7 +716,7 @@ pub fn button_with<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: 
             press: 0.0,
         },
         UiTransform::default(),
-        Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
+        Tween::<Scale>::at_rest(1.0, tokens::motion::FEEDBACK, Ease::OutQuint),
         Children::spawn(Spawn(content)),
     )
 }
@@ -814,7 +814,7 @@ pub fn switch(label: &str, hint: &str, on: bool) -> impl Bundle + use<> {
                             round(knob_fill(), 8.0),
                             SwitchKnob,
                             UiTransform::from_translation(Val2::px(knob_x, 0.0)),
-                            Tween::<OffsetX>::at_rest(knob_x, tokens::motion::QUICK, Ease::OutQuint),
+                            Tween::<OffsetX>::at_rest(knob_x, tokens::motion::SELECT, Ease::OutQuint),
                         )],
                     ),
                     (
@@ -885,7 +885,7 @@ fn button_looks(
     let step = if reduced.0 {
         1.0
     } else {
-        time.delta_secs() / tokens::motion::HOVER
+        time.delta_secs() / tokens::motion::FEEDBACK
     };
     for (entity, mut look, hovered, pressed, mut shape, mut scale) in &mut buttons {
         let toward = |v: f32, target: f32| {
@@ -1143,7 +1143,7 @@ pub fn mod_card(
         Hovered::default(),
         TabIndex(0),
         UiTransform::default(),
-        Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
+        Tween::<Scale>::at_rest(1.0, tokens::motion::FEEDBACK, Ease::OutQuint),
         card_content(code, name, description, &card, options, tag),
     )
 }
@@ -1209,7 +1209,7 @@ fn mod_card_looks(
     let step = if reduced.0 {
         1.0
     } else {
-        time.delta_secs() / tokens::motion::HOVER
+        time.delta_secs() / tokens::motion::FEEDBACK
     };
     for (entity, mut card, hovered, pressed, mut shape, mut scale) in &mut cards {
         let target = if hovered.get() { 1.0 } else { 0.0 };
@@ -1371,7 +1371,7 @@ mod tests {
                 },
                 Hovered(false),
                 kind.rest_shape(),
-                Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
+                Tween::<Scale>::at_rest(1.0, tokens::motion::FEEDBACK, Ease::OutQuint),
             ))
             .id();
         app.update();

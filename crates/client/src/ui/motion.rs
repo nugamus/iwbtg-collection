@@ -1,5 +1,5 @@
-//! Motion: OutQuint for most transitions (300 to 500 ms), OutElastic for small pops, and a
-//! reduced-motion switch that makes every tween land at once.
+//! Motion: OutQuint for most transitions, OutElastic for small pops, and a reduced-motion switch
+//! that makes every tween land at once. How long each takes is a role in `tokens::motion` (#1682).
 //!
 //! A `Tween<P>` drives one property `P` of its entity: `OffsetX`/`OffsetY` (a `UiTransform`
 //! translation, so layout does not move), `Scale`, `Width` (`Node::width`) or `Opacity`

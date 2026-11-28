@@ -233,24 +233,24 @@ pub fn star_color(stars: f32) -> Color {
         .map_or(STAR_RAMP[0].1, |(_, c)| *c)
 }
 
-/// Motion durations in seconds (README, Motion).
-#[allow(
-    dead_code,
-    reason = "the full scale for the screens; the gallery uses part of it"
-)]
+/// Motion durations in seconds, by role (UI foundation, #1682). Every tween in the client takes
+/// its length from one of these, never a literal. The feel is osu!lazer's (user, 2026-11-28): an
+/// answer to a key or a click starts the same frame and what the player waits on settles fast;
+/// longer motion is kept for things nobody waits on. This replaces the m4 README's 300-500 ms.
 pub mod motion {
-    /// Most transitions (OutQuint).
-    pub const STANDARD: f32 = 0.4;
-    /// The shortest OutQuint transition.
-    pub const QUICK: f32 = 0.3;
-    /// The longest OutQuint transition.
-    pub const SLOW: f32 = 0.5;
-    /// Small pops (OutElastic).
-    pub const POP: f32 = 0.5;
-    /// Hover and press feedback on buttons.
-    pub const HOVER: f32 = 0.15;
-    /// Leaderboard rows changing place (OutQuint).
-    pub const REORDER: f32 = 0.45;
+    /// Hover and press: the answer to the pointer or a key (OutQuint).
+    pub const FEEDBACK: f32 = 0.1;
+    /// A selection or focus moving: a list's selected entry sliding out, a switch's knob, a menu
+    /// button widening (OutQuint; never elastic, the player is waiting on it).
+    pub const SELECT: f32 = 0.15;
+    /// Panels and sheets opening, lists scrolling and entries fading (OutQuint).
+    pub const PANEL: f32 = 0.2;
+    /// A screen changing: its big slides and the backdrop's art cross-fade (OutQuint or OutExpo).
+    pub const SCREEN: f32 = 0.3;
+    /// Motion nobody waits on: leaderboard rows changing place, a notice arriving (OutQuint).
+    pub const AMBIENT: f32 = 0.35;
+    /// An accent pop (OutElastic): your leaderboard row widening. Only on things nobody waits on.
+    pub const ACCENT: f32 = 0.4;
     /// How long the pace flash holds before it fades back to your time.
     pub const PACE_HOLD: f32 = 3.0;
 }

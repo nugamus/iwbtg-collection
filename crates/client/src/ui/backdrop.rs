@@ -41,7 +41,7 @@ pub mod dim {
 pub const DEFAULT_BLUR: f32 = 0.6;
 
 /// How long the art takes to cross-fade, seconds.
-const FADE: f32 = 0.4;
+const FADE: f32 = crate::ui::tokens::motion::SCREEN;
 
 /// Adds the material, the camera and the systems. `UiKitPlugin` adds it; the game screen adds it
 /// itself when the kit is not loaded.

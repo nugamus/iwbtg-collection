@@ -258,13 +258,13 @@ pub fn clip(message: &str) -> String {
 
 /// The notice: a sheared dark card with an accent band on the left, a capital heading in the
 /// accent colour and the message under it in soft ink, wrapped to the stack's width (the leaderboard column's in a game). It slides
-/// in from the left and fades in (OutQuint, 400 ms).
+/// in from the left and fades in (OutQuint, `tokens::motion::AMBIENT`).
 fn notice(kind: Kind, message: &str, from_above: bool) -> impl Bundle + use<> {
     let tone = kind.tone();
     let (dx, dy, seconds) = if from_above {
-        (0.0, -24.0, 0.6)
+        (0.0, -24.0, tokens::motion::AMBIENT)
     } else {
-        (-24.0, 0.0, tokens::motion::STANDARD)
+        (-24.0, 0.0, tokens::motion::AMBIENT)
     };
     (
         Node {
