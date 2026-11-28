@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T17:28:34Z",
+ "generated_at": "2026-11-28T17:38:16Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,16 +126,16 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 22,
-   "closed": 50,
+   "open": 20,
+   "closed": 52,
    "total": 72,
-   "pct_closed": 69.4,
+   "pct_closed": 72.2,
    "size_points": 38,
    "sizes": {
     "size:S": 10,
     "size:M": 4,
     "size:L": 2,
-    "unknown": 6
+    "unknown": 4
    },
    "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
    "feeds_from": "client crate, design mockups, games repo catalog",
@@ -262,15 +262,15 @@
  ],
  "activity": {
   "totals": {
-   "issues": 1004,
-   "open": 278,
-   "closed": 726,
-   "pct_closed": 72.3
+   "issues": 1005,
+   "open": 277,
+   "closed": 728,
+   "pct_closed": 72.4
   },
-  "open_prs": 3,
+  "open_prs": 4,
   "process": {
-   "in-progress": 14,
-   "triage": 71,
+   "triage": 70,
+   "in-progress": 13,
    "agent-ready": 107,
    "needs-user": 28,
    "blocked": 25,
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 69
+    "count": 67
    },
    {
     "area": "area:format",
@@ -323,6 +323,35 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1628,
+    "title": "Screenshot checks cannot render a non-English UI (#196 follow-up)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1628",
+    "labels": [
+     "area:client",
+     "triage"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:37:53Z",
+    "closed_at": "2026-11-28T17:37:53Z",
+    "created_at": "2026-11-26T17:53:34Z"
+   },
+   {
+    "number": 1691,
+    "title": "UI foundation: respawn guard tests for pause, results and HUD (#1686 follow-up)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1691",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:31:12Z",
+    "closed_at": "2026-11-28T17:31:12Z",
+    "created_at": "2026-11-28T16:20:27Z"
+   },
    {
     "number": 148,
     "title": "Game select: layout, title wedge, stats, stage strip and footer",
@@ -413,39 +442,71 @@
     "updated_at": "2026-11-28T16:41:22Z",
     "closed_at": "2026-11-28T16:41:22Z",
     "created_at": "2026-11-28T15:42:34Z"
+   }
+  ],
+  "in_progress": [
+   {
+    "number": 106,
+    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:37:34Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:29Z"
    },
    {
-    "number": 1683,
-    "title": "UI foundation 3: measure responsiveness (input frame time readout, respawn guard tests)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1683",
+    "number": 1613,
+    "title": "UI: say Time Attack / Classic instead of Ranked mode / Play original on loading, results, HUD",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1613",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:37:02Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T14:59:02Z"
+   },
+   {
+    "number": 1664,
+    "title": "Settings: frame limit row (m5 C1 Graphics)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1664",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:34:24Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:44:10Z"
+   },
+   {
+    "number": 151,
+    "title": "Game select: Ranking tab and Random",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/151",
     "labels": [
      "size:S",
      "area:client",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:38:32Z",
-    "closed_at": "2026-11-28T16:38:32Z",
-    "created_at": "2026-11-28T15:42:38Z"
+    "updated_at": "2026-11-28T17:31:48Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:57:26Z"
    },
-   {
-    "number": 1681,
-    "title": "UI foundation 1: focus and live parts in the kit; Settings overlay on them",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1681",
-    "labels": [
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:17:01Z",
-    "closed_at": "2026-11-28T16:17:01Z",
-    "created_at": "2026-11-28T15:42:31Z"
-   }
-  ],
-  "in_progress": [
    {
     "number": 1626,
     "title": "Localise the remaining client screens and widen the string guard (#196 follow-up)",
@@ -474,67 +535,6 @@
     "updated_at": "2026-11-28T17:18:01Z",
     "closed_at": null,
     "created_at": "2026-11-28T17:13:54Z"
-   },
-   {
-    "number": 1691,
-    "title": "UI foundation: respawn guard tests for pause, results and HUD (#1686 follow-up)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1691",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:14:46Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T16:20:27Z"
-   },
-   {
-    "number": 1613,
-    "title": "UI: say Time Attack / Classic instead of Ranked mode / Play original on loading, results, HUD",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1613",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:05:31Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T14:59:02Z"
-   },
-   {
-    "number": 151,
-    "title": "Game select: Ranking tab and Random",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/151",
-    "labels": [
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:54Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:26Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T15:43:25Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
    }
   ],
   "needs_user": [
@@ -721,7 +721,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 193,
+  "closed_7d": 194,
   "opened_7d": 166,
   "burnup": [
    {
@@ -741,8 +741,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 1004,
-    "closed": 726
+    "created": 1005,
+    "closed": 728
    }
   ]
  },
