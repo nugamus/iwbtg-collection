@@ -28,6 +28,7 @@
 //! (`assets/ui/cherry.png`). The game's own P-key pause is sim input and stays the game's
 //! (docs/architecture/client.md, Pause menu).
 
+mod options;
 mod page;
 
 use bevy::audio::AudioSink;
@@ -65,13 +66,21 @@ pub enum Item {
     Continue,
     RetryFromSave,
     RestartRun,
+    /// The Options view (`options.rs`, m5 D15).
+    Options,
     Quit,
 }
 
 impl Item {
-    pub const ALL: [Item; 4] = [Item::Continue, Item::RetryFromSave, Item::RestartRun, Item::Quit];
+    pub const ALL: [Item; 5] = [
+        Item::Continue,
+        Item::RetryFromSave,
+        Item::RestartRun,
+        Item::Options,
+        Item::Quit,
+    ];
     /// Classic has no run to restart: its items.
-    pub const CLASSIC: [Item; 3] = [Item::Continue, Item::RetryFromSave, Item::Quit];
+    pub const CLASSIC: [Item; 4] = [Item::Continue, Item::RetryFromSave, Item::Options, Item::Quit];
 
     /// The items of a mode, top to bottom.
     pub fn list(classic: bool) -> &'static [Item] {
@@ -83,6 +92,7 @@ impl Item {
             Item::Continue => locale::text("pause_continue"),
             Item::RetryFromSave => locale::text("pause_retry_from_save"),
             Item::RestartRun => locale::text("pause_restart_run"),
+            Item::Options => locale::text("pause_options"),
             Item::Quit if classic => locale::text("pause_back_to_shelf"),
             Item::Quit => locale::text("pause_quit_to_select"),
         }
@@ -95,6 +105,7 @@ impl Item {
             (Item::RetryFromSave, true) => locale::text("pause_retry_sub_classic"),
             (Item::RetryFromSave, false) => locale::text("pause_retry_sub"),
             (Item::RestartRun, _) => locale::text("pause_restart_sub"),
+            (Item::Options, _) => locale::text("pause_options_sub"),
             (Item::Quit, true) => locale::text("pause_back_to_shelf_sub"),
             (Item::Quit, false) => locale::text("pause_quit_sub"),
         }
@@ -109,7 +120,7 @@ impl Item {
             (Item::RetryFromSave, true) => "Y".to_owned(),
             (Item::RestartRun, false) => locale::format("pause_hold_key", &[("key", &"`")]),
             (Item::RestartRun, true) => locale::format("pause_hold_key", &[("key", &"Back")]),
-            (Item::Quit, _) => String::new(),
+            (Item::Options | Item::Quit, _) => String::new(),
         }
     }
 
@@ -136,8 +147,9 @@ fn parse_item(s: &str) -> Result<Item, String> {
         "continue" => Ok(Item::Continue),
         "retry" => Ok(Item::RetryFromSave),
         "restart" => Ok(Item::RestartRun),
+        "options" => Ok(Item::Options),
         "quit" => Ok(Item::Quit),
-        _ => Err("an item is continue, retry, restart or quit".to_string()),
+        _ => Err("an item is continue, retry, restart, options or quit".to_string()),
     }
 }
 
@@ -145,7 +157,7 @@ fn parse_item(s: &str) -> Result<Item, String> {
 #[derive(clap::Args, Debug, Clone, Copy, Default)]
 pub struct PauseArgs {
     /// Screenshot checks: open the pause menu at once with this item selected (continue, retry,
-    /// restart or quit).
+    /// restart, options (its view open) or quit).
     #[arg(long, hide = true, value_name = "ITEM", value_parser = parse_item)]
     pub pause_preview: Option<Item>,
 }
@@ -186,6 +198,12 @@ pub struct Menu {
     hold: Option<Hold>,
     /// The run is older than [`HOLD_AFTER_SECONDS`]: destructive items need a hold.
     long: bool,
+    /// The Options view shows in the run card's place (`options.rs`).
+    pub options: bool,
+    /// The Options view's focused row.
+    pub opt: options::Opt,
+    /// A change to an option asked for this frame, done by [`act`].
+    adjust: Option<options::Adjust>,
 }
 
 /// A destructive item waiting for its hold: what picked it and how long it has been held.
@@ -245,6 +263,8 @@ impl Plugin for PausePlugin {
         crate::shell::run_resource(app, move |_| Menu { preview, ..default() });
         app.add_systems(FixedUpdate, count.run_if(in_state(RunScreen::Paused)))
             .add_observer(on_activate)
+            .add_observer(options::on_activate)
+            .add_observer(options::on_track_click)
             .add_systems(
                 Update,
                 (
@@ -254,12 +274,14 @@ impl Plugin for PausePlugin {
                         s.is_some_and(|s| matches!(s.get(), RunScreen::Playing | RunScreen::Paused))
                     }),
                     mouse,
+                    options::hover,
                     hold,
                     act,
                     hold_audio,
                     publish,
                     draw.after(crate::screen::apply),
                     looks,
+                    options::looks,
                 )
                     .chain()
                     .in_set(crate::shell::InRun),
@@ -382,6 +404,9 @@ fn keys(
         if let Some(item) = opened {
             menu.classic = classic;
             menu.hold = None;
+            menu.adjust = None;
+            menu.options = item == Item::Options;
+            menu.opt = options::Opt::default();
             menu.selected = if Item::list(classic).contains(&item) {
                 item
             } else {
@@ -396,6 +421,10 @@ fn keys(
         return;
     }
     let collector = collector.as_deref();
+    if menu.options {
+        options_input(&mut menu, &keys, collector, &pad_pressed);
+        return;
+    }
     if let Some(c) = collector {
         for &input in &pad_pressed {
             menu.pad = true;
@@ -462,9 +491,56 @@ fn run_seconds(game: &Game) -> f64 {
     game.sim.world().tick as f64 / rate
 }
 
-/// Picks `item`, or starts its hold when it throws a long run away.
+/// The Options view's keys and pad: Up and Down move, Left and Right step a slider or flip a
+/// switch, Enter (A) flips a switch, Escape (B) goes back to the items, Start closes the menu.
+fn options_input(menu: &mut Menu, keys: &ButtonInput<KeyCode>, collector: Option<&Collector>, pad_pressed: &[PadInput]) {
+    use options::Adjust;
+    for &input in pad_pressed {
+        menu.pad = true;
+        match input {
+            PAUSE_PAD => {
+                menu.options = false;
+                menu.picked = Some(Item::Continue);
+                return;
+            }
+            PadInput::East => {
+                menu.options = false;
+                return;
+            }
+            PadInput::South => menu.adjust = Some(Adjust::Step(menu.opt, 0)),
+            PadInput::DPadUp | PadInput::StickUp => menu.opt = menu.opt.step(-1),
+            PadInput::DPadDown | PadInput::StickDown => menu.opt = menu.opt.step(1),
+            PadInput::DPadLeft | PadInput::StickLeft => menu.adjust = Some(Adjust::Step(menu.opt, -1)),
+            PadInput::DPadRight | PadInput::StickRight => menu.adjust = Some(Adjust::Step(menu.opt, 1)),
+            _ => {}
+        }
+    }
+    for &key in keys.get_just_pressed() {
+        menu.pad = false;
+        let action = bound(collector, key);
+        match (key, action) {
+            (PAUSE_KEY | KeyCode::Backspace, _) => {
+                menu.options = false;
+                return;
+            }
+            (KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space, _) | (_, Some(Action::Jump | Action::Accept)) => {
+                menu.adjust = Some(Adjust::Step(menu.opt, 0));
+            }
+            (KeyCode::ArrowUp, _) | (_, Some(Action::Up)) => menu.opt = menu.opt.step(-1),
+            (KeyCode::ArrowDown, _) | (_, Some(Action::Down)) => menu.opt = menu.opt.step(1),
+            (KeyCode::ArrowLeft, _) | (_, Some(Action::Left)) => menu.adjust = Some(Adjust::Step(menu.opt, -1)),
+            (KeyCode::ArrowRight, _) | (_, Some(Action::Right)) => menu.adjust = Some(Adjust::Step(menu.opt, 1)),
+            _ => {}
+        }
+    }
+}
+
+/// Picks `item`, or starts its hold when it throws a long run away. Options opens its view.
 fn choose(menu: &mut Menu, item: Item, source: HoldSource, long: bool) {
-    if item.destructive() && long {
+    if item == Item::Options {
+        menu.options = true;
+        menu.opt = options::Opt::default();
+    } else if item.destructive() && long {
         menu.hold = Some(Hold {
             item,
             source,
@@ -514,7 +590,8 @@ fn mouse(
     screen: Option<Res<State<RunScreen>>>,
     mut menu: ResMut<Menu>,
 ) {
-    if !is_open(screen.as_deref()) {
+    // The Options view has the pointer; the items still take clicks (`on_activate`).
+    if !is_open(screen.as_deref()) || menu.options {
         return;
     }
     let pressed = buttons
@@ -553,8 +630,13 @@ fn on_activate(
     {
         menu.selected = row.0;
         menu.pad = false;
-        // A long run's destructive item is held, not clicked (`mouse` starts that hold).
-        if !(row.0.destructive() && menu.long) {
+        if row.0 == Item::Options {
+            if !menu.options {
+                menu.options = true;
+                menu.opt = options::Opt::default();
+            }
+        } else if !(row.0.destructive() && menu.long) {
+            // A long run's destructive item is held, not clicked (`mouse` starts that hold).
             menu.picked = Some(row.0);
         }
     }
@@ -563,15 +645,19 @@ fn on_activate(
 /// Does what was picked. Every item closes the menu (back to `RunScreen::Playing`); the key edges
 /// collected while it was open are dropped, so a key pressed in the menu never reaches the game.
 fn act(world: &mut World) {
+    if let Some(adjust) = world.resource_mut::<Menu>().adjust.take() {
+        options::apply(world, adjust);
+    }
     let Some(item) = world.resource_mut::<Menu>().picked.take() else {
         return;
     };
+    world.resource_mut::<Menu>().options = false;
     crate::shell::go(world, RunScreen::Playing);
     if let Some(mut c) = world.get_resource_mut::<Collector>() {
         c.take_frame();
     }
     match item {
-        Item::Continue => {}
+        Item::Continue | Item::Options => {}
         Item::RetryFromSave => {
             if let Some(mut c) = world.get_resource_mut::<Collector>() {
                 c.press_action(Action::Restart);
@@ -903,8 +989,9 @@ fn draw(world: &mut World) {
     let card = card(world);
     let status = status(world);
     let fruit = world.resource::<Fruit>().0.clone();
+    let values = options::Values::read(world);
     let menu = world.resource::<Menu>();
-    let page = page::page(board, menu, &card, status, fruit, pad);
+    let page = page::page(board, menu, &card, status, fruit, pad, values);
     // Centred in the window at the board's scale.
     let (w, h) = (win.x / scale, win.y / scale);
     world.spawn((
@@ -1110,7 +1197,9 @@ mod tests {
         assert_eq!(Item::Continue.step(-1, false), Item::Quit);
         assert_eq!(Item::Quit.step(1, false), Item::Continue);
         assert_eq!(Item::RetryFromSave.step(1, false), Item::RestartRun);
-        assert_eq!(Item::RetryFromSave.step(1, true), Item::Quit, "Classic has no Restart run");
+        assert_eq!(Item::RetryFromSave.step(1, true), Item::Options, "Classic has no Restart run");
+        assert_eq!(Item::RestartRun.step(1, false), Item::Options);
+        assert_eq!(parse_item("options"), Ok(Item::Options));
         assert_eq!(parse_item("Restart"), Ok(Item::RestartRun));
         assert!(parse_item("menu").is_err());
     }
@@ -1453,7 +1542,7 @@ mod tests {
         world.run_system_once(draw).unwrap();
         let built = crate::ui::latency::node_set(&mut world);
         assert!(built.len() > 10, "the page is open");
-        for item in [Item::RetryFromSave, Item::RestartRun, Item::Quit, Item::Continue] {
+        for item in [Item::RetryFromSave, Item::RestartRun, Item::Options, Item::Quit, Item::Continue] {
             world.resource_mut::<Menu>().selected = item;
             world.run_system_once(draw).unwrap();
             assert_eq!(crate::ui::latency::node_set(&mut world), built, "{item:?}");
@@ -1473,5 +1562,68 @@ mod tests {
         world.get_mut::<Window>(window).unwrap().resolution = WindowResolution::new(1440, 1080);
         world.run_system_once(draw).unwrap();
         assert_ne!(crate::ui::latency::node_set(&mut world), pad, "a new board rebuilds it");
+    }
+
+    /// Options opens its view in place (#1654): the arrows move and step there, Escape goes back
+    /// to the items and the menu stays open; showing the view respawns nothing.
+    #[test]
+    fn options_opens_its_view_and_escape_goes_back() {
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::window::{PrimaryWindow, WindowResolution};
+        use options::{Adjust, Opt};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.init_resource::<ButtonInput<KeyCode>>();
+        world.init_resource::<UiScale>();
+        world.init_resource::<Menu>();
+        world.insert_resource(Fruit(Handle::default()));
+        world.spawn((
+            Window {
+                resolution: WindowResolution::new(1920, 1080),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        on_screen(&mut world, RunScreen::Paused);
+        world.run_system_once(draw).unwrap();
+        let built = crate::ui::latency::node_set(&mut world);
+        let mut system = IntoSystem::into_system(keys);
+        system.initialize(&mut world);
+        let mut press = |world: &mut World, key: KeyCode| {
+            {
+                let mut input = world.resource_mut::<ButtonInput<KeyCode>>();
+                input.release_all();
+                input.clear();
+                input.press(key);
+            }
+            system.run((), world).unwrap();
+        };
+        world.resource_mut::<Menu>().selected = Item::Options;
+        press(&mut world, KeyCode::Enter);
+        assert!(world.resource::<Menu>().options, "Enter on Options opens the view");
+        assert!(world.resource::<Menu>().picked.is_none(), "the menu stays open");
+        press(&mut world, KeyCode::ArrowDown);
+        assert_eq!(world.resource::<Menu>().opt, Opt::Sounds);
+        press(&mut world, KeyCode::ArrowRight);
+        assert_eq!(world.resource::<Menu>().adjust, Some(Adjust::Step(Opt::Sounds, 1)));
+        world.resource_mut::<Menu>().adjust = None;
+        world.run_system_once(draw).unwrap();
+        world.run_system_once(options::looks).unwrap();
+        assert_eq!(crate::ui::latency::node_set(&mut world), built, "the view shows in place");
+        let shown = |world: &mut World| {
+            world
+                .query_filtered::<&Node, With<options::Panel>>()
+                .single(world)
+                .unwrap()
+                .display
+        };
+        assert_eq!(shown(&mut world), Display::Flex);
+        press(&mut world, KeyCode::Escape);
+        assert!(!world.resource::<Menu>().options, "Escape goes back to the items");
+        assert!(world.resource::<Menu>().picked.is_none(), "and does not close the menu");
+        world.run_system_once(options::looks).unwrap();
+        assert_eq!(shown(&mut world), Display::None);
+        assert_eq!(screen(&world), RunScreen::Paused);
     }
 }

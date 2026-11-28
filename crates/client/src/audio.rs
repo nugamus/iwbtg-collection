@@ -131,6 +131,8 @@ fn is_music(def: &GameDef, sound: SoundId, looping: bool) -> bool {
 pub struct AudioPlugin {
     offset_ms: u32,
     levels: Levels,
+    /// `--mute`, `IWBTG_MUTE` or a `--screenshot` run: silent whatever the volumes say.
+    muted: bool,
     /// The sound waits for the first key or click: always in a browser (unless silent),
     /// natively only under `--audio-locked`.
     locked: bool,
@@ -157,6 +159,7 @@ impl AudioPlugin {
         AudioPlugin {
             offset_ms: settings.audio_offset_ms,
             levels,
+            muted,
             locked: args.audio_locked || (web && !levels.silent()),
         }
     }
@@ -172,6 +175,7 @@ impl AudioPlugin {
                 music: 1.0,
                 sound: 1.0,
             },
+            muted: false,
             locked: false,
         }
     }
@@ -187,10 +191,12 @@ impl Plugin for AudioPlugin {
             // Belt and braces: nothing else may make a sound either.
             app.insert_resource(GlobalVolume::from(Volume::SILENT));
         }
-        let (offset_ms, levels) = (self.offset_ms, self.levels);
+        let (offset_ms, levels, muted) = (self.offset_ms, self.levels, self.muted);
         shell::run_resource(app, move |_| Queue::new(offset_ms));
         shell::run_resource(app, move |w| {
-            Sounds::new(&w.resource::<LoadedPackage>().pkg, levels)
+            let mut sounds = Sounds::new(&w.resource::<LoadedPackage>().pkg, levels);
+            sounds.muted = muted;
+            sounds
         });
         shell::run_resource(app, |_| Shake::default());
         app.add_systems(
@@ -471,6 +477,8 @@ pub struct Sounds {
     handles: HashMap<SoundId, Handle<AudioSource>>,
     mixer: Mixer,
     levels: Levels,
+    /// The run is silent whatever the volumes say ([`AudioPlugin`]'s `muted`).
+    muted: bool,
 }
 
 impl Sounds {
@@ -480,7 +488,39 @@ impl Sounds {
             handles: HashMap::new(),
             mixer: Mixer::default(),
             levels,
+            muted: false,
         }
+    }
+}
+
+/// Applies the settings' volumes now, to the voices playing and the ones to come (the pause
+/// menu's Options, #1654). A muted run stays silent, and a voice that was not started because
+/// its kind was at zero stays unstarted until the game plays it again.
+pub fn apply_levels(world: &mut World) {
+    let s = crate::settings::get();
+    let Some(mut sounds) = world.get_resource_mut::<Sounds>() else {
+        return;
+    };
+    if sounds.muted {
+        return;
+    }
+    let levels = Levels::new(&s, false);
+    sounds.levels = levels;
+    let mut voices = world.query::<(&mut Voice, Option<&mut AudioSink>, Option<&mut PlaybackSettings>)>();
+    for (mut v, sink, settings) in voices.iter_mut(world) {
+        let gain = levels.gain(v.2);
+        if (gain - v.1).abs() < 1e-6 {
+            continue;
+        }
+        // The mixer's own volume for this voice, without the old gain.
+        let rescale = |current: f32| if v.1 > 0.0 { current / v.1 * gain } else { 0.0 };
+        if let Some(mut sink) = sink {
+            let now = rescale(sink.volume().to_linear());
+            sink.set_volume(Volume::Linear(now));
+        } else if let Some(mut settings) = settings {
+            settings.volume = Volume::Linear(rescale(settings.volume.to_linear()));
+        }
+        v.1 = gain;
     }
 }
 
@@ -505,9 +545,10 @@ pub fn reset(world: &mut World) {
     }
 }
 
-/// A playing copy, by what it plays, and the volume factor of its kind ([`Levels`]).
+/// A playing copy, by what it plays, the volume factor of its kind ([`Levels`]) and whether
+/// that kind is music.
 #[derive(Component)]
-pub struct Voice(SoundTarget, f32);
+pub struct Voice(SoundTarget, f32, bool);
 
 /// Seeks a looping tune back when it drifts more than this many ticks from the tick clock
 /// (docs/product.md, Music sync).
@@ -649,7 +690,8 @@ pub fn play(
                     volume,
                     speed,
                 } => {
-                    let gain = sounds.levels.gain(is_music(def, sound, looping));
+                    let music = is_music(def, sound, looping);
+                    let gain = sounds.levels.gain(music);
                     if gain <= 0.0 {
                         // Muted (or turned all the way down): no voice at all.
                         continue;
@@ -693,11 +735,11 @@ pub fn play(
                         commands.spawn((
                             unlock::Held(handle),
                             PlaybackSettings { speed, ..settings },
-                            Voice(target, gain),
+                            Voice(target, gain, music),
                             RUN_ONLY,
                         ))
                     } else {
-                        commands.spawn((AudioPlayer::new(handle), settings, Voice(target, gain), RUN_ONLY))
+                        commands.spawn((AudioPlayer::new(handle), settings, Voice(target, gain, music), RUN_ONLY))
                     };
                     if looping && length > 0.0 {
                         voice.insert(MusicSync::new(now_tick, f64::from(speed), length));

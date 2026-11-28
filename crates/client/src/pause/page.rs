@@ -142,11 +142,13 @@ pub fn page(
     status: String,
     fruit: Handle<Image>,
     pad: bool,
+    values: super::options::Values,
 ) -> impl Bundle + use<> {
     let card = card.clone();
     let items: Vec<Item> = Item::list(menu.classic).to_vec();
     let selected = menu.selected;
     let classic = menu.classic;
+    let open = menu.options;
     (
         Node {
             width: Val::Px(board.size.x),
@@ -168,17 +170,33 @@ pub fn page(
             0.45,
         )),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
-            menu_column(c, board, &items, selected, classic, status, fruit, pad);
-            run_card(c, board, &card);
-            c.spawn(Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                right: Val::Px(0.0),
-                bottom: Val::Px(board.hint_bottom),
-                justify_content: JustifyContent::Center,
-                ..default()
-            })
-            .with_child(crate::ui::hints::hints(&hints(classic, pad)));
+            menu_column(c, board, &items, selected, classic, status, fruit, pad, open);
+            run_card(c, board, &card, !open);
+            super::options::panel(
+                c,
+                Vec2::new(board.card_x, board.menu_y),
+                board.card_w,
+                values,
+                accent(classic),
+                open,
+            );
+            // The items' hints and the Options view's; `options::looks` shows one.
+            for options in [false, true] {
+                let list = if options { options_hints(pad) } else { hints(classic, pad) };
+                c.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(0.0),
+                        right: Val::Px(0.0),
+                        bottom: Val::Px(board.hint_bottom),
+                        justify_content: JustifyContent::Center,
+                        display: if options == open { Display::Flex } else { Display::None },
+                        ..default()
+                    },
+                    super::options::Hints(options),
+                ))
+                .with_child(crate::ui::hints::hints(&list));
+            }
         })),
     )
 }
@@ -196,6 +214,15 @@ fn hints(classic: bool, pad: bool) -> Vec<(&'static str, &'static str)> {
     h
 }
 
+/// The Options view's hint bar: Choose, Adjust, Back.
+fn options_hints(pad: bool) -> Vec<(&'static str, &'static str)> {
+    vec![
+        (if pad { "D-pad" } else { "↑ ↓" }, locale::text("pause_hint_choose")),
+        (if pad { "◀ ▶" } else { "← →" }, locale::text("pause_hint_adjust")),
+        (if pad { "B" } else { "Esc" }, locale::text("pause_hint_back")),
+    ]
+}
+
 #[allow(clippy::too_many_arguments, reason = "the column's parts")]
 fn menu_column(
     c: &mut ChildSpawner,
@@ -206,6 +233,7 @@ fn menu_column(
     status: String,
     fruit: Handle<Image>,
     pad: bool,
+    open: bool,
 ) {
     let accent = accent(classic);
     c.spawn(Node {
@@ -218,11 +246,14 @@ fn menu_column(
         ..default()
     })
     .with_children(|c| {
-        c.spawn(text_leading(
-            locale::text("pause_paused"),
-            Type::condensed(board.title_size, 700).italic(),
-            tokens::INK,
-            0.9,
+        c.spawn((
+            text_leading(
+                locale::text(if open { "pause_title_options" } else { "pause_paused" }),
+                Type::condensed(board.title_size, 700).italic(),
+                tokens::INK,
+                0.9,
+            ),
+            super::options::Title,
         ));
         // The status pill: violet and still in Classic, red and pulsing in Time Attack.
         let pill_fill = if classic {
@@ -386,18 +417,22 @@ fn row(
     });
 }
 
-/// The run card on the right.
-fn run_card(c: &mut ChildSpawner, board: Board, card: &Card) {
+/// The run card on the right (hidden while the Options view shows).
+fn run_card(c: &mut ChildSpawner, board: Board, card: &Card, shown: bool) {
     let accent = accent(card.classic);
-    c.spawn(Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(board.card_x),
-        top: Val::Px(board.menu_y),
-        width: Val::Px(board.card_w),
-        flex_direction: FlexDirection::Column,
-        row_gap: Val::Px(16.0),
-        ..default()
-    })
+    c.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(board.card_x),
+            top: Val::Px(board.menu_y),
+            width: Val::Px(board.card_w),
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(16.0),
+            display: if shown { Display::Flex } else { Display::None },
+            ..default()
+        },
+        super::options::RunCard,
+    ))
     .with_children(|c| {
         // The game, its map line and pills.
         c.spawn(Node {

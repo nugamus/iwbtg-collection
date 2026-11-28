@@ -363,6 +363,7 @@ mod tests {
                 crate::audio::Voice(
                     iwbtg_sim::sound::SoundTarget::Builtin(iwbtg_sim::def::SoundId(0)),
                     1.0,
+                    true,
                 ),
                 MusicSync::new(100.0, 1.0, 10.0),
             ))
