@@ -253,7 +253,7 @@ fn sign_in() -> impl Bundle {
             Shape::fill(tokens::white(0.12)),
             children![
                 icon(Icon::SignIn, 16.0, tokens::INK),
-                text("Sign in", Type::barlow(15.0, 700), tokens::INK),
+                text(crate::locale::text("toolbar_sign_in"), Type::barlow(15.0, 700), tokens::INK),
             ],
         )],
     )
@@ -324,7 +324,7 @@ fn clock(
         return;
     }
     *last = Some((now.clone(), secs));
-    let session_line = format!("Session {}", session_time(secs));
+    let session_line = crate::locale::format("toolbar_session", &[("time", &session_time(secs))]);
     for mut t in &mut clock {
         t.0 = Type::barlow(16.0, 700).set(&now);
     }

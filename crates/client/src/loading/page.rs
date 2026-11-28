@@ -13,6 +13,7 @@ use crate::ui::tokens;
 use crate::shell::shelf::{self, Facts};
 use crate::ui::mode::Mode;
 use crate::ui::widgets::{classic_pill, mod_pill, rich, text, unranked_pill};
+use crate::locale;
 
 /// The card's left and top on the artboard, and its width.
 pub const CARD_TOP: f32 = 170.0;
@@ -127,25 +128,27 @@ fn card(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
 /// played and deaths in Classic, and when you last played (else how often you finished).
 fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
     let line = match (&facts.furthest, facts.played()) {
-        (Some(room), _) => format!("Last played up to {room}"),
-        (None, true) => {
-            "You played this game before: Continue in its own menu picks up your save.".to_owned()
-        }
-        (None, false) => "Your first time in this game.".to_owned(),
+        (Some(room), _) => locale::format("loading_last_played_up_to", &[("room", room)]),
+        (None, true) => locale::text("loading_played_before").to_owned(),
+        (None, false) => locale::text("loading_first_time").to_owned(),
     };
     let finished = if facts.finished == 0 {
-        "Not yet".to_owned()
+        locale::text("loading_not_yet").to_owned()
     } else {
         shelf::times(facts.finished)
     };
     let now = crate::stats::now_seconds();
     let (third_key, third, third_note) = match (facts.last_played, facts.last_session) {
         (Some(at), session) => (
-            "Last played",
+            locale::text("loading_last_played"),
             crate::card::ago(at, now),
-            session.map(|s| format!("{} session", shelf::clock(s.seconds))),
+            session.map(|s| locale::format("loading_session", &[("time", &shelf::clock(s.seconds))])),
         ),
-        (None, _) => ("Finished", finished, Some("in Classic".to_owned())),
+        (None, _) => (
+            locale::text("loading_finished"),
+            finished,
+            Some(locale::text("loading_in_classic").to_owned()),
+        ),
     };
     c.spawn(Node {
         flex_direction: FlexDirection::Column,
@@ -172,15 +175,15 @@ fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
         .with_children(|c| {
             number(
                 c,
-                "Time played",
+                locale::text("loading_time_played"),
                 &shelf::clock(facts.seconds),
                 Some(facts.scope().to_owned()),
             );
             number(
                 c,
-                "Deaths",
+                locale::text("loading_deaths"),
                 &crate::card::grouped(facts.deaths),
-                Some("in this game".to_owned()),
+                Some(locale::text("loading_in_this_game").to_owned()),
             );
             number(c, third_key, &third, third_note);
         });
@@ -197,7 +200,7 @@ fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
                     flex_shrink: 0.0,
                     ..default()
                 },
-                children![text("Opens", Type::LABEL, tokens::MUTED)],
+                children![text(locale::text("loading_opens"), Type::LABEL, tokens::MUTED)],
             ));
             c.spawn((
                 Node {
@@ -206,7 +209,7 @@ fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
                     ..default()
                 },
                 children![text(
-                    OPENS,
+                    locale::text("loading_opens_title"),
                     Type::barlow(15.0, 400),
                     tokens::ROW_NAME
                 )],
@@ -215,14 +218,10 @@ fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
     });
 }
 
-/// What Play opens in Classic.
-const OPENS: &str =
-    "the game's own title screen: New game, Continue and its file select work as in the original";
-
 /// Classic's line under the loader, in place of a tip.
 fn classic_note() -> impl Bundle + use<> {
     text(
-        "Classic keeps your saves and your stats. Nothing here goes on a leaderboard.",
+        locale::text("loading_classic_note"),
         Type::barlow(15.0, 400),
         tokens::MUTED,
     )
@@ -320,7 +319,7 @@ fn body(c: &mut ChildSpawner, info: &Info) {
 /// stays empty so the others keep their place.
 fn numbers(c: &mut ChildSpawner, info: &Info) {
     let pb = info.pb.clone().unwrap_or_else(|| "—".to_owned());
-    let pb_note = info.pb.is_none().then(|| "No clear yet".to_owned());
+    let pb_note = info.pb.is_none().then(|| locale::text("loading_no_clear_yet").to_owned());
     let stages = info.stages.to_string();
     c.spawn(Node {
         display: Display::Grid,
@@ -329,8 +328,8 @@ fn numbers(c: &mut ChildSpawner, info: &Info) {
         ..default()
     })
     .with_children(|c| {
-        number(c, "Your PB", &pb, pb_note);
-        number(c, "Stages", &stages, None);
+        number(c, locale::text("loading_your_pb"), &pb, pb_note);
+        number(c, locale::text("loading_stages"), &stages, None);
     });
 }
 
@@ -381,7 +380,7 @@ fn mods(c: &mut ChildSpawner, info: &Info) {
                 flex_shrink: 0.0,
                 ..default()
             },
-            children![text("Mods", Type::LABEL, tokens::MUTED)],
+            children![text(locale::text("loading_mods"), Type::LABEL, tokens::MUTED)],
         ));
         if unranked {
             c.spawn(unranked_pill());
@@ -447,17 +446,17 @@ fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool, classi
             })
             .with_children(|c| {
                 c.spawn(rich(vec![
-                    ("Loading".to_owned(), bold, tokens::INK),
-                    (" · starts by itself".to_owned(), plain, tokens::SOFT),
+                    (locale::text("loading_loading").to_owned(), bold, tokens::INK),
+                    (locale::text("loading_starts_itself").to_owned(), plain, tokens::SOFT),
                 ]));
                 c.spawn(rich(vec![
                     ("Esc".to_owned(), bold, tokens::INK),
                     (
-                        match (back, classic) {
-                            (true, true) => " back to the shelf",
-                            (true, false) => " back",
-                            (false, _) => " quit",
-                        }
+                        locale::text(match (back, classic) {
+                            (true, true) => "loading_esc_shelf",
+                            (true, false) => "loading_esc_back",
+                            (false, _) => "loading_esc_quit",
+                        })
                         .to_owned(),
                         plain,
                         tokens::SOFT,

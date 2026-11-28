@@ -778,7 +778,7 @@ fn ensure_ui(mut commands: Commands, mut viewer: ResMut<Viewer>) {
                                 UiText::Time,
                             ));
                             left.spawn((
-                                text("Playing", Type::barlow(14.0, 600), tokens::SOFT),
+                                text(crate::locale::text("viewer_playing"), Type::barlow(14.0, 600), tokens::SOFT),
                                 TextLayout::no_wrap(),
                                 UiText::State,
                             ));
@@ -796,7 +796,7 @@ fn ensure_ui(mut commands: Commands, mut viewer: ResMut<Viewer>) {
                             ));
                             right.spawn((
                                 text(
-                                    "Space play/pause · ←/→ 5 s · Shift ←/→ 30 s · , . speed · Esc close",
+                                    crate::locale::text("viewer_keys"),
                                     Type::barlow(12.0, 500),
                                     tokens::MUTED,
                                 ),
@@ -828,8 +828,8 @@ fn sync_ui(
                 fmt_ticks(viewer.total, viewer.rate)
             ),
             UiText::State => viewer.error.as_ref().map_or_else(
-                || if viewer.playing { "Playing" } else { "Paused" }.to_owned(),
-                |_| "Does not verify".to_owned(),
+                || crate::locale::text(if viewer.playing { "viewer_playing" } else { "viewer_paused" }).to_owned(),
+                |_| crate::locale::text("viewer_unverified").to_owned(),
             ),
             UiText::Speed => format!("{}x", SPEEDS[viewer.speed]),
         };

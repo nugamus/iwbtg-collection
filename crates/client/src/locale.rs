@@ -54,6 +54,12 @@ pub fn language() -> Language {
     *LANGUAGE.get_or_init(|| crate::settings::get().language)
 }
 
+/// `--language`: this run uses `language` whatever the settings file says (a screenshot check
+/// reads no settings). Only before the first lookup; `false` when a string was already read.
+pub fn set_for_run(language: Language) -> bool {
+    LANGUAGE.set(language).is_ok()
+}
+
 /// The string for `key` in the language in effect.
 pub fn text(key: &str) -> &'static str {
     text_in(language(), key)
