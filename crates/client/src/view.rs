@@ -153,10 +153,32 @@ pub(crate) struct GameCamera;
 /// whatever this is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrameCap {
+    /// In step with the display's refresh (vsync).
+    Display,
     /// At most this many frames per second.
     Fps(u32),
     /// No limit.
     Unlimited,
+}
+
+impl FrameCap {
+    /// The cap a `[display] frame_limit` setting asks for (#1664).
+    pub fn from_setting(limit: crate::settings::FrameLimit) -> FrameCap {
+        match limit {
+            crate::settings::FrameLimit::Display => FrameCap::Display,
+            crate::settings::FrameLimit::Fps(n) => FrameCap::Fps(n),
+            crate::settings::FrameLimit::Unlimited => FrameCap::Unlimited,
+        }
+    }
+
+    /// The window's present mode for this cap: vsync only for `Display`; the others pace
+    /// themselves ([`limit_frames`]).
+    pub fn present_mode(self) -> bevy::window::PresentMode {
+        match self {
+            FrameCap::Display => bevy::window::PresentMode::AutoVsync,
+            FrameCap::Fps(_) | FrameCap::Unlimited => bevy::window::PresentMode::AutoNoVsync,
+        }
+    }
 }
 
 impl Default for FrameCap {
@@ -173,10 +195,13 @@ impl std::str::FromStr for FrameCap {
         if s.eq_ignore_ascii_case("unlimited") {
             return Ok(FrameCap::Unlimited);
         }
+        if s.eq_ignore_ascii_case("display") || s.eq_ignore_ascii_case("vsync") {
+            return Ok(FrameCap::Display);
+        }
         match s.parse::<u32>() {
             Ok(n) if n >= 1 => Ok(FrameCap::Fps(n)),
             _ => Err(format!(
-                "`{s}`: expected a number of frames per second (1 or more) or `unlimited`"
+                "`{s}`: expected a number of frames per second (1 or more), `display` or `unlimited`"
             )),
         }
     }
@@ -259,9 +284,9 @@ fn frame_rect(frame: u32, (w, h): (f32, f32), image: Vec2) -> Rect {
     Rect::new(x, y, x + w, y + h)
 }
 
-/// The frame cap in force.
+/// The frame cap in force; the settings' Frame limit row changes it at once (#1664).
 #[derive(Resource)]
-struct Cap(FrameCap);
+pub(crate) struct Cap(pub(crate) FrameCap);
 
 /// Ticks and frames counted over the last full second of wall time, for the overlay.
 #[derive(Resource)]
@@ -276,10 +301,11 @@ pub(crate) struct Stats {
 /// The view's command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct ViewArgs {
-    /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
-    /// rate either way.
-    #[arg(long, value_name = "FPS", default_value = "60")]
-    pub fps: FrameCap,
+    /// Frame cap for this run: `display` (vsync), a number of frames per second, or
+    /// `unlimited`. Without it the settings' frame limit holds (`display` by default). The sim
+    /// ticks at the game's rate either way.
+    #[arg(long, value_name = "FPS")]
+    pub fps: Option<FrameCap>,
     /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
     /// default: the originals draw every step, so a blended frame shows positions the game never had.
     #[arg(long)]
@@ -566,6 +592,15 @@ fn run_inner(
         screenshot,
         ranked,
     } = args;
+    // `--fps` for this run, else the settings' frame limit (#1664). A screenshot check keeps
+    // the old fixed 60 so its frame count means the same on every machine.
+    let cap = cap.unwrap_or_else(|| {
+        if screenshot.is_some() {
+            FrameCap::Fps(60)
+        } else {
+            FrameCap::from_setting(crate::settings::get().frame_limit)
+        }
+    });
     let view = ViewPlugin {
         ranked,
         fresh_seed: screenshot.is_none(),
@@ -596,8 +631,8 @@ fn run_inner(
                 primary_window: Some(Window {
                     title,
                     resolution: (width, height).into(),
-                    // The frame cap does the pacing; vsync would pin it to the monitor.
-                    present_mode: bevy::window::PresentMode::AutoNoVsync,
+                    // Vsync for the `display` limit; a numeric cap paces itself.
+                    present_mode: cap.present_mode(),
                     ..default()
                 }),
                 ..default()
@@ -606,7 +641,7 @@ fn run_inner(
     .add_plugins((crate::render_fix::plugin, view))
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(Cap(cap))
-    .add_systems(Last, limit_frames);
+    .add_systems(Last, (present_mode, limit_frames).chain());
     plugins(&mut app);
     crate::startup_profile::mark("bevy init", clock);
     if let Some(path) = screenshot {
@@ -939,6 +974,19 @@ fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fi
     retune(&mut fixed, game.sim.world().room_speed.get(), speed);
 }
 
+/// The window follows the cap's present mode (vsync for `Display`).
+fn present_mode(cap: Res<Cap>, mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>) {
+    if !cap.is_changed() {
+        return;
+    }
+    let want = cap.0.present_mode();
+    for mut w in &mut windows {
+        if w.present_mode != want {
+            w.present_mode = want;
+        }
+    }
+}
+
 /// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
 fn limit_frames(cap: Res<Cap>, last: Local<Option<Instant>>) {
     // A browser paces the window with animation frames, and `std::thread::sleep` panics on
@@ -951,6 +999,7 @@ fn limit_frames(cap: Res<Cap>, last: Local<Option<Instant>>) {
     {
         let mut last = last;
         let FrameCap::Fps(fps) = cap.0 else {
+            // Vsync paces `Display`; `Unlimited` does not wait.
             *last = None;
             return;
         };
