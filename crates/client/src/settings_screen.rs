@@ -758,6 +758,7 @@ fn apply_live(world: &mut World, s: &settings::Settings, id: Id) {
                 b.blur = s.backdrop_blur as f32 / 100.0;
             }
         }
+        Id::Master | Id::Music | Id::Sounds => crate::audio::apply_levels(world),
         Id::HudElements => {
             if let Some(mut shown) = world.get_resource_mut::<crate::hud::Shown>() {
                 shown.0 = s.hud_show;
