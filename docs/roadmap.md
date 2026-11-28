@@ -51,6 +51,8 @@ Hand an agent a phase and a lane. The open count is from the 2026-11-24 snapshot
 | 9 | Content & ports | The 20 games reaching Beta/Ranked, plus the editor, community games and GMS. | All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames. | games repo ports, editor, community uploads, research CLONE_SPECs |
 | 10 | Release | Packaging, installers, docs, legal and the public build. | Name, takedown and privacy pages, licenses, release builds and contributor docs are in place. | client, server, docs, legal |
 
+**UI foundation first (user, 2026-11-28).** New UI feature work in phases 5 and 6 waits for the UI foundation epic (#1680): steps #1681–#1684 come before any new screen or row, and the paused feature issues are `blocked by` #1684. Screens built after it follow the foundation rules in [architecture, UI](architecture/client/ui.md).
+
 The order of phases 4, 5 and 6 versus 9: phase 9 ports need phase 3 and the phase 2 pipeline, not the client. Ports can run in parallel with phases 4–6. Community games need the editor and phase 7; the GMS runner needs phase 9's first ports. Editor v1 lives under phase 9 because that is the content work it unblocks; it runs alongside the later phases.
 
 ### From the old milestones
