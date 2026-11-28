@@ -30,7 +30,7 @@ pub const HEADER_HEIGHT: f32 = 34.0;
 const WIDTH: f32 = 1000.0;
 /// A game panel starts 860 px from the window's right edge (1060 at 1920 wide); map panels
 /// 30 px further right.
-const FROM_RIGHT: f32 = 860.0;
+pub(in crate::shell) const FROM_RIGHT: f32 = 860.0;
 const MAP_INDENT: f32 = 30.0;
 /// The selected game and map slide this far left.
 pub const SLIDE: f32 = 25.0;

@@ -327,7 +327,10 @@ fn enter(
             position_type: PositionType::Absolute,
             left: Val::Px(64.0),
             top: Val::Px(150.0 + UNDER_TOOLBAR),
-            width: Val::Px(860.0),
+            // Up to the list, with room for its selected panel's slide, on a narrow page too
+            // (#1692).
+            right: Val::Px(list::FROM_RIGHT + 60.0),
+            max_width: Val::Px(860.0),
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(12.0),
             ..default()
@@ -341,7 +344,7 @@ fn enter(
                 PickedTitle
             ),
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
-            text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
+            crate::ui::widgets::ellipsis_text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
             (text(hint, Type::BODY, tokens::SOFT), HintText),
             (
                 Node {
@@ -581,13 +584,19 @@ fn picked(
     }
 }
 
-/// Scales the page with the window.
+/// The narrowest the shell's pages may be laid out, design px: the main menu's widest band
+/// (Play focused, four more buttons and the right margin), game select's list beside its left
+/// column, and the shelf's hero beside its progress panel all fit (#1692).
+pub(super) const MIN_WIDTH: f32 = 1720.0;
+
+/// Scales the page with the window: by its height, or by its width when the window is narrower
+/// than [`MIN_WIDTH`] at that height (`ui::fit_scale`).
 pub(super) fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
-    let h = window.size().y;
-    if h < 1.0 {
+    let size = window.size();
+    if size.x < 1.0 || size.y < 1.0 {
         return;
     }
-    let s = (h / DESIGN_HEIGHT).clamp(0.25, 3.0);
+    let s = crate::ui::fit_scale(size, DESIGN_HEIGHT, MIN_WIDTH);
     if (ui_scale.0 - s).abs() > 1e-4 {
         ui_scale.0 = s;
     }

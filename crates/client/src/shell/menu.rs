@@ -44,6 +44,8 @@ const GAP: f32 = 6.0;
 const ROW_X: f32 = 470.0;
 /// The band's centre line: 470 px down (450 in the initial state).
 const CY: f32 = 470.0;
+/// The artboard's height: the middle of the page is laid out in it.
+const DESIGN_H: f32 = 1080.0;
 const CY_INITIAL: f32 = 450.0;
 /// The fruit's pixel scale: 11x alone in the middle, 7.6x beside the band.
 const FRUIT_SCALE_INITIAL: f32 = 11.0;
@@ -534,13 +536,29 @@ fn spawn_page(world: &mut World, camera: Entity, level: Level) {
             DespawnOnExit(AppScreen::Menu),
         ))
         .with_children(|page| {
-            page.spawn((Slot::Glow, page_node()));
-            page.spawn((band(), shown(ShownAt::Open)));
-            page.spawn((Slot::Row, page_node()));
-            page.spawn((caption_block(), shown(ShownAt::Open)));
-            page.spawn((Slot::Fruit, page_node()));
-            page.spawn((Slot::Wordmark, page_node()));
-            page.spawn((press_any_key(), shown(ShownAt::Initial)));
+            // The middle of the artboard (glow, band, fruit, caption) stays centred when a
+            // narrow window makes the page taller than 1080 design px (#1692).
+            page.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    width: Val::Percent(100.0),
+                    top: Val::Percent(50.0),
+                    height: Val::Px(DESIGN_H),
+                    margin: UiRect::top(Val::Px(-DESIGN_H / 2.0)),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|page| {
+                page.spawn((Slot::Glow, page_node()));
+                page.spawn((band(), shown(ShownAt::Open)));
+                page.spawn((Slot::Row, page_node()));
+                page.spawn((caption_block(), shown(ShownAt::Open)));
+                page.spawn((Slot::Fruit, page_node()));
+                page.spawn((Slot::Wordmark, page_node()));
+                page.spawn((press_any_key(), shown(ShownAt::Initial)));
+            });
             page.spawn((
                 Node {
                     position_type: PositionType::Absolute,
@@ -1412,6 +1430,29 @@ mod tests {
         let (line, sub) = caption_for(Level::Play, 0, Mode::TimeAttack, facts);
         assert!(line.starts_with("The game stripped"), "Back keeps the mode's caption");
         assert_eq!(sub, "20 games · 13 cleared");
+    }
+
+    /// Every level's band, its widest button focused, ends inside the narrowest page the shell
+    /// lays out, with the shear's overhang and the right margin (#1692).
+    #[test]
+    fn the_widest_band_fits_the_narrowest_page() {
+        for level in [Level::Top, Level::Play] {
+            let actions = buttons(level);
+            let widest = (0..actions.len())
+                .map(|focus| {
+                    actions
+                        .iter()
+                        .enumerate()
+                        .map(|(i, a)| if i == focus { a.widths().1 } else { a.widths().0 })
+                        .sum::<f32>()
+                })
+                .fold(0.0, f32::max);
+            let end = ROW_X + widest + GAP * (actions.len() - 1) as f32 + BAND_H * 0.1;
+            assert!(
+                end + EDGE <= super::super::select::MIN_WIDTH,
+                "{level:?} ends at {end}"
+            );
+        }
     }
 
     /// The artboard's numbers: the fruit 160 x 182 at (150, 373) beside the band, 231 x 264 in

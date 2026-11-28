@@ -100,6 +100,14 @@ pub fn configure(args: &UiArgs) {
     }
 }
 
+/// The UI scale that fits a page designed `design_height` tall and at least `min_width` wide
+/// into a window of `size` (physical px): the page fills the height unless that would make it
+/// narrower than `min_width`, and then it fills the width instead (#1692). A narrow window shows
+/// the whole page smaller rather than cutting its right side off.
+pub fn fit_scale(size: Vec2, design_height: f32, min_width: f32) -> f32 {
+    (size.y / design_height).min(size.x / min_width).clamp(0.25, 3.0)
+}
+
 /// Adds the fonts, the shape material, the motion systems and the component behaviour.
 pub struct UiKitPlugin;
 
@@ -123,5 +131,20 @@ impl Plugin for UiKitPlugin {
         if !app.is_plugin_added::<backdrop::BackdropPlugin>() {
             app.add_plugins(backdrop::BackdropPlugin);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_narrow_window_fits_the_width() {
+        let d = 1080.0;
+        assert_eq!(fit_scale(Vec2::new(1920.0, 1080.0), d, 1720.0), 1.0, "16:9 fills the height");
+        assert_eq!(fit_scale(Vec2::new(2560.0, 1080.0), d, 1720.0), 1.0, "ultrawide too");
+        let s = fit_scale(Vec2::new(1440.0, 1080.0), d, 1720.0);
+        assert!((s - 1440.0 / 1720.0).abs() < 1e-6, "4:3 fills the width");
+        assert!(1440.0 / s >= 1720.0 - 1e-3, "and the page is at least that wide");
     }
 }
