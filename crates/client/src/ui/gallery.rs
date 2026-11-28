@@ -277,7 +277,7 @@ fn game_panel(
         SlideOnHover,
         Hovered::default(),
         UiTransform::default(),
-        Tween::<OffsetX>::at_rest(0.0, tokens::motion::STANDARD, Ease::OutQuint),
+        Tween::<OffsetX>::at_rest(0.0, tokens::motion::SELECT, Ease::OutQuint),
         children![
             (
                 Node {
@@ -657,7 +657,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         ..default()
                     },
                     PopRow { wide: false },
-                    Tween::<Width>::at_rest(600.0, tokens::motion::POP, Ease::OutElastic),
+                    Tween::<Width>::at_rest(600.0, tokens::motion::ACCENT, Ease::OutElastic),
                     children![
                         text("#25", Type::condensed(18.0, 700), tokens::INK),
                         text("nugamus", Type::barlow(17.0, 700), tokens::INK),
@@ -677,7 +677,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     },
                     UiOpacity(1.0),
                     FadePanel { shown: true },
-                    Tween::<Opacity>::at_rest(1.0, tokens::motion::QUICK, Ease::OutQuint),
+                    Tween::<Opacity>::at_rest(1.0, tokens::motion::PANEL, Ease::OutQuint),
                     children![text("Fades out and back in", Type::BODY, tokens::INK)],
                 ));
             });

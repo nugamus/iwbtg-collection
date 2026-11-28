@@ -392,7 +392,7 @@ fn page(
                     ..default()
                 },
                 UiTransform::default(),
-                Tween::<OffsetX>::at_rest(0.0, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<OffsetX>::at_rest(0.0, tokens::motion::SELECT, Ease::OutQuint),
             )],
         ));
         p.spawn(footer(player));

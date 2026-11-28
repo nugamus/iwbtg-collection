@@ -280,7 +280,7 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                 ..default()
             },
             UiTransform::default(),
-            Tween::<OffsetY>::at_rest(placed.scroll(), tokens::motion::STANDARD, Ease::OutQuint),
+            Tween::<OffsetY>::at_rest(placed.scroll(), tokens::motion::PANEL, Ease::OutQuint),
             Column,
         ))
         .id();
@@ -300,7 +300,7 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                 bottom: 0.0,
             },
             UiOpacity(1.0),
-            Tween::<Opacity>::at_rest(1.0, tokens::motion::STANDARD, Ease::OutQuint),
+            Tween::<Opacity>::at_rest(1.0, tokens::motion::PANEL, Ease::OutQuint),
             Frame,
             UiTargetCamera(camera),
             DespawnOnExit(super::AppScreen::Select),
@@ -322,9 +322,9 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                 row_node(),
                 GameRow(g),
                 UiTransform::from_translation(Val2::px(0.0, y)),
-                Tween::<OffsetY>::at_rest(y, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<OffsetY>::at_rest(y, tokens::motion::PANEL, Ease::OutQuint),
                 UiOpacity(opacity),
-                Tween::<Opacity>::at_rest(opacity, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<Opacity>::at_rest(opacity, tokens::motion::PANEL, Ease::OutQuint),
                 if at.is_some() {
                     Visibility::Inherited
                 } else {
@@ -342,7 +342,7 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                 panel(WIDTH, GAME_HEIGHT, game_shape(lib.art[g].clone(), false)),
                 GamePanel(g),
                 UiTransform::default(),
-                Tween::<OffsetX>::at_rest(0.0, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<OffsetX>::at_rest(0.0, tokens::motion::SELECT, Ease::OutQuint),
                 children![
                     (
                         Node {
@@ -430,7 +430,7 @@ pub fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, sel: Select
                     node,
                     MapPanel(g, m),
                     UiTransform::default(),
-                    Tween::<OffsetX>::at_rest(0.0, tokens::motion::STANDARD, Ease::OutQuint),
+                    Tween::<OffsetX>::at_rest(0.0, tokens::motion::SELECT, Ease::OutQuint),
                     children![
                         map_stars(map.stars),
                         (
@@ -467,9 +467,9 @@ fn header(name: &str, count: usize, y: f32, opacity: f32) -> impl Bundle + use<>
         node,
         HeaderRow(name.to_owned()),
         UiTransform::from_translation(Val2::px(0.0, y)),
-        Tween::<OffsetY>::at_rest(y, tokens::motion::STANDARD, Ease::OutQuint),
+        Tween::<OffsetY>::at_rest(y, tokens::motion::PANEL, Ease::OutQuint),
         UiOpacity(opacity),
-        Tween::<Opacity>::new(opacity, 1.0, tokens::motion::STANDARD, Ease::OutQuint),
+        Tween::<Opacity>::new(opacity, 1.0, tokens::motion::PANEL, Ease::OutQuint),
         children![
             text(name, Type { size: 13.0, ..label }, tokens::SOFT),
             text(&count.to_string(), Type::barlow(13.0, 600), tokens::MUTED),

@@ -191,7 +191,7 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, set: ModSet, slow_s
                 },
                 flat(tokens::SHEET_DIM),
                 UiOpacity(0.0),
-                Tween::<Opacity>::at_rest(0.0, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<Opacity>::at_rest(0.0, tokens::motion::PANEL, Ease::OutQuint),
                 Dim,
             ));
             o.spawn((
@@ -205,7 +205,7 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, set: ModSet, slow_s
                 },
                 glass,
                 UiTransform::from_translation(Val2::px(0.0, SLIDE)),
-                Tween::<OffsetY>::at_rest(SLIDE, tokens::motion::STANDARD, Ease::OutQuint),
+                Tween::<OffsetY>::at_rest(SLIDE, tokens::motion::PANEL, Ease::OutQuint),
                 Panel,
             ))
             .with_children(|p| {

@@ -29,8 +29,9 @@ use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::motion::ReducedMotion;
 use crate::view::{ClockSpeed, Game, GameCamera};
 
-/// The card shows at least this long, seconds.
-pub const MIN_SECONDS: f32 = 1.5;
+/// The card shows at least this long, seconds: long enough to read the title, short enough that
+/// starting a game does not feel like waiting (was 1.5 s; #1682).
+pub const MIN_SECONDS: f32 = 0.75;
 /// The fruit shows each of its two frames this long (`ld-cherry 640ms steps(2)`).
 const FRUIT_FRAME_SECONDS: f32 = 0.32;
 /// The artboard's size: the page is laid out at its height and scaled to fit the window.
@@ -715,9 +716,9 @@ mod tests {
                 NextState::Pending(RunScreen::Playing)
             )
         };
-        assert!(!step(&mut app, 0.5));
-        assert!(!step(&mut app, 0.9));
-        assert!(step(&mut app, 0.2), "1.6 s shown");
+        assert!(!step(&mut app, MIN_SECONDS * 0.5));
+        assert!(!step(&mut app, MIN_SECONDS * 0.4));
+        assert!(step(&mut app, MIN_SECONDS * 0.2), "just past the minimum");
 
         let mut app = App::new();
         app.init_resource::<Time>()

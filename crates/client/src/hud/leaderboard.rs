@@ -553,7 +553,7 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle + use<> {
                     },
                     Track,
                     UiTransform::from_translation(Val2::px(0.0, y)),
-                    Tween::<OffsetY>::at_rest(y, tokens::motion::REORDER, Ease::OutQuint),
+                    Tween::<OffsetY>::at_rest(y, tokens::motion::AMBIENT, Ease::OutQuint),
                 ))
                 .with_children(|c| {
                     for (k, entry) in entries.iter().enumerate() {
@@ -614,7 +614,7 @@ fn slid(slot: usize) -> (UiTransform, Tween<OffsetY>) {
     let y = slot as f32 * PITCH;
     (
         UiTransform::from_translation(Val2::px(0.0, y)),
-        Tween::<OffsetY>::at_rest(y, tokens::motion::REORDER, Ease::OutQuint),
+        Tween::<OffsetY>::at_rest(y, tokens::motion::AMBIENT, Ease::OutQuint),
     )
 }
 
@@ -690,7 +690,7 @@ fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> im
     (
         node,
         Shape::fill(tokens::ROW_YOU).with_shadow(6.0, 18.0, tokens::black(0.35)),
-        Tween::<Width>::at_rest(width, tokens::motion::POP, Ease::OutElastic),
+        Tween::<Width>::at_rest(width, tokens::motion::ACCENT, Ease::OutElastic),
         // Over the rows it slides past.
         ZIndex(1),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
@@ -704,7 +704,7 @@ fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> im
                         Node::default(),
                         TimeLine,
                         UiOpacity(1.0),
-                        Tween::<Opacity>::at_rest(1.0, tokens::motion::QUICK, Ease::OutQuint),
+                        Tween::<Opacity>::at_rest(1.0, tokens::motion::PANEL, Ease::OutQuint),
                     ));
                     match &fixed {
                         Some(t) => line.with_child((text(t, time, tokens::INK), TextLayout::no_wrap())),
@@ -723,7 +723,7 @@ fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> im
                         },
                         PaceLine,
                         UiOpacity(0.0),
-                        Tween::<Opacity>::at_rest(0.0, tokens::motion::QUICK, Ease::OutQuint),
+                        Tween::<Opacity>::at_rest(0.0, tokens::motion::PANEL, Ease::OutQuint),
                         children![(text("", time, tokens::AHEAD), TextLayout::no_wrap(), PaceText,)],
                     ));
                 });
@@ -850,7 +850,7 @@ pub fn animate(
                 *width = Tween::new(
                     list.you_width - POP,
                     list.you_width,
-                    tokens::motion::POP,
+                    tokens::motion::ACCENT,
                     Ease::OutElastic,
                 );
             }

@@ -319,7 +319,7 @@ fn row(
             UiTransform::from_translation(Val2::px(shift, 0.0)),
             crate::ui::motion::Tween::<crate::ui::motion::OffsetX>::at_rest(
                 shift,
-                0.3,
+                crate::ui::tokens::motion::SELECT,
                 crate::ui::motion::Ease::OutQuint,
             ),
             plate,
