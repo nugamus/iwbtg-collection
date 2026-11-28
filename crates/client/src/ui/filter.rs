@@ -1,7 +1,8 @@
 //! A picture under a CSS colour filter: `filter: saturate(s) brightness(b)` (`filter.wgsl`), which
 //! Bevy UI has no way to draw with an `ImageNode` tint (a tint only multiplies; it cannot take
-//! colour out). Used for the results heatmap's room (#705). The filter runs on the GPU each frame,
-//! so it works on pictures a camera renders into (render targets) as well as on loaded images.
+//! colour out). Used for the results heatmap's room (#705) and, with `blur(r)` in front, the game
+//! behind the pause menu (#1657). The filter runs on the GPU each frame, so it works on pictures a
+//! camera renders into (render targets) as well as on loaded images.
 
 use bevy::asset::uuid_handle;
 use bevy::prelude::*;
@@ -34,7 +35,7 @@ pub struct FilterMaterial {
 
 #[derive(ShaderType, Clone, Copy, Debug, Default, PartialEq)]
 struct FilterUniform {
-    /// x saturate, y brightness.
+    /// x saturate, y brightness, z the blur's standard deviation in the picture's texels (0: none).
     p: Vec4,
 }
 
@@ -58,6 +59,39 @@ pub fn filtered(
         },
         picture: Some(picture),
     }))
+}
+
+/// `picture` as CSS `filter: blur(r) saturate(s) brightness(b)` draws it, with `blur` the
+/// Gaussian's standard deviation in the picture's own texels (CSS `blur(r)` is that deviation in
+/// CSS px). The shader samples at most 8 texels out each way, so keep `blur` at 4 or less.
+pub fn blurred(
+    materials: &mut Assets<FilterMaterial>,
+    picture: Handle<Image>,
+    blur: f32,
+    saturate: f32,
+    brightness: f32,
+) -> MaterialNode<FilterMaterial> {
+    MaterialNode(materials.add(FilterMaterial {
+        u: FilterUniform {
+            p: Vec4::new(saturate, brightness, blur.clamp(0.0, MAX_BLUR), 0.0),
+        },
+        picture: Some(picture),
+    }))
+}
+
+/// The most blur [`blurred`] draws, in texels: the shader's 8-texel reach is two deviations.
+pub const MAX_BLUR: f32 = 4.0;
+
+impl FilterMaterial {
+    /// The blur, in texels (0: none).
+    pub fn blur(&self) -> f32 {
+        self.u.p.z
+    }
+
+    /// Sets the blur, clamped to [`MAX_BLUR`].
+    pub fn set_blur(&mut self, blur: f32) {
+        self.u.p.z = blur.clamp(0.0, MAX_BLUR);
+    }
 }
 
 /// What the shader does to one sRGB colour, for the tests and for anyone checking a screenshot.

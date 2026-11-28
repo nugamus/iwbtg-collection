@@ -29,6 +29,7 @@
 //! (docs/architecture/client.md, Pause menu).
 
 mod options;
+mod blur;
 mod page;
 
 use bevy::audio::AudioSink;
@@ -282,6 +283,7 @@ impl Plugin for PausePlugin {
                     draw.after(crate::screen::apply),
                     looks,
                     options::looks,
+                    blur::follow,
                 )
                     .chain()
                     .in_set(crate::shell::InRun),
@@ -1005,7 +1007,7 @@ fn draw(world: &mut World) {
             align_items: AlignItems::Center,
             ..default()
         },
-        // The game at half brightness behind the page's gradient.
+        // The game at half brightness behind the page's gradient (blurred under it: `blur`).
         BackgroundColor(crate::ui::tokens::black(0.5)),
         GlobalZIndex(20),
         Root {
