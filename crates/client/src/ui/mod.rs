@@ -10,6 +10,7 @@ pub mod gallery;
 pub mod glow;
 pub mod hints;
 pub mod icons;
+pub mod latency;
 pub mod mode;
 pub mod motion;
 pub mod notice;
@@ -109,6 +110,7 @@ impl Plugin for UiKitPlugin {
             motion::plugin,
             widgets::plugin,
             icons::plugin,
+            latency::plugin,
             glow::plugin,
             notice::plugin,
             notifications::plugin,

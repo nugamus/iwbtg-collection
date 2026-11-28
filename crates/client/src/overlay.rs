@@ -1,5 +1,6 @@
 //! The F3 debug overlay (docs/architecture/client/overlay.md): ticks and frames per second, the
-//! tick, the room, the kid's position and speed, and the input the last tick saw.
+//! tick, the room, the kid's position and speed, the input the last tick saw, and how long the
+//! UI took to answer the last key or click (`ui::latency`).
 //!
 //! A small UI panel on the HUD's camera, at a fixed size (the UI scale applies, the game's scale
 //! never does): at the bottom of the run info column (narrow at its top in a small window), or
@@ -231,6 +232,7 @@ fn show(
     fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     collector: Res<Collector>,
+    latency: Option<Res<crate::ui::latency::UiLatency>>,
     panel: Single<(&Visibility, &Panel)>,
     mut label: Single<&mut Text, With<Label>>,
 ) {
@@ -262,6 +264,9 @@ fn show(
     let fps = stats.frames_per_second;
     let tick = world.tick;
     let input = collector.describe();
+    // The UI's answer to the last key or click (`ui::latency`, #1683).
+    let ui = latency.map_or_else(String::new, |l| format!("
+{}", l.line()));
     let text = if panel.narrow {
         // About 16 characters a line: the room's size, the `[F3 hides]` hint and the long
         // labels go.
@@ -301,7 +306,7 @@ hspeed {h}  vspeed {v}"
 tick {tick}  [F3 hides]{status}
 room {room}
 {kid}
-{input}"
+{input}{ui}"
         )
     };
     if label.0 != text {

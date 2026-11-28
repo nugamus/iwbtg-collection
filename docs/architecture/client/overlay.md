@@ -2,9 +2,9 @@
 
 Part of [the client](../client.md).
 
-The F3 debug overlay (`overlay.rs`, `OverlayPlugin`, #598): ticks per second (and the game's current rate, `game N`), frames per second, the tick, the sim's status when it halted or ended, the room (name and size), the kid's x, y, hspeed and vspeed (or `no kid`), and the input the last tick saw (`Collector::describe`: actions, and the controller inputs that are down). The counts come from `view::Stats`, which the view's tick adds to and `overlay::show` turns into rates once a second.
+The F3 debug overlay (`overlay.rs`, `OverlayPlugin`, #598): ticks per second (and the game's current rate, `game N`), frames per second, the tick, the sim's status when it halted or ended, the room (name and size), the kid's x, y, hspeed and vspeed (or `no kid`), and the input the last tick saw (`Collector::describe`: actions, and the controller inputs that are down), and in the wide form the UI's answer time (`ui input <ms>  worst 1 s <ms>`, from `ui::latency`, #1683). The counts come from `view::Stats`, which the view's tick adds to and `overlay::show` turns into rates once a second.
 
-Off by default. F3 shows and hides it and saves the choice (`hud.overlay` in the settings file, [Settings](settings.md)). `--overlay` shows it for one run without saving. A `--screenshot` check never draws it unless `--overlay` is given, whatever the setting.
+Off by default. Outside a run the same setting shows `ui::latency`'s one-line readout in the window's bottom-left corner, and F3 there toggles it (#1683). In a run F3 shows and hides the overlay and saves the choice (`hud.overlay` in the settings file, [Settings](settings.md)). `--overlay` shows it for one run without saving. A `--screenshot` check never draws it unless `--overlay` is given, whatever the setting.
 
 Drawing: one bevy_ui panel on the HUD's camera, so the game's scale never applies; the UI scale does. The panel is a kit glass box (`tokens::GLASS`, `tokens::SOFT` text, `Type::barlow(12, 500)` with tabular figures), at most 260 UI px wide, `GlobalZIndex` 15: over the HUD's columns (10), under the pause menu (20) and the notices (30). `place` puts it, after `screen::apply`, from `HudLayout`:
 
