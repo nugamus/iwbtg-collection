@@ -288,7 +288,7 @@ toolbar_session = "セッション {time}"
 # Pause: Options view (#1654)
 pause_options = "オプション"
 pause_options_sub = "音量・表示・操作"
-pause_title_options = "ポーズ · オプション"
+pause_title_options = "オプション"
 pause_options_note = "ラン中に変えても安全な項目だけです。ラン、タイマー、リプレイには影響しません。その他の設定はメニューの設定から。"
 pause_opt_music = "音楽"
 pause_opt_sounds = "効果音"
