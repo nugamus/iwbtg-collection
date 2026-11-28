@@ -155,7 +155,7 @@ pub fn page(
             height: Val::Px(board.size.y),
             ..default()
         },
-        // The game behind at half brightness (`filter: brightness(.5)`; there is no blur yet), then
+        // The game behind blurred and at half brightness (`pause::blur`, the root's black), then
         // `linear-gradient(90deg, rgba(8,9,14,.92) 0%, rgba(8,9,14,.55) 45%, rgba(8,9,14,.7) 100%)`
         // over the game.
         Shape {
