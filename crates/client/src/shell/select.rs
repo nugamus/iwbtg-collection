@@ -206,7 +206,7 @@ impl Plugin for SelectPlugin {
                     (
                         controls::search,
                         list::refilter,
-                        controls::labels,
+                        (controls::labels, footer::spin),
                         keys.run_if(mod_sheet::closed)
                             .run_if(practice::closed)
                             .run_if(crate::settings_screen::closed),
