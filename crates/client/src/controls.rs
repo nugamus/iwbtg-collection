@@ -228,7 +228,7 @@ struct Listen {
     fresh: bool,
 }
 
-/// The panel's state. Every change rebuilds the list and the action columns (`rebuild`).
+/// The panel's state. `rebuild` follows it in place.
 #[derive(Resource)]
 struct Panel {
     games: Vec<GameRow>,
@@ -696,40 +696,76 @@ fn capture_key(keys: Res<ButtonInput<KeyCode>>, mut panel: ResMut<Panel>) {
     }
 }
 
-/// Rebuilds the list and the action columns from [`Panel`] whenever it changes.
+/// What the action columns show: rebuilt only when this changes (`ui::live`, #1686).
+#[derive(Clone, Debug, PartialEq)]
+struct DetailData {
+    game: Option<GameRow>,
+    bindings: Bindings,
+    listening: Option<Target>,
+    error: Option<String>,
+}
+
+/// The list's scrolling column.
+#[derive(Component)]
+struct ListColumn;
+
+/// Follows [`Panel`] in place (UI foundation, #1686): the list is rebuilt only when the search
+/// changes the games shown, the pick and the scroll change the existing rows, and the action
+/// columns are rebuilt only when what they show changes.
 fn rebuild(
     mut commands: Commands,
     panel: Res<Panel>,
     list: Single<Entity, With<GameList>>,
     detail: Single<Entity, With<Detail>>,
+    mut column: Query<&mut Node, With<ListColumn>>,
+    mut rows: Query<(&PickGame, &mut widgets::ButtonLook)>,
 ) {
     if !panel.is_changed() {
         return;
     }
-    commands.entity(*list).despawn_related::<Children>();
-    commands.entity(*list).with_children(|parent| {
+    let games: Vec<GameRow> = panel.shown.iter().map(|i| panel.games[*i].clone()).collect();
+    let (selected, scroll) = (panel.selected, panel.scroll);
+    crate::ui::live::queue_refresh(&mut commands, *list, games, move |parent, games| {
         parent
-            .spawn(Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                top: Val::Px(-panel.scroll),
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(ROW_GAP),
-                ..default()
-            })
+            .spawn((
+                ListColumn,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    top: Val::Px(-scroll),
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(ROW_GAP),
+                    ..default()
+                },
+            ))
             .with_children(|column| {
-                for (pos, index) in panel.shown.iter().enumerate() {
-                    let game = &panel.games[*index];
-                    column.spawn((game_row(game, pos == panel.selected), PickGame(pos)));
+                for (pos, game) in games.iter().enumerate() {
+                    column.spawn((game_row(game, pos == selected), PickGame(pos)));
                 }
             });
     });
-
-    commands.entity(*detail).despawn_related::<Children>();
-    let picked = panel.current().cloned();
-    commands.entity(*detail).with_children(|parent| {
-        let Some(game) = &picked else {
+    for mut node in &mut column {
+        let top = Val::Px(-scroll);
+        if node.top != top {
+            node.top = top;
+        }
+    }
+    for (pick, mut look) in &mut rows {
+        look.set_kind(if pick.0 == selected {
+            ButtonKind::ControlOn
+        } else {
+            ButtonKind::Control
+        });
+    }
+    let data = DetailData {
+        game: panel.current().cloned(),
+        bindings: panel.bindings.clone(),
+        listening: panel.listening.map(|l| l.target),
+        error: panel.error.clone(),
+    };
+    crate::ui::live::queue_refresh(&mut commands, *detail, data, |parent, d| {
+        let Some(game) = &d.game else {
             parent.spawn(text(
                 "No game matches the search",
                 Type::barlow(18.0, 600),
@@ -756,7 +792,7 @@ fn rebuild(
                 ),
             ],
         ));
-        let notice = extra_actions_notice(game.label_refs(), &panel.bindings).unwrap_or_else(|| {
+        let notice = extra_actions_notice(game.label_refs(), &d.bindings).unwrap_or_else(|| {
             "No extra actions in this game; the standard set covers it.".to_string()
         });
         parent.spawn(text(
@@ -768,9 +804,9 @@ fn rebuild(
                 tokens::MUTED
             },
         ));
-        if let Some(error) = &panel.error {
+        if let Some(error) = &d.error {
             parent.spawn(text(error, Type::barlow(13.0, 500), tokens::BEHIND));
-        } else if panel.listening.is_some() {
+        } else if d.listening.is_some() {
             parent.spawn(text(
                 "Press a key, or Escape to cancel",
                 Type::barlow(13.0, 500),
@@ -800,7 +836,8 @@ fn rebuild(
                                 Target::Action(action),
                                 action_label(action),
                                 None,
-                                &panel,
+                                &d.bindings,
+                                d.listening,
                             ));
                         }
                         for (label, action) in game.labels.iter().zip(EXTRA_ACTIONS) {
@@ -809,7 +846,8 @@ fn rebuild(
                                     Target::Action(action),
                                     label,
                                     Some("EXTRA"),
-                                    &panel,
+                                    &d.bindings,
+                                d.listening,
                                 ));
                             }
                         }
@@ -828,7 +866,8 @@ fn rebuild(
                                 Target::Client(key),
                                 Target::Client(key).label(),
                                 None,
-                                &panel,
+                                &d.bindings,
+                                d.listening,
                             ));
                         }
                     });
@@ -885,10 +924,16 @@ fn game_row(game: &GameRow, picked: bool) -> impl Bundle {
 
 /// One action row: its label and tag left, its keys (or `press a key…`) right; a click starts a
 /// rebind for it.
-fn action_row(target: Target, label: &str, tag: Option<&str>, panel: &Panel) -> impl Bundle {
-    let listening = panel.listening.is_some_and(|l| l.target == target);
-    let changed = !target.is_default(&panel.bindings);
-    let (keys, pads) = target.inputs(&panel.bindings);
+fn action_row(
+    target: Target,
+    label: &str,
+    tag: Option<&str>,
+    bindings: &Bindings,
+    listening: Option<Target>,
+) -> impl Bundle {
+    let listening = listening == Some(target);
+    let changed = !target.is_default(bindings);
+    let (keys, pads) = target.inputs(bindings);
     let kind = if listening {
         ButtonKind::ControlOn
     } else {
@@ -993,6 +1038,52 @@ mod tests {
         };
         panel.refilter();
         panel
+    }
+
+    /// Walking the list keeps every row and the list itself; only the action columns, which
+    /// show the picked game, are rebuilt (UI foundation, #1686).
+    #[test]
+    fn walking_the_list_keeps_its_rows() {
+        use crate::ui::latency::node_set;
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(panel(vec![
+                game("A", "x", [None; 4]),
+                game("B", "y", [Some("Bomb"), None, None, None]),
+                game("C", "z", [None; 4]),
+            ]))
+            .add_systems(Update, (move_selection, rebuild).chain());
+        let list = app.world_mut().spawn((Node::default(), GameList)).id();
+        let detail = app.world_mut().spawn((Node::default(), Detail)).id();
+        app.update();
+        let outside_detail = |app: &mut App| {
+            let mut inside = std::collections::BTreeSet::new();
+            let mut todo = vec![detail];
+            while let Some(e) = todo.pop() {
+                if let Some(children) = app.world().get::<Children>(e) {
+                    for c in children.iter() {
+                        inside.insert(c);
+                        todo.push(c);
+                    }
+                }
+            }
+            let mut all = node_set(app.world_mut());
+            all.retain(|e| !inside.contains(e));
+            all
+        };
+        let before = outside_detail(&mut app);
+        let rows_before: Vec<Entity> = app.world_mut().query_filtered::<Entity, With<PickGame>>().iter(app.world()).collect();
+        assert_eq!(rows_before.len(), 3);
+        for key in [KeyCode::ArrowDown, KeyCode::ArrowDown, KeyCode::ArrowUp] {
+            app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+            app.update();
+            let mut k = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            k.release(key);
+            k.clear();
+            assert_eq!(outside_detail(&mut app), before, "{key:?} kept the list");
+        }
+        assert_eq!(app.world().resource::<Panel>().selected, 1);
+        assert!(app.world().get_entity(list).is_ok());
     }
 
     fn game(title: &str, creator: &str, labels: [Option<&str>; 4]) -> GameRow {
