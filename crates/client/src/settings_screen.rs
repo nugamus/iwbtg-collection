@@ -783,7 +783,7 @@ fn shown_rows(world: &World, query: &str) -> Vec<Row> {
 /// Keeps the overlay's tree in step with the overlay: builds it when it opens or its frame
 /// changes, rebuilds a row's content when that row changed, moves the focus looks, and takes it
 /// down when it closes.
-fn draw(world: &mut World) {
+fn draw(world: &mut World, mut seen: Local<Option<settings::Settings>>) {
     let open = world.resource::<Overlay>().open;
     let roots: Vec<(Entity, Frame)> = world.query::<(Entity, &Root)>().iter(world).map(|(e, r)| (e, r.0.clone())).collect();
     if !open {
@@ -792,7 +792,12 @@ fn draw(world: &mut World) {
         }
         return;
     }
-    if !roots.is_empty() && !world.is_resource_changed::<Overlay>() {
+    // A setting can also change while the overlay is open from outside it (F11, F9, `[` and
+    // `]` in `screen.rs`): the rows are read again then too.
+    let now = settings::get();
+    let settings_changed = seen.as_ref() != Some(&now);
+    *seen = Some(now);
+    if !roots.is_empty() && !settings_changed && !world.is_resource_changed::<Overlay>() {
         scroll_into_view(world);
         return;
     }

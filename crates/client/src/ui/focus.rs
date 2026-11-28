@@ -12,7 +12,7 @@
 
 use bevy::prelude::*;
 
-use crate::ui::shape::Shape;
+use crate::ui::shape::{Ink, Shape};
 
 /// Whether the keyboard is on this part. Screens write it; only change it when it differs, so
 /// `Changed` stays meaningful ([`set`]).
@@ -76,11 +76,12 @@ type Looks<'a> = (
     Option<&'a mut Shape>,
     Option<&'a mut ImageNode>,
     Option<&'a mut TextColor>,
+    Option<&'a mut Ink>,
 );
 
 /// Applies each changed focus.
 pub fn look(mut parts: Query<Looks, Changed<Focused>>) {
-    for (focused, fill, ring, ink, bg, outline, shape, image, text) in &mut parts {
+    for (focused, fill, ring, ink, bg, outline, shape, image, text, base) in &mut parts {
         let on = focused.0;
         if let (Some(f), Some(mut bg)) = (fill, bg) {
             let want = if on { f.focus } else { f.rest };
@@ -103,6 +104,13 @@ pub fn look(mut parts: Query<Looks, Changed<Focused>>) {
         }
         if let Some(i) = ink {
             let want = if on { i.focus } else { i.rest };
+            // Kit text and faded icons take their colour from `Ink` every frame (opacity and
+            // list fades, `shape::sync_shapes`): the focus colour goes there too.
+            if let Some(mut base) = base
+                && base.0 != want
+            {
+                base.0 = want;
+            }
             if let Some(mut image) = image
                 && image.color != want
             {
@@ -158,7 +166,20 @@ mod tests {
         assert_eq!(w.get::<Node>(plain).unwrap(), &node, "focus never touches the layout");
         assert_eq!(w.get::<Node>(sheared).unwrap(), &node);
         app.world_mut().get_mut::<Focused>(sheared).unwrap().0 = false;
+        let ink = FocusInk {
+            rest: Color::BLACK,
+            focus: Color::WHITE,
+        };
+        let label = app
+            .world_mut()
+            .spawn((TextColor(Color::BLACK), Ink(Color::BLACK), ink, Focused(true)))
+            .id();
         app.update();
         assert_eq!(app.world().get::<Shape>(sheared).unwrap().ring, None);
+        assert_eq!(
+            app.world().get::<Ink>(label).unwrap().0,
+            Color::WHITE,
+            "kit text keeps its focus colour through the fade pass"
+        );
     }
 }
