@@ -142,8 +142,8 @@ impl GameRow {
     fn extras_tag(&self) -> String {
         match self.extras() {
             0 => String::new(),
-            1 => "1 extra action".to_string(),
-            n => format!("{n} extra actions"),
+            1 => crate::locale::text("controls_extra_one").to_string(),
+            n => crate::locale::format("controls_extra_many", &[("n", &n)]),
         }
     }
 }
@@ -168,9 +168,9 @@ impl Target {
     fn label(self) -> &'static str {
         match self {
             Target::Action(a) => action_label(a),
-            Target::Client(ClientKey::QuickRetry) => "Quick retry",
-            Target::Client(ClientKey::SkipCutscene) => "Skip cutscene",
-            Target::Client(ClientKey::FrameAdvance) => "Frame advance",
+            Target::Client(ClientKey::QuickRetry) => crate::locale::text("controls_client_quick_retry"),
+            Target::Client(ClientKey::SkipCutscene) => crate::locale::text("controls_client_skip_cutscene"),
+            Target::Client(ClientKey::FrameAdvance) => crate::locale::text("controls_client_frame_advance"),
         }
     }
 
@@ -198,25 +198,25 @@ impl Target {
 /// The panel's name for an action.
 fn action_label(action: Action) -> &'static str {
     match action {
-        Action::Left => "Left",
-        Action::Right => "Right",
-        Action::Up => "Up",
-        Action::Down => "Down",
-        Action::Jump => "Jump",
-        Action::Shoot => "Shoot",
-        Action::Restart => "Restart",
-        Action::Suicide => "Suicide",
-        Action::Skip => "Skip",
-        Action::Accept => "Accept",
-        Action::Back => "Back",
-        Action::Menu => "Menu",
-        Action::Pause => "Pause",
-        Action::Mute => "Mute",
-        Action::Reset => "Reset",
-        Action::Extra1 => "Extra 1",
-        Action::Extra2 => "Extra 2",
-        Action::Extra3 => "Extra 3",
-        Action::Extra4 => "Extra 4",
+        Action::Left => crate::locale::text("controls_action_left"),
+        Action::Right => crate::locale::text("controls_action_right"),
+        Action::Up => crate::locale::text("controls_action_up"),
+        Action::Down => crate::locale::text("controls_action_down"),
+        Action::Jump => crate::locale::text("controls_action_jump"),
+        Action::Shoot => crate::locale::text("controls_action_shoot"),
+        Action::Restart => crate::locale::text("controls_action_restart"),
+        Action::Suicide => crate::locale::text("controls_action_suicide"),
+        Action::Skip => crate::locale::text("controls_action_skip"),
+        Action::Accept => crate::locale::text("controls_action_accept"),
+        Action::Back => crate::locale::text("controls_action_back"),
+        Action::Menu => crate::locale::text("controls_action_menu"),
+        Action::Pause => crate::locale::text("controls_action_pause"),
+        Action::Mute => crate::locale::text("controls_action_mute"),
+        Action::Reset => crate::locale::text("controls_action_reset"),
+        Action::Extra1 => crate::locale::text("controls_action_extra1"),
+        Action::Extra2 => crate::locale::text("controls_action_extra2"),
+        Action::Extra3 => crate::locale::text("controls_action_extra3"),
+        Action::Extra4 => crate::locale::text("controls_action_extra4"),
     }
 }
 
@@ -335,16 +335,16 @@ pub fn extra_actions_notice(labels: [Option<&str>; 4], bindings: &Bindings) -> O
                 .map(bindings::key_name)
                 .collect();
             Some(if keys.is_empty() {
-                format!("{label} (unbound)")
+                crate::locale::format("controls_notice_unbound", &[("label", &label)])
             } else {
-                format!("{label} ({})", keys.join(" / "))
+                crate::locale::format("controls_notice_keys", &[("label", &label), ("keys", &keys.join(" / "))])
             })
         })
         .collect();
     if parts.is_empty() {
         None
     } else {
-        Some(format!("Extra actions: {}.", parts.join(", ")))
+        Some(crate::locale::format("controls_notice", &[("list", &parts.join(", "))]))
     }
 }
 
@@ -514,9 +514,9 @@ fn setup(mut commands: Commands, search: Res<InitialSearch>) {
                     ..default()
                 },
                 children![
-                    text("CONTROLS", Type::LABEL, tokens::MUTED),
+                    text(crate::locale::text("controls_title"), Type::LABEL, tokens::MUTED),
                     text(
-                        "Pick a game, then one of its rows to rebind",
+                        crate::locale::text("controls_hint"),
                         Type::barlow(14.0, 400),
                         tokens::MUTED
                     ),
@@ -546,7 +546,7 @@ fn setup(mut commands: Commands, search: Res<InitialSearch>) {
                                     ..default()
                                 },
                                 children![search_field(
-                                    "Search games: title, creator",
+                                    crate::locale::text("controls_search"),
                                     &search.0
                                 )],
                             ),
@@ -767,7 +767,7 @@ fn rebuild(
     crate::ui::live::queue_refresh(&mut commands, *detail, data, |parent, d| {
         let Some(game) = &d.game else {
             parent.spawn(text(
-                "No game matches the search",
+                crate::locale::text("controls_no_match"),
                 Type::barlow(18.0, 600),
                 tokens::MUTED,
             ));
@@ -783,7 +783,7 @@ fn rebuild(
                 text(&game.title, Type::barlow(26.0, 700), tokens::INK),
                 text(
                     &if game.creator.is_empty() {
-                        "No creator listed".to_string()
+                        crate::locale::text("controls_no_creator").to_string()
                     } else {
                         game.creator.clone()
                     },
@@ -793,7 +793,7 @@ fn rebuild(
             ],
         ));
         let notice = extra_actions_notice(game.label_refs(), &d.bindings).unwrap_or_else(|| {
-            "No extra actions in this game; the standard set covers it.".to_string()
+            crate::locale::text("controls_no_extras").to_string()
         });
         parent.spawn(text(
             &notice,
@@ -808,7 +808,7 @@ fn rebuild(
             parent.spawn(text(error, Type::barlow(13.0, 500), tokens::BEHIND));
         } else if d.listening.is_some() {
             parent.spawn(text(
-                "Press a key, or Escape to cancel",
+                crate::locale::text("controls_listen"),
                 Type::barlow(13.0, 500),
                 tokens::ACCENT,
             ));
@@ -830,7 +830,7 @@ fn rebuild(
                         ..default()
                     })
                     .with_children(|column| {
-                        column.spawn(text("GAME ACTIONS", Type::LABEL, tokens::MUTED));
+                        column.spawn(text(crate::locale::text("controls_game_actions"), Type::LABEL, tokens::MUTED));
                         for action in GAME_ACTIONS {
                             column.spawn(action_row(
                                 Target::Action(action),
@@ -845,7 +845,7 @@ fn rebuild(
                                 column.spawn(action_row(
                                     Target::Action(action),
                                     label,
-                                    Some("EXTRA"),
+                                    Some(crate::locale::text("controls_extra_tag")),
                                     &d.bindings,
                                 d.listening,
                                 ));
@@ -860,7 +860,7 @@ fn rebuild(
                         ..default()
                     })
                     .with_children(|column| {
-                        column.spawn(text("CLIENT KEYS", Type::LABEL, tokens::MUTED));
+                        column.spawn(text(crate::locale::text("controls_client_keys"), Type::LABEL, tokens::MUTED));
                         for key in ClientKey::ALL {
                             column.spawn(action_row(
                                 Target::Client(key),
@@ -906,7 +906,7 @@ fn game_row(game: &GameRow, picked: bool) -> impl Bundle {
                             text(&game.title, Type::barlow(15.0, 600), tokens::INK),
                             text(
                                 &if game.creator.is_empty() {
-                                    "No creator listed".to_string()
+                                    crate::locale::text("controls_no_creator").to_string()
                                 } else {
                                     game.creator.clone()
                                 },
@@ -940,20 +940,20 @@ fn action_row(
         ButtonKind::Control
     };
     let tag = if changed {
-        ("CHANGED", tokens::AMBER)
+        (crate::locale::text("controls_changed"), tokens::AMBER)
     } else if let Some(tag) = tag {
         (tag, tokens::ACCENT)
     } else {
         ("", tokens::MUTED)
     };
     let (right, note): (Vec<String>, bool) = if listening {
-        (vec!["press a key…".to_string()], true)
+        (vec![crate::locale::text("controls_press_key").to_string()], true)
     } else if keys.is_empty() && pads.is_empty() {
-        (vec!["unbound".to_string()], true)
+        (vec![crate::locale::text("controls_unbound").to_string()], true)
     } else {
         (
             keys.into_iter()
-                .chain(pads.into_iter().map(|p| format!("pad {p}")))
+                .chain(pads.into_iter().map(|p| crate::locale::format("controls_pad", &[("pad", &p)])))
                 .collect(),
             false,
         )
