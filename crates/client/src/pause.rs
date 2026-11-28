@@ -1426,4 +1426,52 @@ mod tests {
         }
         assert_eq!(runs[0], runs[1], "the ticks after the menu are the same");
     }
+
+    /// Foundation rules 1 and 2 (#1691): moving the selection, holding an item and the timer
+    /// change the open page in place; only a new board (the window's size class), the device or
+    /// Classic rebuild it.
+    #[test]
+    fn moving_the_selection_respawns_nothing() {
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::window::{PrimaryWindow, WindowResolution};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.init_resource::<UiScale>();
+        world.init_resource::<Menu>();
+        world.insert_resource(Fruit(Handle::default()));
+        let window = world
+            .spawn((
+                Window {
+                    resolution: WindowResolution::new(1920, 1080),
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        on_screen(&mut world, RunScreen::Paused);
+        world.run_system_once(draw).unwrap();
+        let built = crate::ui::latency::node_set(&mut world);
+        assert!(built.len() > 10, "the page is open");
+        for item in [Item::RetryFromSave, Item::RestartRun, Item::Quit, Item::Continue] {
+            world.resource_mut::<Menu>().selected = item;
+            world.run_system_once(draw).unwrap();
+            assert_eq!(crate::ui::latency::node_set(&mut world), built, "{item:?}");
+        }
+        world.resource_mut::<Menu>().hold = Some(Hold {
+            item: Item::Quit,
+            seconds: 0.2,
+            source: HoldSource::Key(KeyCode::Enter),
+        });
+        world.run_system_once(draw).unwrap();
+        assert_eq!(crate::ui::latency::node_set(&mut world), built, "a hold");
+
+        world.resource_mut::<Menu>().pad = true;
+        world.run_system_once(draw).unwrap();
+        assert_ne!(crate::ui::latency::node_set(&mut world), built, "the device rebuilds it");
+        let pad = crate::ui::latency::node_set(&mut world);
+        world.get_mut::<Window>(window).unwrap().resolution = WindowResolution::new(1440, 1080);
+        world.run_system_once(draw).unwrap();
+        assert_ne!(crate::ui::latency::node_set(&mut world), pad, "a new board rebuilds it");
+    }
 }
