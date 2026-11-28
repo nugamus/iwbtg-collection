@@ -892,6 +892,7 @@ fn show(
     mut roots: Query<RootParts>,
     cameras: Query<Entity, With<ResultsCamera>>,
     viewer: Option<Res<crate::viewer::Viewer>>,
+    notices: Option<ResMut<crate::ui::notice::Area>>,
 ) {
     let Some(summary) = &results.summary else {
         return;
@@ -915,6 +916,13 @@ fn show(
     let scale = (win.x / design.x).min(win.y / design.y);
     if (ui_scale.0 - scale).abs() > 1e-4 {
         ui_scale.0 = scale;
+    }
+    // Notices go in the page's left column, above the footer (the HUD's column is covered).
+    let area = Some(page::notice_area(size, win / scale));
+    if let Some(mut notices) = notices
+        && notices.0 != area
+    {
+        notices.0 = area;
     }
     let (w, h) = (Val::Px(win.x / scale), Val::Px(win.y / scale));
     let mut current = false;
