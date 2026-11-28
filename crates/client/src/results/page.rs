@@ -137,6 +137,14 @@ impl Size {
     }
 }
 
+/// Where notices go while the page covers the HUD (`ui::notice::Area`, in the page's UI px for
+/// a page of `page` UI px): the left column under the runs list, above the footer's buttons.
+pub fn notice_area(size: Size, page: Vec2) -> Rect {
+    let d = size.dims();
+    let bottom = page.y - d.pad[2] - d.button - d.row_gap;
+    Rect::new(d.pad[3], 0.0, d.pad[3] + d.rivals, bottom.max(0.0))
+}
+
 /// The artboard's numbers for one layout (`renderVals`).
 #[derive(Clone, Copy)]
 struct Dims {
@@ -1065,6 +1073,19 @@ pub fn save_button(c: &mut ChildSpawner, slot: SaveSlot, saved: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A notice on the page stays in the left column and clear of the footer's buttons (#1694).
+    #[test]
+    fn notices_sit_above_the_footer() {
+        for size in [Size::Wide, Size::Compact] {
+            let d = size.dims();
+            let page = size.design();
+            let r = notice_area(size, page);
+            let footer_top = page.y - d.pad[2] - d.button;
+            assert!(r.max.y < footer_top, "{size:?}");
+            assert!(r.min.x >= d.pad[3] && r.max.x <= d.pad[3] + d.rivals, "{size:?}");
+        }
+    }
 
     #[test]
     fn the_layout_follows_the_window_ratio() {
