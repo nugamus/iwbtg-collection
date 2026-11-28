@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T16:44:26Z",
+ "generated_at": "2026-11-28T16:51:18Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -267,11 +267,11 @@
    "closed": 721,
    "pct_closed": 71.9
   },
-  "open_prs": 0,
+  "open_prs": 1,
   "process": {
-   "in-progress": 13,
+   "in-progress": 15,
    "triage": 70,
-   "agent-ready": 109,
+   "agent-ready": 107,
    "needs-user": 28,
    "blocked": 25,
    "revisit": 1
@@ -447,19 +447,19 @@
   ],
   "in_progress": [
    {
-    "number": 148,
-    "title": "Game select: layout, title wedge, stats, stage strip and footer",
+    "number": 151,
+    "title": "Game select: Ranking tab and Random",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/148",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/151",
     "labels": [
      "size:S",
      "area:client",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:43:03Z",
+    "updated_at": "2026-11-28T16:48:54Z",
     "closed_at": null,
-    "created_at": "2026-11-02T11:57:19Z"
+    "created_at": "2026-11-02T11:57:26Z"
    },
    {
     "number": 1692,
@@ -473,9 +473,24 @@
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:25:20Z",
+    "updated_at": "2026-11-28T16:48:19Z",
     "closed_at": null,
     "created_at": "2026-11-28T16:25:20Z"
+   },
+   {
+    "number": 1686,
+    "title": "UI foundation 6: pause, results, HUD and remaining screens update in place",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1686",
+    "labels": [
+     "size:L",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T16:48:17Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T15:42:47Z"
    },
    {
     "number": 1685,
@@ -488,9 +503,24 @@
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:06:25Z",
+    "updated_at": "2026-11-28T16:48:16Z",
     "closed_at": null,
     "created_at": "2026-11-28T15:42:44Z"
+   },
+   {
+    "number": 148,
+    "title": "Game select: layout, title wedge, stats, stage strip and footer",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/148",
+    "labels": [
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T16:48:14Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:57:19Z"
    },
    {
     "number": 1684,
@@ -503,41 +533,9 @@
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:01:36Z",
+    "updated_at": "2026-11-28T16:48:12Z",
     "closed_at": null,
     "created_at": "2026-11-28T15:42:41Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T15:43:25Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
-   },
-   {
-    "number": 1664,
-    "title": "Settings: frame limit row (m5 C1 Graphics)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1664",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T15:43:15Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T22:44:10Z"
    }
   ],
   "needs_user": [
@@ -725,7 +723,7 @@
    }
   ],
   "closed_7d": 193,
-  "opened_7d": 171,
+  "opened_7d": 168,
   "burnup": [
    {
     "week": "2026-11-09",
