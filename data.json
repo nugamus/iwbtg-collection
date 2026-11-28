@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T16:51:18Z",
+ "generated_at": "2026-11-28T17:28:34Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,15 +126,15 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 27,
-   "closed": 45,
+   "open": 22,
+   "closed": 50,
    "total": 72,
-   "pct_closed": 62.5,
-   "size_points": 54,
+   "pct_closed": 69.4,
+   "size_points": 38,
    "sizes": {
-    "size:S": 12,
-    "size:M": 6,
-    "size:L": 3,
+    "size:S": 10,
+    "size:M": 4,
+    "size:L": 2,
     "unknown": 6
    },
    "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
@@ -262,15 +262,15 @@
  ],
  "activity": {
   "totals": {
-   "issues": 1003,
-   "open": 282,
-   "closed": 721,
-   "pct_closed": 71.9
+   "issues": 1004,
+   "open": 278,
+   "closed": 726,
+   "pct_closed": 72.3
   },
-  "open_prs": 1,
+  "open_prs": 3,
   "process": {
-   "in-progress": 15,
-   "triage": 70,
+   "in-progress": 14,
+   "triage": 71,
    "agent-ready": 107,
    "needs-user": 28,
    "blocked": 25,
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 74
+    "count": 69
    },
    {
     "area": "area:format",
@@ -323,6 +323,82 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 148,
+    "title": "Game select: layout, title wedge, stats, stage strip and footer",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/148",
+    "labels": [
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:21:09Z",
+    "closed_at": "2026-11-28T17:21:08Z",
+    "created_at": "2026-11-02T11:57:19Z"
+   },
+   {
+    "number": 1692,
+    "title": "UI scales by height only: narrow windows cut off the main menu's buttons and overlap game select and the shelf",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1692",
+    "labels": [
+     "bug",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:21:07Z",
+    "closed_at": "2026-11-28T17:21:06Z",
+    "created_at": "2026-11-28T16:25:20Z"
+   },
+   {
+    "number": 1686,
+    "title": "UI foundation 6: pause, results, HUD and remaining screens update in place",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1686",
+    "labels": [
+     "size:L",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:21:05Z",
+    "closed_at": "2026-11-28T17:21:05Z",
+    "created_at": "2026-11-28T15:42:47Z"
+   },
+   {
+    "number": 1685,
+    "title": "UI foundation 5: game select, shelf and mod sheet update in place",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1685",
+    "labels": [
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:21:03Z",
+    "closed_at": "2026-11-28T17:21:03Z",
+    "created_at": "2026-11-28T15:42:44Z"
+   },
+   {
+    "number": 1684,
+    "title": "UI foundation 4: main menu updates in place instead of respawning per level",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1684",
+    "labels": [
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:21:01Z",
+    "closed_at": "2026-11-28T17:21:00Z",
+    "created_at": "2026-11-28T15:42:41Z"
+   },
    {
     "number": 1682,
     "title": "UI foundation 2: one motion timing table (osu!lazer feel) and the main menu's band timing",
@@ -367,85 +443,68 @@
     "updated_at": "2026-11-28T16:17:01Z",
     "closed_at": "2026-11-28T16:17:01Z",
     "created_at": "2026-11-28T15:42:31Z"
-   },
+   }
+  ],
+  "in_progress": [
    {
-    "number": 1676,
-    "title": "Release: a GitHub release for every green commit on main",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1676",
+    "number": 1626,
+    "title": "Localise the remaining client screens and widen the string guard (#196 follow-up)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1626",
     "labels": [
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "10 · Release",
-    "updated_at": "2026-11-27T01:25:02Z",
-    "closed_at": "2026-11-27T01:25:02Z",
-    "created_at": "2026-11-27T01:16:59Z"
-   },
-   {
-    "number": 1675,
-    "title": "Client: wire the #1606 updater into the m5 Settings and notifications UI (osu!lazer-style)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1675",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-27T01:25:00Z",
-    "closed_at": "2026-11-27T01:24:59Z",
-    "created_at": "2026-11-26T23:34:12Z"
-   },
-   {
-    "number": 1624,
-    "title": "UI: Classic session summary and session panel (m5 A7–A9, group 2)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1624",
-    "labels": [
-     "size:L",
      "area:client",
      "triage",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-27T00:52:33Z",
-    "closed_at": "2026-11-27T00:52:33Z",
-    "created_at": "2026-11-26T15:41:13Z"
+    "updated_at": "2026-11-28T17:28:07Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T17:52:37Z"
    },
    {
-    "number": 1667,
-    "title": "UI: notifications and toasts (m5 D2, D3, group 6)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1667",
+    "number": 1694,
+    "title": "Results page: a notice covers the Back button (notice area stays in the suspended HUD's column)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1694",
     "labels": [
-     "area:client",
-     "triage"
+     "triage",
+     "in-progress"
     ],
     "phase": null,
-    "updated_at": "2026-11-27T00:31:32Z",
-    "closed_at": "2026-11-27T00:31:32Z",
-    "created_at": "2026-11-26T22:53:33Z"
+    "updated_at": "2026-11-28T17:18:01Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T17:13:54Z"
    },
    {
-    "number": 1673,
-    "title": "UI: the mod sheet, m5 D8 and D9 (Flashlight, Hitboxes practice, Mirror faded, Ghost switch)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1673",
+    "number": 1691,
+    "title": "UI foundation: respawn guard tests for pause, results and HUD (#1686 follow-up)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1691",
     "labels": [
-     "size:M",
      "area:client",
+     "triage",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-27T00:28:59Z",
-    "closed_at": "2026-11-27T00:28:59Z",
-    "created_at": "2026-11-26T23:24:49Z"
-   }
-  ],
-  "in_progress": [
+    "updated_at": "2026-11-28T17:14:46Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T16:20:27Z"
+   },
+   {
+    "number": 1613,
+    "title": "UI: say Time Attack / Classic instead of Ranked mode / Play original on loading, results, HUD",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1613",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:05:31Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T14:59:02Z"
+   },
    {
     "number": 151,
     "title": "Game select: Ranking tab and Random",
@@ -462,80 +521,20 @@
     "created_at": "2026-11-02T11:57:26Z"
    },
    {
-    "number": 1692,
-    "title": "UI scales by height only: narrow windows cut off the main menu's buttons and overlap game select and the shelf",
+    "number": 106,
+    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1692",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
     "labels": [
-     "bug",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:19Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T16:25:20Z"
-   },
-   {
-    "number": 1686,
-    "title": "UI foundation 6: pause, results, HUD and remaining screens update in place",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1686",
-    "labels": [
-     "size:L",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:17Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T15:42:47Z"
-   },
-   {
-    "number": 1685,
-    "title": "UI foundation 5: game select, shelf and mod sheet update in place",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1685",
-    "labels": [
+     "agent-ready",
      "size:M",
      "area:client",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:16Z",
+    "updated_at": "2026-11-28T15:43:25Z",
     "closed_at": null,
-    "created_at": "2026-11-28T15:42:44Z"
-   },
-   {
-    "number": 148,
-    "title": "Game select: layout, title wedge, stats, stage strip and footer",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/148",
-    "labels": [
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:14Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:19Z"
-   },
-   {
-    "number": 1684,
-    "title": "UI foundation 4: main menu updates in place instead of respawning per level",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1684",
-    "labels": [
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T16:48:12Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T15:42:41Z"
+    "created_at": "2026-11-02T11:55:29Z"
    }
   ],
   "needs_user": [
@@ -723,7 +722,7 @@
    }
   ],
   "closed_7d": 193,
-  "opened_7d": 168,
+  "opened_7d": 166,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -742,8 +741,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 1003,
-    "closed": 721
+    "created": 1004,
+    "closed": 726
    }
   ]
  },
