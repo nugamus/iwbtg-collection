@@ -141,7 +141,9 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity) {
                 position_type: PositionType::Absolute,
                 left: Val::Px(LEFT),
                 top: Val::Px(top),
-                width: Val::Px(WEDGE_W - LEFT - 70.0),
+                // Up to the list on a narrow page (#1692), the wedge's width on a wide one.
+                right: Val::Px(super::list::FROM_RIGHT + 60.0),
+                max_width: Val::Px(WEDGE_W - LEFT - 70.0),
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
@@ -247,8 +249,25 @@ fn head_key(d: &HeroData) -> (String, String, String, Option<u32>, bool) {
     (d.title.clone(), d.by.clone(), d.map.clone(), d.stars.map(f32::to_bits), d.ranked)
 }
 
-/// The pills, the title and the creator line.
+/// The pills, the title and the creator line; they slide in from the left on a new pick
+/// (`motion::SCREEN`, OutQuint; at once with reduced motion).
 fn head(c: &mut ChildSpawner, d: &HeroData) {
+    use crate::ui::motion::{Ease, OffsetX, Opacity, Tween};
+    let d = d.clone();
+    c.spawn((
+        Node {
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        UiTransform::default(),
+        crate::ui::shape::UiOpacity(0.0),
+        Tween::<OffsetX>::new(-30.0, 0.0, tokens::motion::SCREEN, Ease::OutQuint),
+        Tween::<Opacity>::new(0.0, 1.0, tokens::motion::PANEL, Ease::OutQuint),
+    ))
+    .with_children(|c| head_parts(c, &d));
+}
+
+fn head_parts(c: &mut ChildSpawner, d: &HeroData) {
     c.spawn(Node {
         align_items: AlignItems::Center,
         column_gap: Val::Px(10.0),
