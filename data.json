@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T17:38:16Z",
+ "generated_at": "2026-11-28T17:45:32Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -267,10 +267,10 @@
    "closed": 728,
    "pct_closed": 72.4
   },
-  "open_prs": 4,
+  "open_prs": 5,
   "process": {
    "triage": 70,
-   "in-progress": 13,
+   "in-progress": 15,
    "agent-ready": 107,
    "needs-user": 28,
    "blocked": 25,
@@ -446,6 +446,36 @@
   ],
   "in_progress": [
    {
+    "number": 1654,
+    "title": "UI: pause Options view (m5 D15): volume, backdrop blur, HUD, input display, bindings, audio offset",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1654",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T17:39:10Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:20:43Z"
+   },
+   {
+    "number": 1688,
+    "title": "Client: Library::busy is unused in the non-test build (dead_code warning)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1688",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T17:39:03Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T15:50:07Z"
+   },
+   {
     "number": 106,
     "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
     "state": "open",
@@ -506,35 +536,6 @@
     "updated_at": "2026-11-28T17:31:48Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:57:26Z"
-   },
-   {
-    "number": 1626,
-    "title": "Localise the remaining client screens and widen the string guard (#196 follow-up)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1626",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:28:07Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T17:52:37Z"
-   },
-   {
-    "number": 1694,
-    "title": "Results page: a notice covers the Back button (notice area stays in the suspended HUD's column)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1694",
-    "labels": [
-     "triage",
-     "in-progress"
-    ],
-    "phase": null,
-    "updated_at": "2026-11-28T17:18:01Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T17:13:54Z"
    }
   ],
   "needs_user": [
