@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T17:54:43Z",
+ "generated_at": "2026-11-28T18:01:21Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,13 +126,13 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 19,
-   "closed": 53,
+   "open": 18,
+   "closed": 54,
    "total": 72,
-   "pct_closed": 73.6,
-   "size_points": 37,
+   "pct_closed": 75.0,
+   "size_points": 36,
    "sizes": {
-    "size:S": 9,
+    "size:S": 8,
     "size:M": 4,
     "size:L": 2,
     "unknown": 4
@@ -263,15 +263,15 @@
  "activity": {
   "totals": {
    "issues": 1005,
-   "open": 276,
-   "closed": 729,
-   "pct_closed": 72.5
+   "open": 274,
+   "closed": 731,
+   "pct_closed": 72.7
   },
-  "open_prs": 4,
+  "open_prs": 2,
   "process": {
-   "triage": 70,
-   "in-progress": 14,
-   "agent-ready": 107,
+   "triage": 69,
+   "in-progress": 12,
+   "agent-ready": 106,
    "needs-user": 28,
    "blocked": 25,
    "revisit": 1
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 66
+    "count": 64
    },
    {
     "area": "area:format",
@@ -323,6 +323,37 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1688,
+    "title": "Client: Library::busy is unused in the non-test build (dead_code warning)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1688",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T17:55:42Z",
+    "closed_at": "2026-11-28T17:55:42Z",
+    "created_at": "2026-11-28T15:50:07Z"
+   },
+   {
+    "number": 1664,
+    "title": "Settings: frame limit row (m5 C1 Graphics)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1664",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T17:55:13Z",
+    "closed_at": "2026-11-28T17:55:13Z",
+    "created_at": "2026-11-26T22:44:10Z"
+   },
    {
     "number": 151,
     "title": "Game select: Ranking tab and Random",
@@ -412,36 +443,6 @@
     "updated_at": "2026-11-28T17:21:05Z",
     "closed_at": "2026-11-28T17:21:05Z",
     "created_at": "2026-11-28T15:42:47Z"
-   },
-   {
-    "number": 1685,
-    "title": "UI foundation 5: game select, shelf and mod sheet update in place",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1685",
-    "labels": [
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:21:03Z",
-    "closed_at": "2026-11-28T17:21:03Z",
-    "created_at": "2026-11-28T15:42:44Z"
-   },
-   {
-    "number": 1684,
-    "title": "UI foundation 4: main menu updates in place instead of respawning per level",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1684",
-    "labels": [
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:21:01Z",
-    "closed_at": "2026-11-28T17:21:00Z",
-    "created_at": "2026-11-28T15:42:41Z"
    }
   ],
   "in_progress": [
@@ -459,21 +460,6 @@
     "updated_at": "2026-11-28T17:39:10Z",
     "closed_at": null,
     "created_at": "2026-11-26T22:20:43Z"
-   },
-   {
-    "number": 1688,
-    "title": "Client: Library::busy is unused in the non-test build (dead_code warning)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1688",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": null,
-    "updated_at": "2026-11-28T17:39:03Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T15:50:07Z"
    },
    {
     "number": 106,
@@ -507,22 +493,6 @@
     "created_at": "2026-11-26T14:59:02Z"
    },
    {
-    "number": 1664,
-    "title": "Settings: frame limit row (m5 C1 Graphics)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1664",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:34:24Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T22:44:10Z"
-   },
-   {
     "number": 1626,
     "title": "Localise the remaining client screens and widen the string guard (#196 follow-up)",
     "state": "open",
@@ -536,6 +506,36 @@
     "updated_at": "2026-11-28T17:28:07Z",
     "closed_at": null,
     "created_at": "2026-11-26T17:52:37Z"
+   },
+   {
+    "number": 1694,
+    "title": "Results page: a notice covers the Back button (notice area stays in the suspended HUD's column)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1694",
+    "labels": [
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T17:18:01Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T17:13:54Z"
+   },
+   {
+    "number": 1648,
+    "title": "Harness: xtask check skips the scripts unittest suite CI runs (UI strings test failed only in CI)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1648",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-27T01:30:17Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T22:06:38Z"
    }
   ],
   "needs_user": [
@@ -722,7 +722,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 194,
+  "closed_7d": 196,
   "opened_7d": 166,
   "burnup": [
    {
@@ -743,7 +743,7 @@
    {
     "week": "2026-11-30",
     "created": 1005,
-    "closed": 729
+    "closed": 731
    }
   ]
  },
