@@ -34,7 +34,7 @@ use crate::ui::fonts::Type;
 use crate::ui::hints::hints;
 use crate::ui::icons::{Icon, icon};
 use crate::ui::mode::Mode;
-use crate::ui::motion::{Ease, OffsetX, Tween};
+use crate::ui::motion::{Ease, Height, OffsetX, Tween, Width};
 use crate::ui::shape::{Band, Shape, Side, Veil};
 use crate::ui::tokens;
 use crate::ui::toolbar::toolbar;
@@ -825,6 +825,10 @@ fn cover(
             ..default()
         },
         cover_shape(facts, picked, art),
+        // The picked cover grows and the others make room over `motion::SELECT` (#1685): a pick
+        // never jumps the row.
+        Tween::<Width>::at_rest(size.x, tokens::motion::SELECT, Ease::OutQuint),
+        Tween::<Height>::at_rest(size.y, tokens::motion::SELECT, Ease::OutQuint),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn((
                 text_leading(
@@ -1030,19 +1034,19 @@ fn shelf_looks(
     state: Res<ShelfState>,
     lib: Res<Library>,
     facts: Res<AllFacts>,
-    mut covers: Query<(&Cover, &mut Node, &mut Shape, &Children)>,
+    mut covers: Query<(&Cover, &mut Tween<Width>, &mut Tween<Height>, &mut Shape, &Children)>,
     mut titles: Query<&mut TextFont, With<CoverTitle>>,
     mut row: Query<&mut Tween<OffsetX>, With<Row>>,
 ) {
     if !state.is_changed() {
         return;
     }
-    for (cover, mut node, mut shape, children) in &mut covers {
+    for (cover, mut w, mut h, mut shape, children) in &mut covers {
         let picked = cover.0 == state.pick;
         let size = if picked { COVER_PICKED } else { COVER };
-        if node.width != Val::Px(size.x) {
-            node.width = Val::Px(size.x);
-            node.height = Val::Px(size.y);
+        if w.to != size.x {
+            w.retarget(size.x);
+            h.retarget(size.y);
         }
         let f = facts.0.get(cover.0).cloned().unwrap_or_default();
         let mut want = cover_shape(f, picked, shape.image.clone());
@@ -1255,6 +1259,25 @@ mod tests {
         input.release(key);
         input.clear();
         app.update();
+    }
+
+    /// Walking the shelf respawns nothing, and the picked cover grows by tween, not by a jump
+    /// (UI foundation, #1685).
+    #[test]
+    fn walking_the_shelf_updates_it_in_place() {
+        use crate::ui::latency::node_set;
+        let mut app = screen();
+        let before = node_set(app.world_mut());
+        for key in [KeyCode::ArrowRight, KeyCode::ArrowRight, KeyCode::ArrowLeft] {
+            tap(&mut app, key);
+            assert_eq!(node_set(app.world_mut()), before, "{key:?}");
+        }
+        let pick = app.world().resource::<ShelfState>().pick;
+        let mut q = app.world_mut().query::<(&Cover, &Tween<Width>, &Tween<Height>)>();
+        for (cover, w, h) in q.iter(app.world()) {
+            let want = if cover.0 == pick { COVER_PICKED } else { COVER };
+            assert_eq!((w.to, h.to), (want.x, want.y), "cover {}", cover.0);
+        }
     }
 
     /// One cover per game; Right and Left move the pick along the shelf; Escape goes back to the

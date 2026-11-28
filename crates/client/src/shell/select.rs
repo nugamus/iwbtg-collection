@@ -631,6 +631,29 @@ mod tests {
         app
     }
 
+    /// Moving through the list updates it in place: no UI node is spawned or despawned
+    /// (UI foundation, #1685).
+    #[test]
+    fn moving_the_selection_respawns_nothing() {
+        use crate::ui::latency::node_set;
+        let mut app = screen();
+        let tap = |app: &mut App, key: KeyCode| {
+            app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+            app.update();
+            let mut k = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            k.release(key);
+            k.clear();
+            app.update();
+        };
+        let before = node_set(app.world_mut());
+        let start = *app.world().resource::<Selection>();
+        for key in [KeyCode::ArrowDown, KeyCode::ArrowDown, KeyCode::ArrowUp, KeyCode::ArrowRight, KeyCode::ArrowLeft] {
+            tap(&mut app, key);
+            assert_eq!(node_set(app.world_mut()), before, "{key:?}");
+        }
+        assert_ne!(*app.world().resource::<Selection>(), start, "the selection moved");
+    }
+
     /// The hint under the pick, as drawn.
     fn hint_text(app: &mut App) -> String {
         let world = app.world_mut();

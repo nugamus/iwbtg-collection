@@ -2,7 +2,7 @@
 //! that makes every tween land at once. How long each takes is a role in `tokens::motion` (#1682).
 //!
 //! A `Tween<P>` drives one property `P` of its entity: `OffsetX`/`OffsetY` (a `UiTransform`
-//! translation, so layout does not move), `Scale`, `Width` (`Node::width`) or `Opacity`
+//! translation, so layout does not move), `Scale`, `Width` and `Height` (`Node::width`, `Node::height`) or `Opacity`
 //! (`UiOpacity`). It stays on the entity when finished, so `retarget` can send it somewhere else
 //! from wherever it is now.
 
@@ -21,6 +21,7 @@ pub(super) fn plugin(app: &mut App) {
             run::<OffsetY>,
             run::<Scale>,
             run::<Width>,
+            run::<Height>,
             run::<Opacity>,
         ),
     );
@@ -80,6 +81,8 @@ pub struct OffsetY;
 pub struct Scale;
 /// `Node::width`, logical px.
 pub struct Width;
+/// `Node::height`, logical px.
+pub struct Height;
 /// `UiOpacity`, 0 to 1.
 pub struct Opacity;
 
@@ -108,6 +111,13 @@ impl Prop for Width {
     type Target = Node;
     fn set(target: &mut Node, value: f32) {
         target.width = Val::Px(value);
+    }
+}
+
+impl Prop for Height {
+    type Target = Node;
+    fn set(target: &mut Node, value: f32) {
+        target.height = Val::Px(value);
     }
 }
 
