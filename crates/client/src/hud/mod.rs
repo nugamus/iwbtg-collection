@@ -522,4 +522,59 @@ mod tests {
         assert!(parse_ui_scale("200").is_err());
         assert!(parse_ui_scale("big").is_err());
     }
+
+    /// Foundation rule 1 (#1691): the columns are built once for their density, width, look and
+    /// board; hiding and showing the HUD, the results covering it and frames that change nothing
+    /// keep every node. A new look (a run's mods) rebuilds the panel.
+    #[test]
+    fn the_columns_are_built_once() {
+        use bevy::window::{PrimaryWindow, WindowResolution};
+        // What `screen.rs` does: the layout follows the options (no columns while hidden).
+        fn relayout(hud: Res<HudOptions>, mut layout: ResMut<HudLayout>) {
+            let area = Rect::new(0.0, 0.0, 1920.0, 1080.0);
+            let want = HudLayout(layout::compute(area, 1.0, Vec2::new(800.0, 608.0), hud.0));
+            if *layout != want {
+                *layout = want;
+            }
+        }
+        let mut app = App::new();
+        let options = HudOptions::default();
+        let area = Rect::new(0.0, 0.0, 1920.0, 1080.0);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(options)
+            .init_resource::<Suspended>()
+            .insert_resource(HudLayout(layout::compute(area, 1.0, Vec2::new(800.0, 608.0), options.0)))
+            .init_resource::<run_info::Look>()
+            .init_resource::<leaderboard::Live>()
+            .init_resource::<UiScale>()
+            .init_resource::<notice::Area>()
+            .add_systems(Update, (keys, relayout, place).chain());
+        app.world_mut().spawn((
+            Window {
+                resolution: WindowResolution::new(1920, 1080),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        for left in [true, false] {
+            app.world_mut().spawn((Node::default(), Column { left }));
+        }
+        app.update();
+        app.update();
+        let built = crate::ui::latency::node_set(app.world_mut());
+        assert!(built.len() > 20, "both panels are built");
+
+        press(&mut app, &[KeyCode::ShiftLeft], KeyCode::Tab);
+        assert!(!app.world().resource::<HudOptions>().0.shown);
+        press(&mut app, &[KeyCode::ShiftLeft], KeyCode::Tab);
+        app.world_mut().resource_mut::<Suspended>().0 = true;
+        app.update();
+        app.world_mut().resource_mut::<Suspended>().0 = false;
+        app.update();
+        assert_eq!(crate::ui::latency::node_set(app.world_mut()), built);
+
+        app.world_mut().resource_mut::<run_info::Look>().unranked = true;
+        app.update();
+        assert_ne!(crate::ui::latency::node_set(app.world_mut()), built, "a new look");
+    }
 }

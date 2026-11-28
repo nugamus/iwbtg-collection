@@ -528,7 +528,8 @@ impl Plugin for ResultsPlugin {
                     open.run_if(in_state(RunScreen::Playing)),
                     keys.run_if(on_page.clone()),
                     act.run_if(on_page.clone()),
-                    show.run_if(on_page),
+                    show.run_if(on_page.clone()),
+                    save_slot.run_if(on_page),
                     hover_rows,
                     heat,
                     light_rows,
@@ -808,8 +809,7 @@ fn act(world: &mut World) {
             match save_replay(&name) {
                 Ok(to) => {
                     eprintln!("results: replay saved to {to}");
-                    results.saved = true;
-                    results.generation = results.generation.wrapping_add(1);
+                    mark_saved(&mut results);
                 }
                 Err(e) => crate::storage::warn(&format!("results: replay not saved: {e}")),
             }
@@ -970,6 +970,24 @@ fn show(
         RUN_ONLY,
         children![page::page(summary, &look)],
     ));
+}
+
+/// The replay was saved: only the button changes (`save_slot`); the page stays.
+fn mark_saved(results: &mut Results) {
+    results.saved = true;
+}
+
+/// Rebuilds the Save replay button when the replay is saved (foundation rule 3).
+fn save_slot(world: &mut World) {
+    let saved = world.resource::<Results>().saved;
+    let slots: Vec<(Entity, page::SaveSlot)> = world
+        .query::<(Entity, &page::SaveSlot)>()
+        .iter(world)
+        .map(|(e, s)| (e, *s))
+        .collect();
+    for (entity, slot) in slots {
+        crate::ui::live::refresh(world, entity, &saved, |c, saved| page::save_button(c, slot, *saved));
+    }
 }
 
 /// Fills the heatmap panel with the shown stage's room and dots whenever that stage changes, and
@@ -1280,5 +1298,71 @@ mod tests {
             .press(KeyCode::Escape);
         app.update();
         assert_eq!(app.world().resource::<Results>().picked, Some(Action::Back));
+    }
+
+    /// Foundation rules 1 and 3 (#1691): the page is built once; hovering or clicking a row,
+    /// holding R and saving the replay change it in place. Only the heatmap panel's contents
+    /// (rebuilt per shown stage by `heat`) and the Save replay slot are parts.
+    #[test]
+    fn the_page_is_built_once() {
+        use bevy::window::PrimaryWindow;
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<Time>()
+            .init_resource::<UiScale>()
+            .insert_resource(Results::default())
+            .add_systems(Update, (keys, show, save_slot, hover_rows, light_rows).chain());
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let mut board = Board::default();
+        let mut s = summary_after(&mut board, &run(&[100, 400], &[1, 3]), true);
+        s.replay = Some("demo.replay".into());
+        show_summary(&mut app.world_mut().resource_mut::<Results>(), s);
+        app.update();
+        app.update();
+        let parts = |app: &mut App| -> std::collections::BTreeSet<Entity> {
+            let world = app.world_mut();
+            let mut inside = std::collections::BTreeSet::new();
+            let roots: Vec<Entity> = world
+                .query_filtered::<Entity, Or<(With<page::HeatPanel>, With<page::SaveSlot>)>>()
+                .iter(world)
+                .collect();
+            let mut stack = roots;
+            while let Some(e) = stack.pop() {
+                if let Some(children) = world.get::<Children>(e) {
+                    inside.extend(children.iter());
+                    stack.extend(children.iter());
+                }
+            }
+            let mut all = crate::ui::latency::node_set(world);
+            all.retain(|e| !inside.contains(e));
+            all
+        };
+        let built = parts(&mut app);
+        assert!(built.len() > 20, "the page is open");
+        let saves = |app: &mut App| {
+            let world = app.world_mut();
+            world.query::<&Action>().iter(world).filter(|a| **a == Action::SaveReplay).count()
+        };
+        assert_eq!(saves(&mut app), 1);
+
+        app.world_mut().resource_mut::<Results>().hovered = Some(0);
+        app.update();
+        app.world_mut().resource_mut::<Results>().selected = Some(1);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(RETRY_KEY);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(RETRY_KEY);
+        app.update();
+        assert_eq!(parts(&mut app), built, "rows and the hold");
+
+        // What a save does (`act`, without writing the file).
+        mark_saved(&mut app.world_mut().resource_mut::<Results>());
+        app.update();
+        assert_eq!(parts(&mut app), built, "a save");
+        assert_eq!(saves(&mut app), 0, "the button says the replay was saved");
     }
 }

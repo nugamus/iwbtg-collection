@@ -1024,17 +1024,42 @@ fn footer(c: &mut ChildSpawner, s: &Summary, d: &Dims, saved: bool) {
                 label(locale::text("results_watch_replay")),
             ));
         }
-        if s.replay.is_some() && !saved {
-            c.spawn((
-                button_with(ButtonKind::Secondary, h, 20.0, label(locale::text("results_save_replay"))),
-                Action::SaveReplay,
-            ));
-        } else {
-            let l = locale::text(if saved { "results_replay_saved" } else { "results_save_replay" });
-            c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label(l)));
-        }
+        let slot = SaveSlot {
+            replay: s.replay.is_some(),
+            height: h,
+            text: d.button_text,
+        };
+        c.spawn((Node::default(), slot, crate::ui::live::Live(saved)))
+            .with_children(|c| save_button(c, slot, saved));
         c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label(locale::text("results_upload_replay"))));
     });
+}
+
+/// The Save replay button's place in the footer: saving rebuilds only it (`ui::live`, keyed on
+/// whether the replay was saved), not the page.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct SaveSlot {
+    /// The run has a replay to save.
+    pub replay: bool,
+    pub height: f32,
+    pub text: f32,
+}
+
+/// Save replay, or the disabled button that says it was saved (or that there is no replay).
+pub fn save_button(c: &mut ChildSpawner, slot: SaveSlot, saved: bool) {
+    let label = (
+        text(
+            locale::text(if saved { "results_replay_saved" } else { "results_save_replay" }),
+            Type::barlow(slot.text, 600),
+            tokens::INK,
+        ),
+        TextLayout::no_wrap(),
+    );
+    if slot.replay && !saved {
+        c.spawn((button_with(ButtonKind::Secondary, slot.height, 20.0, label), Action::SaveReplay));
+    } else {
+        c.spawn(button_off(ButtonKind::Secondary, slot.height, 20.0, label));
+    }
 }
 
 #[cfg(test)]
