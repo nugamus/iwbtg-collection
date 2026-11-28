@@ -24,8 +24,8 @@ use crate::ui::backdrop;
 /// shows a 72 px strip of it, so a room of another size only crops differently.
 const ROOM: (u32, u32) = (800, 608);
 
-/// The map name of a package without `[[maps]]`, as the loading card names its ranked run.
-pub const SINGLE_MAP: &str = "Ranked mode";
+/// The map name of a package without `[[maps]]` (#1613: the game as a whole, not a mode).
+pub const SINGLE_MAP: &str = "Full game";
 
 /// One map of a game, as the list shows it.
 #[derive(Clone, Debug, PartialEq)]

@@ -607,9 +607,9 @@ fn open(
     }
     subtitle.push(
         locale::text(if original {
-            "results_play_original"
+            "mode_classic"
         } else {
-            "pill_ranked"
+            "mode_time_attack"
         })
         .to_owned(),
     );
