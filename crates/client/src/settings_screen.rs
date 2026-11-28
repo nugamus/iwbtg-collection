@@ -424,8 +424,8 @@ pub struct Overlay {
     /// The choice the focus is on in a row of choices.
     pub chip: usize,
     pub query: String,
-    /// Bumped on every change: the panel is rebuilt.
-    generation: u64,
+    /// Bumped by [`Overlay::refresh`]: the rows are read again.
+    refreshes: u64,
     /// A change picked this frame: the row, the step and the choice.
     pending: Option<(Id, i32, Option<usize>)>,
     /// A section to jump to.
@@ -433,9 +433,10 @@ pub struct Overlay {
 }
 
 impl Overlay {
-    /// Draws it again (the updater's state changed under the Updates row).
+    /// Reads the rows again (the updater's state changed under the Updates row): only the rows
+    /// whose content changed are rebuilt.
     pub fn refresh(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
+        self.refreshes = self.refreshes.wrapping_add(1);
     }
 
     /// Opens it (the main menu's Settings, the toolbar's gear).
@@ -444,7 +445,6 @@ impl Overlay {
         self.focus = 0;
         self.chip = 0;
         self.query.clear();
-        self.generation = self.generation.wrapping_add(1);
     }
 }
 
@@ -548,21 +548,17 @@ fn keys(
         } else {
             overlay.query.clear();
             overlay.focus = 0;
-            overlay.generation = overlay.generation.wrapping_add(1);
         }
         typed.clear();
         return;
     }
-    let mut moved = false;
     if keys.just_pressed(KeyCode::ArrowDown) && n > 0 {
         overlay.focus = (overlay.focus + 1) % n;
         overlay.chip = 0;
-        moved = true;
     }
     if keys.just_pressed(KeyCode::ArrowUp) && n > 0 {
         overlay.focus = (overlay.focus + n - 1) % n;
         overlay.chip = 0;
-        moved = true;
     }
     if keys.just_pressed(KeyCode::Tab) && n > 0 {
         let here = shown.get(overlay.focus).map(|r| r.section);
@@ -578,7 +574,6 @@ fn keys(
             overlay.focus = 0;
         }
         overlay.chip = 0;
-        moved = true;
     }
     if let Some(row) = shown.get(overlay.focus.min(n.saturating_sub(1))) {
         let step = i32::from(keys.just_pressed(KeyCode::ArrowRight)) - i32::from(keys.just_pressed(KeyCode::ArrowLeft));
@@ -588,7 +583,6 @@ fn keys(
             Kind::Chips { on, .. } if !on.is_empty() => {
                 if step != 0 {
                     overlay.chip = (overlay.chip as i32 + step).rem_euclid(on.len() as i32) as usize;
-                    moved = true;
                 }
                 if pick {
                     overlay.pending = Some((row.id, 0, Some(overlay.chip)));
@@ -645,10 +639,6 @@ fn keys(
         overlay.query = query;
         overlay.focus = 0;
         overlay.chip = 0;
-        moved = true;
-    }
-    if moved {
-        overlay.generation = overlay.generation.wrapping_add(1);
     }
 }
 
@@ -669,6 +659,14 @@ fn wheel(
 
 /// Applies a change: saves it and sets what can change at once.
 fn act(world: &mut World) {
+    // Read first: taking from the overlay marks it changed, which makes `draw` read the rows.
+    let quiet = {
+        let o = world.resource::<Overlay>();
+        o.pending.is_none() && o.jump.is_none()
+    };
+    if quiet {
+        return;
+    }
     let (pending, jump) = {
         let mut o = world.resource_mut::<Overlay>();
         (o.pending.take(), o.jump.take())
@@ -679,7 +677,6 @@ fn act(world: &mut World) {
             let mut o = world.resource_mut::<Overlay>();
             o.focus = i;
             o.chip = 0;
-            o.generation = o.generation.wrapping_add(1);
         }
     }
     let Some((id, step, chip)) = pending else {
@@ -688,8 +685,6 @@ fn act(world: &mut World) {
     let new = change(settings::get(), id, step, chip);
     settings::update(|s| *s = new.clone());
     apply_live(world, &new, id);
-    let mut o = world.resource_mut::<Overlay>();
-    o.generation = o.generation.wrapping_add(1);
 }
 
 /// Sets what a setting changes in the running client.
@@ -732,14 +727,33 @@ fn apply_live(world: &mut World, s: &settings::Settings, id: Id) {
     }
 }
 
+/// What the overlay's tree is built from. Only a change here builds it again (a search, the
+/// language, the mode's accent); a focus move or a value change updates the tree in place
+/// (`ui::focus`, `ui::live`, #1681).
+#[derive(Clone, Debug, PartialEq)]
+struct Frame {
+    query: String,
+    ids: Vec<Id>,
+    language: Language,
+    accent: Color,
+}
+
 /// The overlay's root and its scrolling list.
 #[derive(Component)]
-struct Root(u64);
+struct Root(Frame);
 #[derive(Component)]
 struct List;
-/// A row's node, for scrolling it into view.
+/// A row's node, for scrolling it into view and rebuilding its content.
 #[derive(Component)]
 struct RowNode(usize);
+
+/// Where the keyboard focus shows: a row (or one choice in a row of switches), or a section's
+/// icon in the strip.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+enum Spot {
+    Row(usize, Option<usize>),
+    Section(Section),
+}
 
 /// The panel's width and the strip's.
 const STRIP: f32 = 72.0;
@@ -747,37 +761,12 @@ const PANEL: f32 = 660.0;
 /// `#08090d`, `#10121a`.
 const STRIP_FILL: Color = Color::srgb_u8(0x08, 0x09, 0x0d);
 const PANEL_FILL: Color = Color::srgb_u8(0x10, 0x12, 0x1a);
+/// The section icon at rest.
+const STRIP_ICON: Color = Color::srgb_u8(0x8d, 0x93, 0xa8);
 
-/// Builds the overlay again after each change, and takes it down when it closes.
-fn draw(world: &mut World) {
-    let (open, generation) = {
-        let o = world.resource::<Overlay>();
-        (o.open, o.generation)
-    };
-    let roots: Vec<(Entity, u64)> = world.query::<(Entity, &Root)>().iter(world).map(|(e, r)| (e, r.0)).collect();
-    let keep_scroll = world
-        .query_filtered::<&ScrollPosition, With<List>>()
-        .iter(world)
-        .next()
-        .map(|p| p.y);
-    let mut current = false;
-    for (e, g) in roots {
-        if open && g == generation {
-            current = true;
-        } else {
-            world.entity_mut(e).despawn();
-        }
-    }
-    if !open || current {
-        scroll_into_view(world);
-        return;
-    }
-    let s = settings::get();
-    let (focus, chip, query) = {
-        let o = world.resource::<Overlay>();
-        (o.focus, o.chip, o.query.clone())
-    };
-    let mut shown = rows(&s, &query);
+/// The rows as shown now: the settings, and the updater under the Updates row.
+fn shown_rows(world: &World, query: &str) -> Vec<Row> {
+    let mut shown = rows(&settings::get(), query);
     // The Updates row reads the updater, which `rows` cannot see.
     if let Some(updater) = world.get_resource::<crate::updater::Updater>() {
         let ready = matches!(updater.phase, crate::updater::Phase::Ready(_));
@@ -788,9 +777,82 @@ fn draw(world: &mut World) {
             };
         }
     }
+    shown
+}
+
+/// Keeps the overlay's tree in step with the overlay: builds it when it opens or its frame
+/// changes, rebuilds a row's content when that row changed, moves the focus looks, and takes it
+/// down when it closes.
+fn draw(world: &mut World, mut seen: Local<Option<settings::Settings>>) {
+    let open = world.resource::<Overlay>().open;
+    let roots: Vec<(Entity, Frame)> = world.query::<(Entity, &Root)>().iter(world).map(|(e, r)| (e, r.0.clone())).collect();
+    if !open {
+        for (e, _) in roots {
+            world.entity_mut(e).despawn();
+        }
+        return;
+    }
+    // A setting can also change while the overlay is open from outside it (F11, F9, `[` and
+    // `]` in `screen.rs`): the rows are read again then too.
+    let now = settings::get();
+    let settings_changed = seen.as_ref() != Some(&now);
+    *seen = Some(now);
+    if !roots.is_empty() && !settings_changed && !world.is_resource_changed::<Overlay>() {
+        scroll_into_view(world);
+        return;
+    }
+    let (focus, chip, query) = {
+        let o = world.resource::<Overlay>();
+        (o.focus, o.chip, o.query.clone())
+    };
+    let shown = shown_rows(world, &query);
     let accent = crate::ui::mode::accent(world.get_resource::<crate::ui::mode::Mode>());
+    let frame = Frame {
+        query: query.clone(),
+        ids: shown.iter().map(|r| r.id).collect(),
+        language: settings::get().language,
+        accent,
+    };
+    let current = roots.iter().any(|(_, f)| *f == frame);
+    if !current {
+        let keep_scroll = world
+            .query_filtered::<&ScrollPosition, With<List>>()
+            .iter(world)
+            .next()
+            .map(|p| p.y);
+        for (e, _) in roots {
+            world.entity_mut(e).despawn();
+        }
+        build(world, frame, &shown, keep_scroll);
+    }
+    // Each row's content follows its data; an unchanged row is left alone.
+    let row_nodes: Vec<(Entity, usize)> = world.query::<(Entity, &RowNode)>().iter(world).map(|(e, r)| (e, r.0)).collect();
+    for (e, i) in row_nodes {
+        if let Some(row) = shown.get(i) {
+            crate::ui::live::refresh(world, e, row, |c, row| row_content(c, i, row, accent));
+        }
+    }
+    // The focus looks: a few component writes, never a respawn.
+    let active = shown.get(focus).map(|r| r.section);
+    let mut spots = world.query::<(&Spot, &mut crate::ui::focus::Focused)>();
+    for (spot, mut focused) in spots.iter_mut(world) {
+        let on = match *spot {
+            Spot::Row(i, None) => i == focus,
+            Spot::Row(i, Some(j)) => i == focus && j == chip,
+            Spot::Section(s) => active == Some(s),
+        };
+        crate::ui::focus::set(&mut focused, on);
+    }
+    scroll_into_view(world);
+}
+
+/// Builds the overlay's tree; the rows' content is filled in by `draw`.
+fn build(world: &mut World, frame: Frame, shown: &[Row], keep_scroll: Option<f32>) {
+    let (query, accent) = (frame.query.clone(), frame.accent);
+    let sections: Vec<(usize, Row)> = shown.iter().cloned().enumerate().collect();
+    let found = shown.len();
     world.spawn((
-        Root(generation),
+        Root(frame),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(0.0),
@@ -815,14 +877,14 @@ fn draw(world: &mut World) {
                 },
                 BackgroundColor(tokens::dark(Color::srgb_u8(5, 6, 10), 0.55)),
             ));
-            strip(c, &shown, focus, accent);
-            panel(c, &shown, focus, chip, &query, accent, keep_scroll);
+            strip(c, accent);
+            panel(c, &sections, found, &query, accent, keep_scroll);
         })),
     ));
 }
 
-fn strip(c: &mut ChildSpawner, shown: &[Row], focus: usize, accent: Color) {
-    let active = shown.get(focus).map(|r| r.section);
+fn strip(c: &mut ChildSpawner, accent: Color) {
+    use crate::ui::focus::{FocusFill, FocusInk, Focused};
     c.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -839,20 +901,31 @@ fn strip(c: &mut ChildSpawner, shown: &[Row], focus: usize, accent: Color) {
     ))
     .with_children(|c| {
         for s in Section::ALL {
-            let on = active == Some(s);
             c.spawn((
                 Button,
                 Hit::Section(s),
+                Spot::Section(s),
+                Focused(false),
+                FocusFill {
+                    rest: Color::NONE,
+                    focus: tokens::white(0.06),
+                },
                 Node {
                     height: Val::Px(60.0),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     ..default()
                 },
-                BackgroundColor(if on { tokens::white(0.06) } else { Color::NONE }),
+                BackgroundColor(Color::NONE),
             ))
             .with_children(|c| {
                 c.spawn((
+                    Spot::Section(s),
+                    Focused(false),
+                    FocusFill {
+                        rest: Color::NONE,
+                        focus: accent,
+                    },
                     Node {
                         position_type: PositionType::Absolute,
                         left: Val::Px(0.0),
@@ -862,28 +935,23 @@ fn strip(c: &mut ChildSpawner, shown: &[Row], focus: usize, accent: Color) {
                         border_radius: BorderRadius::right(Val::Px(3.0)),
                         ..default()
                     },
-                    BackgroundColor(if on { accent } else { Color::NONE }),
+                    BackgroundColor(Color::NONE),
                 ));
-                c.spawn(icon(
-                    s.icon(),
-                    26.0,
-                    if on { Color::WHITE } else { Color::srgb_u8(0x8d, 0x93, 0xa8) },
+                c.spawn((
+                    icon(s.icon(), 26.0, STRIP_ICON),
+                    Spot::Section(s),
+                    Focused(false),
+                    FocusInk {
+                        rest: STRIP_ICON,
+                        focus: Color::WHITE,
+                    },
                 ));
             });
         }
     });
 }
 
-#[allow(clippy::too_many_arguments, reason = "the panel's parts")]
-fn panel(
-    c: &mut ChildSpawner,
-    shown: &[Row],
-    focus: usize,
-    chip: usize,
-    query: &str,
-    accent: Color,
-    keep_scroll: Option<f32>,
-) {
+fn panel(c: &mut ChildSpawner, shown: &[(usize, Row)], found: usize, query: &str, accent: Color, keep_scroll: Option<f32>) {
     c.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -929,7 +997,6 @@ fn panel(
             },
             Children::spawn(SpawnWith({
                 let query = query.to_owned();
-                let found = shown.len();
                 move |c: &mut ChildSpawner| {
                     c.spawn(icon(Icon::Search, 18.0, tokens::MUTED));
                     let (t, ink) = if query.is_empty() {
@@ -970,7 +1037,7 @@ fn panel(
         ));
         list.with_children(|c| {
             let mut last = None;
-            for (i, row) in shown.iter().enumerate() {
+            for (i, row) in shown {
                 if last != Some(row.section) {
                     last = Some(row.section);
                     c.spawn(Node {
@@ -993,7 +1060,7 @@ fn panel(
                         c.spawn(text(row.section.title(), Type::barlow(20.0, 700), tokens::INK));
                     });
                 }
-                row_node(c, i, row, i == focus, chip, !query.is_empty(), accent);
+                row_node(c, *i, row, !query.is_empty(), accent);
             }
             if shown.is_empty() {
                 c.spawn(text(locale::text("set_nothing"), Type::barlow(15.0, 400), tokens::MUTED));
@@ -1002,25 +1069,31 @@ fn panel(
     });
 }
 
-fn row_node(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, hit: bool, accent: Color) {
-    let wide = matches!(&row.kind, Kind::Chips { options, .. } if options.len() > 3);
-    let fill = if focus {
-        tokens::white(0.06)
-    } else if hit {
-        accent.with_alpha(0.08)
-    } else {
-        Color::NONE
-    };
-    let mut node = c.spawn((
+/// Whether a row lays its choices out under its label (more than three choices).
+fn wide(row: &Row) -> bool {
+    matches!(&row.kind, Kind::Chips { options, .. } if options.len() > 3)
+}
+
+/// A row's box: its size never depends on the focus. The focus fills it and rings it from
+/// outside (an outline, not a border), so no row moves when the focus does.
+fn row_node(c: &mut ChildSpawner, i: usize, row: &Row, hit: bool, accent: Color) {
+    let wide = wide(row);
+    let rest = if hit { accent.with_alpha(0.08) } else { Color::NONE };
+    c.spawn((
         RowNode(i),
         Button,
         Hit::Row(i, None),
+        Spot::Row(i, None),
+        crate::ui::focus::FocusFill {
+            rest,
+            focus: tokens::white(0.06),
+        },
+        crate::ui::focus::ring(2.0, tokens::white(0.5)),
         Node {
             min_height: Val::Px(58.0),
             padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
             margin: UiRect::horizontal(Val::Px(-14.0)),
             border_radius: BorderRadius::all(Val::Px(10.0)),
-            border: UiRect::all(Val::Px(if focus { 2.0 } else { 0.0 })),
             flex_direction: if wide { FlexDirection::Column } else { FlexDirection::Row },
             align_items: if wide { AlignItems::Stretch } else { AlignItems::Center },
             column_gap: Val::Px(18.0),
@@ -1028,30 +1101,30 @@ fn row_node(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize,
             flex_shrink: 0.0,
             ..default()
         },
-        BackgroundColor(fill),
-        BorderColor::all(if focus { tokens::white(0.5) } else { Color::NONE }),
+        BackgroundColor(rest),
     ));
-    node.with_children(|c| {
-        c.spawn(Node {
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(3.0),
-            flex_grow: 1.0,
-            flex_shrink: 1.0,
-            min_width: Val::Px(0.0),
-            ..default()
-        })
-        .with_children(|c| {
-            c.spawn(text(&row.label, Type::barlow(16.0, 600), tokens::INK));
-            if !row.desc.is_empty() {
-                c.spawn(text(&row.desc, Type::barlow(13.0, 400), tokens::MUTED));
-            }
-        });
-        control(c, i, row, focus, chip, accent, wide);
-    });
 }
 
-#[allow(clippy::too_many_arguments, reason = "one control")]
-fn control(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, accent: Color, wide: bool) {
+/// A row's content: its label, its description and its control, built from the row's data.
+fn row_content(c: &mut ChildSpawner, i: usize, row: &Row, accent: Color) {
+    c.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: Val::Px(3.0),
+        flex_grow: 1.0,
+        flex_shrink: 1.0,
+        min_width: Val::Px(0.0),
+        ..default()
+    })
+    .with_children(|c| {
+        c.spawn(text(&row.label, Type::barlow(16.0, 600), tokens::INK));
+        if !row.desc.is_empty() {
+            c.spawn(text(&row.desc, Type::barlow(13.0, 400), tokens::MUTED));
+        }
+    });
+    control(c, i, row, accent, wide(row));
+}
+
+fn control(c: &mut ChildSpawner, i: usize, row: &Row, accent: Color, wide: bool) {
     let mut box_ = c.spawn(Node {
         align_items: AlignItems::Center,
         justify_content: if wide { JustifyContent::FlexStart } else { JustifyContent::FlexEnd },
@@ -1088,12 +1161,8 @@ fn control(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, 
         Kind::Chips { options, picked, on } => {
             for (j, o) in options.iter().enumerate() {
                 let lit = picked.map_or_else(|| on.get(j).copied().unwrap_or(false), |p| p == j);
-                let cursor = focus && !on.is_empty() && j == chip;
-                let mut shape = Shape::fill(if lit { tokens::over(accent, 0.26, PANEL_FILL) } else { tokens::white(0.07) });
-                if cursor {
-                    shape = shape.with_ring(2.0, tokens::white(0.6));
-                }
-                c.spawn((
+                let shape = Shape::fill(if lit { tokens::over(accent, 0.26, PANEL_FILL) } else { tokens::white(0.07) });
+                let mut chip = c.spawn((
                     Button,
                     Hit::Row(i, Some(j)),
                     crate::ui::widgets::sheared(34.0, 11.0, shape),
@@ -1103,6 +1172,10 @@ fn control(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, 
                         if lit { Color::WHITE } else { tokens::MUTED }
                     )],
                 ));
+                // A row of switches has a cursor on one switch; a row of choices has none.
+                if !on.is_empty() {
+                    chip.insert((Spot::Row(i, Some(j)), crate::ui::focus::shape_ring(2.0, tokens::white(0.6))));
+                }
             }
         }
         Kind::Slider(f, value) => {
@@ -1179,14 +1252,12 @@ fn control(c: &mut ChildSpawner, i: usize, row: &Row, focus: bool, chip: usize, 
                     children![text(value, Type::barlow(14.0, 500), tokens::SOFT)],
                 ));
             }
-            let mut shape = Shape::fill(tokens::white(0.12));
-            if focus {
-                shape = shape.with_ring(2.0, tokens::white(0.6));
-            }
             c.spawn((
                 Button,
                 Hit::Row(i, Some(0)),
-                crate::ui::widgets::sheared(36.0, 16.0, shape),
+                Spot::Row(i, None),
+                crate::ui::focus::shape_ring(2.0, tokens::white(0.6)),
+                crate::ui::widgets::sheared(36.0, 16.0, Shape::fill(tokens::white(0.12))),
                 children![text(button, Type::barlow(15.0, 700), tokens::INK)],
             ));
         }
@@ -1267,5 +1338,80 @@ mod tests {
         let s = change(s, Id::UpdateChannel, 1, None);
         assert_eq!(s.update_channel, UpdateChannel::MainBuilds, "Enter steps round");
         assert_eq!(change(s.clone(), Id::Updates, 0, None), s, "the button changes no setting");
+    }
+
+    /// The overlay's systems in a bare app, opened.
+    fn open_app() -> App {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .add_message::<KeyboardInput>()
+            .add_message::<MouseWheel>()
+            .insert_resource(Overlay::default())
+            .add_systems(Update, ((keys, wheel, act, draw).chain(), crate::ui::focus::look).chain());
+        app.world_mut().resource_mut::<Overlay>().show();
+        app.update();
+        app
+    }
+
+    fn press(app: &mut App, key: KeyCode) {
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+        app.update();
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.release(key);
+        keys.clear();
+        app.update();
+    }
+
+    /// Every row's entity and its layout, in order.
+    fn row_boxes(app: &mut App) -> Vec<(usize, Entity, Node)> {
+        let mut q = app.world_mut().query::<(Entity, &RowNode, &Node)>();
+        let mut v: Vec<_> = q.iter(app.world()).map(|(e, r, n)| (r.0, e, n.clone())).collect();
+        v.sort_by_key(|(i, ..)| *i);
+        v
+    }
+
+    fn focused_rows(app: &mut App) -> Vec<usize> {
+        let mut q = app.world_mut().query::<(&RowNode, &crate::ui::focus::Focused)>();
+        let mut v: Vec<usize> = q.iter(app.world()).filter(|(_, f)| f.0).map(|(r, _)| r.0).collect();
+        v.sort_unstable();
+        v
+    }
+
+    #[test]
+    fn moving_the_focus_rebuilds_nothing_and_moves_nothing() {
+        let mut app = open_app();
+        let before = row_boxes(&mut app);
+        assert_eq!(before.len(), rows(&settings::get(), "").len());
+        assert_eq!(focused_rows(&mut app), vec![0]);
+        let root = app.world_mut().query_filtered::<Entity, With<Root>>().single(app.world()).unwrap();
+        for (key, want) in [(KeyCode::ArrowDown, 1), (KeyCode::ArrowDown, 2), (KeyCode::ArrowUp, 1)] {
+            press(&mut app, key);
+            assert_eq!(focused_rows(&mut app), vec![want], "{key:?}");
+            assert_eq!(row_boxes(&mut app), before, "the same rows, laid out the same");
+        }
+        assert!(app.world().get_entity(root).is_ok(), "the overlay was not rebuilt");
+        let row = before[1].1;
+        assert_eq!(app.world().get::<Outline>(row).unwrap().color, tokens::white(0.5), "the ring shows");
+        assert_eq!(app.world().get::<Outline>(before[0].1).unwrap().color, Color::NONE);
+    }
+
+    #[test]
+    fn a_search_builds_the_list_again_and_escape_restores_it() {
+        let mut app = open_app();
+        let all = row_boxes(&mut app).len();
+        let mut typed = app.world_mut().resource_mut::<Messages<KeyboardInput>>();
+        typed.write(KeyboardInput {
+            key_code: KeyCode::KeyZ,
+            logical_key: Key::Character("zzzz".into()),
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        app.update();
+        assert!(row_boxes(&mut app).is_empty(), "nothing matches");
+        press(&mut app, KeyCode::Escape);
+        assert_eq!(row_boxes(&mut app).len(), all);
+        assert_eq!(app.world_mut().query::<&Root>().iter(app.world()).count(), 1, "one overlay");
     }
 }
