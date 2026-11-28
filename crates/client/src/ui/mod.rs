@@ -5,11 +5,13 @@
 
 pub mod backdrop;
 pub mod filter;
+pub mod focus;
 pub mod fonts;
 pub mod gallery;
 pub mod glow;
 pub mod hints;
 pub mod icons;
+pub mod live;
 pub mod mode;
 pub mod motion;
 pub mod notice;
@@ -106,6 +108,7 @@ impl Plugin for UiKitPlugin {
             fonts::plugin,
             shape::plugin,
             filter::plugin,
+            focus::plugin,
             motion::plugin,
             widgets::plugin,
             icons::plugin,
