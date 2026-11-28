@@ -44,7 +44,7 @@ impl Language {
         }
     }
 
-    fn parse(code: &str) -> Option<Language> {
+    pub fn parse(code: &str) -> Option<Language> {
         match code {
             "en" => Some(Language::En),
             "ja" => Some(Language::Ja),

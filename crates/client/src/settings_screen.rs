@@ -473,6 +473,10 @@ pub struct SettingsScreenArgs {
     /// no search).
     #[arg(long, hide = true, value_name = "QUERY")]
     pub settings_preview: Option<String>,
+    /// Screenshot checks: draw this run in `en` or `ja`, not the settings file's language
+    /// (not saved).
+    #[arg(long, hide = true, value_name = "CODE")]
+    pub language: Option<String>,
 }
 
 /// The module's place in the module list (main.rs).
@@ -480,6 +484,18 @@ pub struct Registration;
 
 impl crate::registration::ClientModule for Registration {
     type Args = SettingsScreenArgs;
+
+    fn prepare(args: &mut SettingsScreenArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        let Some(code) = &args.language else {
+            return Ok(());
+        };
+        let language = crate::settings::Language::parse(code)
+            .ok_or_else(|| format!("--language: `{code}` is not en or ja"))?;
+        if !crate::locale::set_for_run(language) {
+            return Err("--language: a string was read before the flag".to_owned());
+        }
+        Ok(())
+    }
 
     fn add(app: &mut App, args: SettingsScreenArgs, _startup: &crate::registration::Startup) {
         let mut overlay = Overlay::default();

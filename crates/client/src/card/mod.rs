@@ -229,19 +229,15 @@ pub fn grouped(n: u64) -> String {
 /// `3 hours ago`, `yesterday`, `2 days ago`, then the date (`14 Sep`).
 pub fn ago(then: u64, now: u64) -> String {
     let s = now.saturating_sub(then);
-    let plural = |n: u64, unit: &str| {
-        if n == 1 {
-            format!("1 {unit} ago")
-        } else {
-            format!("{n} {unit}s ago")
-        }
+    let plural = |n: u64, (one, many): (&str, &str)| {
+        crate::locale::format(if n == 1 { one } else { many }, &[("n", &n)])
     };
     match s {
-        0..60 => "just now".to_owned(),
-        60..3600 => plural(s / 60, "minute"),
-        3600..86_400 => plural(s / 3600, "hour"),
-        86_400..172_800 => "yesterday".to_owned(),
-        172_800..604_800 => plural(s / 86_400, "day"),
+        0..60 => crate::locale::text("card_ago_now").to_owned(),
+        60..3600 => plural(s / 60, ("card_ago_minute", "card_ago_minutes")),
+        3600..86_400 => plural(s / 3600, ("card_ago_hour", "card_ago_hours")),
+        86_400..172_800 => crate::locale::text("card_ago_yesterday").to_owned(),
+        172_800..604_800 => plural(s / 86_400, ("card_ago_day", "card_ago_days")),
         _ => crate::hud::leaderboard::date_short(then),
     }
 }
@@ -271,22 +267,24 @@ fn cells(card: &Card, cols: usize) -> Vec<[String; 3]> {
     let run = card.run.as_ref();
     let mut out = vec![
         [
-            "Total deaths".to_owned(),
+            crate::locale::text("card_total_deaths").to_owned(),
             grouped(card.deaths),
-            run.map_or(String::new(), |r| format!("+{} this run", grouped(r.deaths))),
+            run.map_or(String::new(), |r| {
+                crate::locale::format("card_this_run", &[("n", &grouped(r.deaths))])
+            }),
         ],
         [
-            "Play time".to_owned(),
+            crate::locale::text("card_play_time").to_owned(),
             hours_minutes(card.play_seconds),
             run.map_or(String::new(), |r| format!("+{}", hours_minutes(r.play_seconds))),
         ],
     ];
     if let Some(r) = run {
-        let unit = if r.entries_total == 1 { "entry" } else { "entries" };
+        let key = if r.entries_total == 1 { "card_entry" } else { "card_entries" };
         out.push([
             r.game.clone(),
-            format!("{} / {} {unit}", r.entries_cleared, r.entries_total),
-            "cleared".to_owned(),
+            crate::locale::format(key, &[("cleared", &r.entries_cleared), ("total", &r.entries_total)]),
+            crate::locale::text("card_cleared").to_owned(),
         ]);
     }
     out.truncate(cols);
@@ -371,12 +369,12 @@ fn identity(card: &Card, variant: Variant, d: &Dims) -> impl Bundle + use<> {
         children![text(&initial, Type::condensed(d.avatar_font, 700), tokens::INK)],
     );
     let footer = variant == Variant::Footer;
-    let cleared = if footer {
-        format!("{} cleared", card.games_cleared)
-    } else {
-        let unit = if card.games_cleared == 1 { "game" } else { "games" };
-        format!("{} {unit} cleared", card.games_cleared)
+    let key = match (footer, card.games_cleared) {
+        (true, _) => "card_cleared_short",
+        (false, 1) => "card_game_cleared",
+        (false, _) => "card_games_cleared",
     };
+    let cleared = crate::locale::format(key, &[("n", &card.games_cleared)]);
     let name = card.name.clone();
     let line = d.line;
     let name_size = d.name;
@@ -411,9 +409,9 @@ fn identity(card: &Card, variant: Variant, d: &Dims) -> impl Bundle + use<> {
                         let soft = Type::barlow(13.0, 400);
                         let bold = Type::barlow(13.0, 600);
                         c.spawn(rich(vec![
-                            ("Deaths ".to_owned(), soft, tokens::SOFT),
+                            (crate::locale::text("card_deaths_lead").to_owned(), soft, tokens::SOFT),
                             (deaths, bold, tokens::INK),
-                            (" · Play time ".to_owned(), soft, tokens::SOFT),
+                            (crate::locale::text("card_play_time_lead").to_owned(), soft, tokens::SOFT),
                             (play, bold, tokens::INK),
                         ]));
                     }
@@ -434,11 +432,11 @@ fn collection(card: &Card, d: &Dims) -> impl Bundle + use<> {
             ..default()
         },
         children![
-            text("Collection", small, tokens::SOFT),
+            text(crate::locale::text("card_collection"), small, tokens::SOFT),
             rich(vec![
                 (card.games_cleared.to_string(), small, tokens::INK),
                 (
-                    format!(" / {} games cleared", card.games_total),
+                    crate::locale::format("card_of_games", &[("total", &card.games_total)]),
                     small,
                     tokens::SOFT
                 ),

@@ -13,8 +13,8 @@ Two halves, both deterministic and offline:
   widget. `TEXT_CONSTRUCTORS` below is the whole rule; there is no per-string allowlist. A literal
   with no word (a time placeholder such as `0:00.00`, a bare `—`) is not text and is allowed.
 
-Scope: the modules this issue localises. The browser and game-select screens are localised under
-#105, so they are not scanned here yet; widening `SCANNED` is the follow-up when #105 lands.
+Scope: the modules localised so far (#196, #1626). `shell/**` and `controls.rs` join `SCANNED`
+when #1626 localises them.
 """
 
 import re
@@ -33,6 +33,10 @@ SCANNED = (
     "src/ui/notice.rs",
     "src/hud",
     "src/results",
+    "src/viewer.rs",
+    "src/card",
+    "src/loading/page.rs",
+    "src/ui/toolbar.rs",
 )
 
 CATALOGUES = {
