@@ -109,6 +109,10 @@ fn main() -> ExitCode {
             .as_deref()
             .and_then(|r| screen::parse_ratio(r).ok().flatten()),
     };
+    // The language first: the standalone modes below draw text too.
+    if let Err(e) = settings_screen::apply_language(&args.settings_screen) {
+        return exit_code(Err(e));
+    }
     // Validate the flags and open any standalone mode (gallery, card preview, `--show-bindings`).
     if let Some(result) = args.prepare(&startup) {
         return exit_code(result);

@@ -501,23 +501,25 @@ pub struct SettingsScreenArgs {
     pub language: Option<String>,
 }
 
+/// `--language`: the run's language, set before any module's startup checks so the standalone
+/// modes (`--controls`, `--ui-gallery`) draw in it too (main.rs calls it first).
+pub fn apply_language(args: &SettingsScreenArgs) -> Result<(), String> {
+    let Some(code) = &args.language else {
+        return Ok(());
+    };
+    let language =
+        crate::settings::Language::parse(code).ok_or_else(|| format!("--language: `{code}` is not en or ja"))?;
+    if !crate::locale::set_for_run(language) {
+        return Err("--language: a string was read before the flag".to_owned());
+    }
+    Ok(())
+}
+
 /// The module's place in the module list (main.rs).
 pub struct Registration;
 
 impl crate::registration::ClientModule for Registration {
     type Args = SettingsScreenArgs;
-
-    fn prepare(args: &mut SettingsScreenArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
-        let Some(code) = &args.language else {
-            return Ok(());
-        };
-        let language = crate::settings::Language::parse(code)
-            .ok_or_else(|| format!("--language: `{code}` is not en or ja"))?;
-        if !crate::locale::set_for_run(language) {
-            return Err("--language: a string was read before the flag".to_owned());
-        }
-        Ok(())
-    }
 
     fn add(app: &mut App, args: SettingsScreenArgs, _startup: &crate::registration::Startup) {
         let mut overlay = Overlay::default();

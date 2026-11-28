@@ -13,8 +13,8 @@ Two halves, both deterministic and offline:
   widget. `TEXT_CONSTRUCTORS` below is the whole rule; there is no per-string allowlist. A literal
   with no word (a time placeholder such as `0:00.00`, a bare `—`) is not text and is allowed.
 
-Scope: the modules localised so far (#196, #1626). `shell/**` and `controls.rs` join `SCANNED`
-when #1626 localises them.
+Scope: the modules localised so far (#196, #1626), `controls.rs` and the pause menu's own modules
+included. `shell/**` joins `SCANNED` when #1626 localises it.
 """
 
 import re
@@ -29,6 +29,8 @@ CLIENT = ROOT / "crates" / "client"
 # are directories (all `.rs` under them).
 SCANNED = (
     "src/pause.rs",
+    "src/pause",
+    "src/controls.rs",
     "src/ui/widgets.rs",
     "src/ui/notice.rs",
     "src/hud",
