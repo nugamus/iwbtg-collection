@@ -84,6 +84,7 @@ pub enum Id {
     Display,
     Ratio,
     WindowSize,
+    FrameLimit,
     IntegerScale,
     BackdropBlur,
     UiScale,
@@ -131,7 +132,7 @@ pub struct Row {
 }
 
 impl Id {
-    pub const ALL: [Id; 21] = [
+    pub const ALL: [Id; 22] = [
         Id::Language,
         Id::ProfileName,
         Id::UpdateChannel,
@@ -139,6 +140,7 @@ impl Id {
         Id::Display,
         Id::Ratio,
         Id::WindowSize,
+        Id::FrameLimit,
         Id::IntegerScale,
         Id::BackdropBlur,
         Id::UiScale,
@@ -161,6 +163,7 @@ impl Id {
             Id::Display
             | Id::Ratio
             | Id::WindowSize
+            | Id::FrameLimit
             | Id::IntegerScale
             | Id::BackdropBlur
             | Id::UiScale => Section::Graphics,
@@ -185,6 +188,7 @@ impl Id {
             Id::Display => ("set_display", ""),
             Id::Ratio => ("set_ratio", "set_ratio_desc"),
             Id::WindowSize => ("set_window_size", "set_window_size_desc"),
+            Id::FrameLimit => ("set_frame_limit", "set_frame_limit_desc"),
             Id::IntegerScale => ("set_integer_scale", "set_integer_scale_desc"),
             Id::BackdropBlur => ("set_backdrop_blur", "set_backdrop_blur_desc"),
             Id::UiScale => ("set_ui_scale", "set_ui_scale_desc"),
@@ -242,6 +246,18 @@ impl Id {
                 || locale::text("set_default").to_owned(),
                 |(w, h)| format!("{w} × {h}"),
             )),
+            Id::FrameLimit => Kind::Chips {
+                options: settings::FrameLimit::CHOICES
+                    .iter()
+                    .map(|l| match l {
+                        settings::FrameLimit::Display => locale::text("set_frame_display").to_owned(),
+                        settings::FrameLimit::Unlimited => locale::text("set_frame_unlimited").to_owned(),
+                        settings::FrameLimit::Fps(n) => n.to_string(),
+                    })
+                    .collect(),
+                picked: settings::FrameLimit::CHOICES.iter().position(|l| *l == s.frame_limit),
+                on: Vec::new(),
+            },
             Id::IntegerScale => Kind::Toggle(s.integer_scale),
             Id::BackdropBlur => {
                 let (f, t) = pct(s.backdrop_blur, settings::MAX_BACKDROP_BLUR);
@@ -380,6 +396,12 @@ pub fn change(mut s: settings::Settings, id: Id, step: i32, chip: Option<usize>)
                 Some(i) => (i as i32 + if step < 0 { -1 } else { 1 }).rem_euclid(w.len() as i32) as usize,
             };
             s.window = Some(w[next]);
+        }
+        Id::FrameLimit => {
+            let all = settings::FrameLimit::CHOICES;
+            let at = all.iter().position(|l| *l == s.frame_limit).unwrap_or(0);
+            let i = chip.unwrap_or((at + 1) % all.len());
+            s.frame_limit = all[i.min(all.len() - 1)];
         }
         Id::IntegerScale => s.integer_scale = !s.integer_scale,
         Id::BackdropBlur => {
@@ -720,6 +742,11 @@ fn apply_live(world: &mut World, s: &settings::Settings, id: Id) {
                 window.resolution.set_physical_resolution(w, h);
             }
         }
+        Id::FrameLimit => {
+            if let Some(mut cap) = world.get_resource_mut::<crate::view::Cap>() {
+                cap.0 = crate::view::FrameCap::from_setting(s.frame_limit);
+            }
+        }
         Id::IntegerScale | Id::UiScale => {
             if let Some(mut hud) = world.get_resource_mut::<crate::hud::HudOptions>() {
                 hud.0.integer = s.integer_scale;
@@ -1029,7 +1056,11 @@ fn panel(c: &mut ChildSpawner, shown: &[(usize, Row)], found: usize, query: &str
                     ));
                     if !query.is_empty() {
                         c.spawn(text(
-                            &locale::format("set_found", &[("n", &found)]),
+                            &if found == 1 {
+                                locale::text("set_found_one").to_owned()
+                            } else {
+                                locale::format("set_found", &[("n", &found)])
+                            },
                             Type::barlow(13.0, 400),
                             tokens::MUTED,
                         ));
@@ -1349,6 +1380,8 @@ mod tests {
         assert_eq!(s.ui_scale, 95);
         let s = change(s, Id::SlowSpeed, 1, Some(1));
         assert_eq!(s.slow_speed, crate::practice::SLOW_SPEEDS[1]);
+        let s = change(s, Id::FrameLimit, 0, Some(3));
+        assert_eq!(s.frame_limit, settings::FrameLimit::Fps(144));
         let s = change(s, Id::UpdateChannel, 0, Some(1));
         assert_eq!(s.update_channel, UpdateChannel::Releases);
         let s = change(s, Id::UpdateChannel, 1, None);

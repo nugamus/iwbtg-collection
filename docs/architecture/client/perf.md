@@ -14,7 +14,7 @@ target/release/iwbtg-client <package> --perf 600 --perf-warmup 120 --fps unlimit
     --perf-write perf-<case>.txt
 ```
 
-- `--fps unlimited` matters: the default cap of 60 adds its sleep to every **frame period**,
+- `--fps unlimited` matters: a numeric cap adds its sleep, and the default `display` limit its vsync wait, to every **frame period**,
   while the main-thread and sim lines stay honest. `--perf` and `--screenshot` cannot be
   combined.
 - `--perf-warmup` counts **sim ticks** (default 120, 2.4 s at 50 Hz), so a churn room's

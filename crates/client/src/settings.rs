@@ -83,6 +83,9 @@ pub struct Settings {
     pub ui_scale: u32,
     /// Backdrop blur in percent, 0 to [`MAX_BACKDROP_BLUR`] (`[` and `]`, later the settings slider).
     pub backdrop_blur: u32,
+    /// How fast the window draws (`[display] frame_limit`, #1664): the display's refresh (vsync,
+    /// the default), a cap in frames per second, or none. Never the game's tick rate.
+    pub frame_limit: FrameLimit,
     /// Which HUD elements are shown (`[hud.show]`).
     pub hud_show: HudShow,
     /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
@@ -108,6 +111,43 @@ pub struct Settings {
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
+}
+
+/// How fast the window draws (`[display] frame_limit`, #1664).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FrameLimit {
+    /// In step with the display's refresh (vsync): no tearing, no wasted frames.
+    #[default]
+    Display,
+    /// At most this many frames per second, without vsync.
+    Fps(u32),
+    /// As fast as it can, without vsync.
+    Unlimited,
+}
+
+impl FrameLimit {
+    /// The settings row's choices, in order.
+    pub const CHOICES: [FrameLimit; 6] = [
+        FrameLimit::Display,
+        FrameLimit::Fps(60),
+        FrameLimit::Fps(120),
+        FrameLimit::Fps(144),
+        FrameLimit::Fps(240),
+        FrameLimit::Unlimited,
+    ];
+
+    /// The value `frame_limit` holds: `display`, `unlimited` or a number.
+    pub fn parse(text: &str) -> Option<FrameLimit> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "display" | "vsync" => Some(FrameLimit::Display),
+            "unlimited" => Some(FrameLimit::Unlimited),
+            n => n
+                .parse::<u32>()
+                .ok()
+                .filter(|n| (1..=1000).contains(n))
+                .map(FrameLimit::Fps),
+        }
+    }
 }
 
 /// Which release the client updates itself from (`[updates] channel`, #1606).
@@ -159,6 +199,7 @@ impl Default for Settings {
             overlay: false,
             ui_scale: 100,
             backdrop_blur: DEFAULT_BACKDROP_BLUR,
+            frame_limit: FrameLimit::Display,
             hud_show: HudShow::default(),
             auto_retry: false,
             slow_speed: crate::practice::SLOW_SPEEDS[0],
@@ -380,7 +421,22 @@ impl Settings {
                         "display.backdrop_blur {v} is outside 0 to {MAX_BACKDROP_BLUR}, using the default"
                     )),
                 },
-                ("fullscreen" | "ratio" | "window" | "integer_scale" | "backdrop_blur", _) => {
+                ("frame_limit", Value::String(t)) => match FrameLimit::parse(t) {
+                    Some(l) => self.frame_limit = l,
+                    None => w.push(format!(
+                        "display.frame_limit `{t}` is not display, unlimited or 1 to 1000, using display"
+                    )),
+                },
+                ("frame_limit", Value::Integer(v)) => match u32::try_from(*v) {
+                    Ok(v) if (1..=1000).contains(&v) => self.frame_limit = FrameLimit::Fps(v),
+                    _ => w.push(format!(
+                        "display.frame_limit {v} is outside 1 to 1000, using display"
+                    )),
+                },
+                (
+                    "fullscreen" | "ratio" | "window" | "integer_scale" | "backdrop_blur" | "frame_limit",
+                    _,
+                ) => {
                     w.push(format!("display.{key} has the wrong type, using the default"));
                 }
                 _ => w.push(format!("unknown entry `display.{key}`, ignored")),
@@ -525,6 +581,14 @@ impl Settings {
         }
         display.insert("integer_scale".into(), self.integer_scale.into());
         display.insert("backdrop_blur".into(), i64::from(self.backdrop_blur).into());
+        display.insert(
+            "frame_limit".into(),
+            match self.frame_limit {
+                FrameLimit::Display => "display".into(),
+                FrameLimit::Unlimited => "unlimited".into(),
+                FrameLimit::Fps(n) => i64::from(n).into(),
+            },
+        );
         let mut audio = Table::new();
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
         audio.insert("master_volume".into(), i64::from(self.master_volume).into());
@@ -681,6 +745,7 @@ mod tests {
             overlay: true,
             ui_scale: 125,
             backdrop_blur: 30,
+            frame_limit: FrameLimit::Fps(144),
             auto_retry: true,
             slow_speed: 50,
             results_heatmap: true,
@@ -926,6 +991,38 @@ channel = \"nightly\"
         .to_toml();
         assert!(text.contains("[updates]"), "{text}");
         assert_eq!(parse(&text).0.update_channel, UpdateChannel::Releases);
+    }
+
+    #[test]
+    fn frame_limit_reads_display_numbers_and_unlimited() {
+        for (text, want) in [
+            ("\"display\"", FrameLimit::Display),
+            ("\"unlimited\"", FrameLimit::Unlimited),
+            ("144", FrameLimit::Fps(144)),
+            ("\"240\"", FrameLimit::Fps(240)),
+        ] {
+            let (s, w) = parse(&format!(
+                "version = 1
+[display]
+frame_limit = {text}
+"
+            ));
+            assert_eq!((s.frame_limit, w.len()), (want, 0), "{text}");
+        }
+        let (s, w) = parse(
+            "version = 1
+[display]
+frame_limit = 0
+",
+        );
+        assert_eq!((s.frame_limit, w.len()), (FrameLimit::Display, 1));
+        let (s, w) = parse(
+            "version = 1
+[display]
+frame_limit = \"fast\"
+",
+        );
+        assert_eq!((s.frame_limit, w.len()), (FrameLimit::Display, 1));
     }
 
     #[test]
