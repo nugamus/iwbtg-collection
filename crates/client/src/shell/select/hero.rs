@@ -126,7 +126,7 @@ pub(super) struct Wedge;
 
 /// The slots the left side's parts are built in.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum HeroSlot {
+pub(in crate::shell) enum HeroSlot {
     Head,
     Stats,
     Strip,

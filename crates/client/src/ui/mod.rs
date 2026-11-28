@@ -105,7 +105,8 @@ pub fn configure(args: &UiArgs) {
 /// narrower than `min_width`, and then it fills the width instead (#1692). A narrow window shows
 /// the whole page smaller rather than cutting its right side off.
 pub fn fit_scale(size: Vec2, design_height: f32, min_width: f32) -> f32 {
-    (size.y / design_height).min(size.x / min_width).clamp(0.25, 3.0)
+    // Capped above only: a tiny window must still fit the whole page, so no lower floor.
+    (size.y / design_height).min(size.x / min_width).min(3.0)
 }
 
 /// Adds the fonts, the shape material, the motion systems and the component behaviour.
@@ -146,5 +147,7 @@ mod tests {
         let s = fit_scale(Vec2::new(1440.0, 1080.0), d, 1720.0);
         assert!((s - 1440.0 / 1720.0).abs() < 1e-6, "4:3 fills the width");
         assert!(1440.0 / s >= 1720.0 - 1e-3, "and the page is at least that wide");
+        let tiny = fit_scale(Vec2::new(400.0, 800.0), d, 1720.0);
+        assert!(400.0 / tiny >= 1720.0 - 1e-3, "a window narrower than 430 px still fits the page");
     }
 }

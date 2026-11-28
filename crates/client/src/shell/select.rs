@@ -579,8 +579,9 @@ mod tests {
         app
     }
 
-    /// Moving through the list updates it in place: no UI node is spawned or despawned
-    /// (UI foundation, #1685).
+    /// Moving through the list updates it in place: no UI node is spawned or despawned outside
+    /// the parts that show the pick's own data (the hero's slots, which `ui::live` rebuilds when
+    /// that data changes; UI foundation, #1685, #148).
     #[test]
     fn moving_the_selection_respawns_nothing() {
         use crate::ui::latency::node_set;
@@ -593,11 +594,28 @@ mod tests {
             k.clear();
             app.update();
         };
-        let before = node_set(app.world_mut());
+        // Every UI node but those under a part keyed on the pick's data.
+        let lasting = |app: &mut App| {
+            let world = app.world_mut();
+            let mut roots: Vec<Entity> = world.query_filtered::<Entity, With<hero::HeroSlot>>().iter(world).collect();
+            let mut inside = std::collections::BTreeSet::new();
+            while let Some(e) = roots.pop() {
+                if let Some(children) = world.get::<Children>(e) {
+                    for c in children.iter() {
+                        inside.insert(c);
+                        roots.push(c);
+                    }
+                }
+            }
+            let mut all = node_set(world);
+            all.retain(|e| !inside.contains(e));
+            all
+        };
+        let before = lasting(&mut app);
         let start = *app.world().resource::<Selection>();
         for key in [KeyCode::ArrowDown, KeyCode::ArrowDown, KeyCode::ArrowUp, KeyCode::ArrowRight, KeyCode::ArrowLeft] {
             tap(&mut app, key);
-            assert_eq!(node_set(app.world_mut()), before, "{key:?}");
+            assert_eq!(lasting(&mut app), before, "{key:?}");
         }
         assert_ne!(*app.world().resource::<Selection>(), start, "the selection moved");
     }
