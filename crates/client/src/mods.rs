@@ -65,14 +65,14 @@ fn parse_built(text: &str) -> Result<ModSet, String> {
 }
 
 /// One line for the terminal: the play mode, the set, and whether the run can be ranked.
-/// Play original (no `--ranked`) is never ranked, whatever the mods.
+/// Classic (no `--ranked`) is never ranked, whatever the mods.
 pub fn describe(set: ModSet, ranked: bool) -> String {
     if !ranked {
-        return format!("Play original (unranked), mods: {}", set.codes());
+        return format!("Classic (unranked), mods: {}", set.codes());
     }
     match set.unranked_by() {
-        None => format!("Play ranked, mods: {} (ranked)", set.codes()),
-        Some(d) => format!("Play ranked, mods: {} (unranked: {})", set.codes(), d.name),
+        None => format!("Time Attack, mods: {} (ranked)", set.codes()),
+        Some(d) => format!("Time Attack, mods: {} (unranked: {})", set.codes(), d.name),
     }
 }
 
@@ -192,11 +192,11 @@ mod tests {
         let sd = ModSet::parse("SD").unwrap();
         assert_eq!(
             describe(ModSet::NONE, false),
-            "Play original (unranked), mods: NM"
+            "Classic (unranked), mods: NM"
         );
-        assert_eq!(describe(sd, false), "Play original (unranked), mods: SD");
-        assert_eq!(describe(ModSet::NONE, true), "Play ranked, mods: NM (ranked)");
-        assert!(describe(sd, true).starts_with("Play ranked, mods: SD ("));
+        assert_eq!(describe(sd, false), "Classic (unranked), mods: SD");
+        assert_eq!(describe(ModSet::NONE, true), "Time Attack, mods: NM (ranked)");
+        assert!(describe(sd, true).starts_with("Time Attack, mods: SD ("));
     }
 
     #[test]
@@ -213,11 +213,11 @@ mod tests {
     fn the_line_says_ranked_or_why_not() {
         assert_eq!(
             describe(ModSet::parse("SD").unwrap(), true),
-            "Play ranked, mods: SD (ranked)"
+            "Time Attack, mods: SD (ranked)"
         );
         assert_eq!(
             describe(ModSet::parse("SD,SL").unwrap(), true),
-            "Play ranked, mods: SD+SL (unranked: Slow motion)"
+            "Time Attack, mods: SD+SL (unranked: Slow motion)"
         );
     }
 }

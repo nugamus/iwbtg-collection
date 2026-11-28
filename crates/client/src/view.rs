@@ -313,8 +313,8 @@ pub struct ViewArgs {
     /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
     #[arg(long, value_name = "PNG")]
     pub screenshot: Option<std::path::PathBuf>,
-    /// Play the ranked (stripped) mode: always a new game, never the save file (docs/product.md,
-    /// Two ways to play each game). The default is Play original.
+    /// Play Time Attack (the stripped, ranked mode): always a new game, never the save file
+    /// (docs/product.md, Two ways to play each game). The default is Classic.
     #[arg(long)]
     pub ranked: bool,
 }
