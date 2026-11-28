@@ -46,6 +46,8 @@ const ROW_X: f32 = 470.0;
 const CY: f32 = 470.0;
 /// The artboard's height: the middle of the page is laid out in it.
 const DESIGN_H: f32 = 1080.0;
+/// The artboard's width: the page is this wide at 16:9.
+const DESIGN_W: f32 = 1920.0;
 const CY_INITIAL: f32 = 450.0;
 /// The fruit's pixel scale: 11x alone in the middle, 7.6x beside the band.
 const FRUIT_SCALE_INITIAL: f32 = 11.0;
@@ -469,6 +471,7 @@ fn rebuild(world: &mut World, mut fruit: Local<Option<Handle<Image>>>) {
     let slide = animate && from == Some(Level::Initial);
     let grow = animate && from.is_some();
     let fruit = fruit.clone().unwrap_or_default();
+    let page_w = page_width(world);
     let slots: Vec<(Entity, Slot)> = world.query::<(Entity, &Slot)>().iter(world).map(|(e, s)| (e, *s)).collect();
     for (e, slot) in slots {
         let fruit = fruit.clone();
@@ -483,10 +486,10 @@ fn rebuild(world: &mut World, mut fruit: Local<Option<Handle<Image>>>) {
                 }
                 Slot::Row => {}
                 Slot::Fruit => {
-                    c.spawn(fruit_block(level, fruit, slide));
+                    c.spawn(fruit_block(level, fruit, slide, page_w));
                 }
                 Slot::Wordmark => {
-                    c.spawn(wordmark(level, slide));
+                    c.spawn(wordmark(level, slide, page_w));
                 }
             }
         });
@@ -591,11 +594,13 @@ fn mode_glow(level: Level, mode: Mode) -> impl Bundle {
     // CSS `radial-gradient(ellipse at x y, c 0%, transparent 38%)`: the far corner's ellipse,
     // 38 % of it. About 908 x 328 px from (230, 470) on a 1920 x 1080 page.
     let (rx, ry) = (908.0, 328.0);
+    let (left, margin) = place_x(level, cx, 2.0 * ry);
     (
         ModeGlow,
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(cx - ry),
+            left,
+            margin,
             top: Val::Px(cy - ry),
             width: Val::Px(2.0 * ry),
             height: Val::Px(2.0 * ry),
@@ -776,19 +781,48 @@ fn fruit_size(level: Level) -> Vec2 {
     (FRUIT * s).round()
 }
 
+/// The page's width in design px: the window's width over the UI scale. The page is 1080 tall
+/// and at least `select::MIN_WIDTH` wide, so it is 1920 only at 16:9.
+fn page_width(world: &mut World) -> f32 {
+    let scale = world.get_resource::<UiScale>().map_or(1.0, |s| s.0);
+    let width = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .map(|w| w.width());
+    match width {
+        Some(w) if w >= 1.0 && scale > 0.0 => w / scale,
+        _ => DESIGN_W,
+    }
+}
+
+/// Where a box `w` wide centred at artboard x `cx` goes: `left` and its left margin. The middle
+/// of the page (B6, the fruit alone) is the middle of the window at any width, so there the box
+/// keeps to 50 % instead of to x 960, which is the middle only at 16:9; beside the band it keeps
+/// to the left edge as the artboard does.
+fn place_x(level: Level, cx: f32, w: f32) -> (Val, UiRect) {
+    if level == Level::Initial {
+        (Val::Percent(50.0), UiRect::left(Val::Px(cx - DESIGN_W / 2.0 - w / 2.0)))
+    } else {
+        (Val::Px(cx - w / 2.0), UiRect::default())
+    }
+}
+
 /// The delicious fruit with its red halo and a hard shadow 1 fruit-pixel below; `slide`: it
-/// comes from the middle of the page, shrinking.
-fn fruit_block(level: Level, fruit: Handle<Image>, slide: bool) -> impl Bundle {
+/// comes from the middle of the page (`page_w` wide), shrinking.
+fn fruit_block(level: Level, fruit: Handle<Image>, slide: bool, page_w: f32) -> impl Bundle {
     let size = fruit_size(level);
     let (cx, cy) = fruit_centre(level);
     let pixel = size.x / FRUIT.x;
     let frame = Rect::new(0.0, 0.0, FRUIT.x, FRUIT.y);
-    let (dx, dy, scale) = slide_from(level);
+    let (dx, dy, scale) = slide_from(level, page_w);
     let halo = 230.0 * size.x / 160.0;
+    let (left, margin) = place_x(level, cx, size.x);
     (
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(cx - size.x / 2.0),
+            left,
+            margin,
             top: Val::Px(cy - size.y / 2.0),
             width: Val::Px(size.x),
             height: Val::Px(size.y),
@@ -855,23 +889,23 @@ fn fruit_block(level: Level, fruit: Handle<Image>, slide: bool) -> impl Bundle {
     )
 }
 
-/// How far the fruit at `level` starts from where it ends when it leaves the middle: x, y and
-/// scale (1 when it does not move).
-fn slide_from(level: Level) -> (f32, f32, f32) {
+/// How far the fruit at `level` starts from where it ends when it leaves the middle of a page
+/// `page_w` wide: x, y and scale (1 when it does not move).
+fn slide_from(level: Level, page_w: f32) -> (f32, f32, f32) {
     if level == Level::Initial {
         return (0.0, 0.0, 1.0);
     }
-    let (fx, fy) = fruit_centre(Level::Initial);
+    let (_, fy) = fruit_centre(Level::Initial);
     let (tx, ty) = fruit_centre(level);
     (
-        fx - tx,
+        page_w / 2.0 - tx,
         fy - ty,
         fruit_size(Level::Initial).x / fruit_size(level).x,
     )
 }
 
 /// The working title and its logo-slot pill under the fruit (72 px alone, 40 px beside the band).
-fn wordmark(level: Level, slide: bool) -> impl Bundle {
+fn wordmark(level: Level, slide: bool, page_w: f32) -> impl Bundle {
     let initial = level == Level::Initial;
     let size = fruit_size(level);
     let (cx, cy) = fruit_centre(level);
@@ -884,14 +918,16 @@ fn wordmark(level: Level, slide: bool) -> impl Bundle {
         // From under the fruit in the middle (B6) to under the band.
         let from = fruit_centre(Level::Initial);
         let from_top = from.1 + fruit_size(Level::Initial).y / 2.0 + 34.0;
-        (from.0 - cx, from_top - top)
+        (page_w / 2.0 - cx, from_top - top)
     } else {
         (0.0, 0.0)
     };
+    let (left, margin) = place_x(level, cx, w);
     (
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(cx - w / 2.0),
+            left,
+            margin,
             top: Val::Px(top),
             width: Val::Px(w),
             flex_direction: FlexDirection::Column,
@@ -1463,5 +1499,21 @@ mod tests {
         let (cx, cy) = fruit_centre(Level::Top);
         assert_eq!((cx - 80.0, cy - 91.0), (150.0, 373.0));
         assert_eq!(fruit_size(Level::Initial), Vec2::new(231.0, 264.0));
+    }
+
+    /// The fruit alone keeps to the middle of the window at any width (B6), not to x 960, which
+    /// is the middle only at 16:9; leaving it, the fruit slides from that middle.
+    #[test]
+    fn the_fruit_alone_stays_in_the_middle_at_any_width() {
+        let size = fruit_size(Level::Initial);
+        let (cx, _) = fruit_centre(Level::Initial);
+        let (left, margin) = place_x(Level::Initial, cx, size.x);
+        assert_eq!(left, Val::Percent(50.0));
+        assert_eq!(margin.left, Val::Px(-size.x / 2.0));
+        let (left, margin) = place_x(Level::Top, fruit_centre(Level::Top).0, 160.0);
+        assert_eq!((left, margin.left), (Val::Px(150.0), Val::Px(0.0)));
+        let (tx, _) = fruit_centre(Level::Top);
+        assert_eq!(slide_from(Level::Top, 1920.0).0, 960.0 - tx);
+        assert_eq!(slide_from(Level::Top, 3000.0).0, 1500.0 - tx);
     }
 }
