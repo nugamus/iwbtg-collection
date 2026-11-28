@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-28T18:09:00Z",
+ "generated_at": "2026-11-28T21:08:18Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -126,16 +126,16 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 18,
-   "closed": 54,
+   "open": 17,
+   "closed": 55,
    "total": 72,
-   "pct_closed": 75.0,
+   "pct_closed": 76.4,
    "size_points": 36,
    "sizes": {
     "size:S": 8,
     "size:M": 4,
     "size:L": 2,
-    "unknown": 4
+    "unknown": 3
    },
    "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
    "feeds_from": "client crate, design mockups, games repo catalog",
@@ -262,14 +262,14 @@
  ],
  "activity": {
   "totals": {
-   "issues": 1005,
-   "open": 274,
-   "closed": 731,
-   "pct_closed": 72.7
+   "issues": 1007,
+   "open": 273,
+   "closed": 734,
+   "pct_closed": 72.9
   },
-  "open_prs": 2,
+  "open_prs": 3,
   "process": {
-   "triage": 69,
+   "triage": 68,
    "in-progress": 12,
    "agent-ready": 106,
    "needs-user": 28,
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 64
+    "count": 62
    },
    {
     "area": "area:format",
@@ -323,6 +323,50 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1613,
+    "title": "UI: say Time Attack / Classic instead of Ranked mode / Play original on loading, results, HUD",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1613",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-28T21:08:07Z",
+    "closed_at": "2026-11-28T21:08:07Z",
+    "created_at": "2026-11-26T14:59:02Z"
+   },
+   {
+    "number": 1654,
+    "title": "UI: pause Options view (m5 D15): volume, backdrop blur, HUD, input display, bindings, audio offset",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1654",
+    "labels": [
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T21:05:15Z",
+    "closed_at": "2026-11-28T21:05:14Z",
+    "created_at": "2026-11-26T22:20:43Z"
+   },
+   {
+    "number": 1694,
+    "title": "Results page: a notice covers the Back button (notice area stays in the suspended HUD's column)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1694",
+    "labels": [
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T21:02:07Z",
+    "closed_at": "2026-11-28T21:02:06Z",
+    "created_at": "2026-11-28T17:13:54Z"
+   },
    {
     "number": 1688,
     "title": "Client: Library::busy is unused in the non-test build (dead_code warning)",
@@ -397,69 +441,51 @@
     "updated_at": "2026-11-28T17:31:12Z",
     "closed_at": "2026-11-28T17:31:12Z",
     "created_at": "2026-11-28T16:20:27Z"
-   },
-   {
-    "number": 148,
-    "title": "Game select: layout, title wedge, stats, stage strip and footer",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/148",
-    "labels": [
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:21:09Z",
-    "closed_at": "2026-11-28T17:21:08Z",
-    "created_at": "2026-11-02T11:57:19Z"
-   },
-   {
-    "number": 1692,
-    "title": "UI scales by height only: narrow windows cut off the main menu's buttons and overlap game select and the shelf",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1692",
-    "labels": [
-     "bug",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:21:07Z",
-    "closed_at": "2026-11-28T17:21:06Z",
-    "created_at": "2026-11-28T16:25:20Z"
-   },
-   {
-    "number": 1686,
-    "title": "UI foundation 6: pause, results, HUD and remaining screens update in place",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1686",
-    "labels": [
-     "size:L",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:21:05Z",
-    "closed_at": "2026-11-28T17:21:05Z",
-    "created_at": "2026-11-28T15:42:47Z"
    }
   ],
   "in_progress": [
    {
-    "number": 1654,
-    "title": "UI: pause Options view (m5 D15): volume, backdrop blur, HUD, input display, bindings, audio offset",
+    "number": 1698,
+    "title": "Game select: Random spins the list; your PB pinned under the ranking rows (#151 follow-up)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1654",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1698",
+    "labels": [
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T21:04:05Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T17:31:43Z"
+   },
+   {
+    "number": 1657,
+    "title": "UI: blur the game behind the pause page (m5 D13: blur 5px, saturate .6, brightness .5)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1657",
     "labels": [
      "area:client",
      "triage",
      "in-progress"
     ],
     "phase": null,
-    "updated_at": "2026-11-28T17:39:10Z",
+    "updated_at": "2026-11-28T20:59:08Z",
     "closed_at": null,
-    "created_at": "2026-11-26T22:20:43Z"
+    "created_at": "2026-11-26T22:20:48Z"
+   },
+   {
+    "number": 1704,
+    "title": "Main menu: the fruit alone (B6) is off centre on windows that are not 16:9",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1704",
+    "labels": [
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-28T20:51:40Z",
+    "closed_at": null,
+    "created_at": "2026-11-28T20:50:32Z"
    },
    {
     "number": 106,
@@ -478,21 +504,6 @@
     "created_at": "2026-11-02T11:55:29Z"
    },
    {
-    "number": 1613,
-    "title": "UI: say Time Attack / Classic instead of Ranked mode / Play original on loading, results, HUD",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1613",
-    "labels": [
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-28T17:37:02Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T14:59:02Z"
-   },
-   {
     "number": 1626,
     "title": "Localise the remaining client screens and widen the string guard (#196 follow-up)",
     "state": "open",
@@ -506,20 +517,6 @@
     "updated_at": "2026-11-28T17:28:07Z",
     "closed_at": null,
     "created_at": "2026-11-26T17:52:37Z"
-   },
-   {
-    "number": 1694,
-    "title": "Results page: a notice covers the Back button (notice area stays in the suspended HUD's column)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1694",
-    "labels": [
-     "triage",
-     "in-progress"
-    ],
-    "phase": null,
-    "updated_at": "2026-11-28T17:18:01Z",
-    "closed_at": null,
-    "created_at": "2026-11-28T17:13:54Z"
    },
    {
     "number": 1648,
@@ -722,8 +719,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 196,
-  "opened_7d": 166,
+  "closed_7d": 199,
+  "opened_7d": 168,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -742,8 +739,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 1005,
-    "closed": 731
+    "created": 1007,
+    "closed": 734
    }
   ]
  },
