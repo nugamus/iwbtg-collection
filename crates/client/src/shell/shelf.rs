@@ -11,7 +11,6 @@
 //! The numbers are the stats book's Classic ones (#1619). The furthest point is a room until
 //! packages declare sections, and the route line comes with m5 E7 (group 4).
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bevy::camera::visibility::RenderLayers;
@@ -1087,11 +1086,16 @@ fn hero(
     added: Query<(), Added<HeroText>>,
     mut avatar: Query<&mut BackgroundColor, With<Avatar>>,
     mut backdrop: ResMut<Backdrop>,
-    mut art: Local<HashMap<usize, Handle<Image>>>,
-    mut images: ResMut<Assets<Image>>,
     mut last: Local<Option<usize>>,
 ) {
-    // Once per pick, and again when the page is new (back on the shelf).
+    // The picked game's art fills the screen, from the library's previews (built off the UI
+    // thread: a pick never reads a package on it); until it arrives the last art stays.
+    if let Some(handle) = lib.backdrop.get(state.pick).cloned().flatten()
+        && backdrop.art.as_ref() != Some(&handle)
+    {
+        backdrop.art = Some(handle);
+    }
+    // The texts once per pick, and again when the page is new (back on the shelf).
     if *last == Some(state.pick) && added.is_empty() {
         return;
     }
@@ -1146,22 +1150,6 @@ fn hero(
     for mut bg in &mut avatar {
         bg.0 = Color::hsl(hue as f32, 0.7, 0.52);
     }
-    // The picked game's art fills the screen.
-    let pick = state.pick;
-    let handle = art
-        .entry(pick)
-        .or_insert_with(|| {
-            let (_, files) = library::read(&game.path);
-            let image = files
-                .as_ref()
-                .and_then(library::backdrop_art)
-                .unwrap_or_else(crate::ui::backdrop::fallback_image);
-            images.add(image)
-        })
-        .clone();
-    // Keep only the pick's art.
-    art.retain(|k, _| *k == pick);
-    backdrop.art = Some(handle);
 }
 
 /// The line under Your progress: the furthest room and the last finish (m5 A4).

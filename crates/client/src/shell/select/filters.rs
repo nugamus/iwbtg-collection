@@ -279,6 +279,7 @@ mod tests {
                     id: format!("m{i}"),
                     name: format!("Map {i}"),
                     stars: *s,
+                    stages: Vec::new(),
                 })
                 .collect(),
         }

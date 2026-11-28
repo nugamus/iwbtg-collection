@@ -5,7 +5,7 @@
 //! made until the shelf, #851), Escape goes back to the main menu. The toolbar (`ui::toolbar`)
 //! runs along the top. Above the list, search, group, sort and filters (#150,
 //! `select/controls.rs`, `select/filters.rs`) pick the rows it shows. The left side is a
-//! placeholder until #148: the picked game and map, and the keys.
+//! title wedge, stats and stage strip (#148, `select/hero.rs`), then the keys and collections.
 
 use std::path::{Path, PathBuf};
 
@@ -31,6 +31,7 @@ pub mod collections;
 pub mod controls;
 pub mod filters;
 pub mod footer;
+pub mod hero;
 pub mod library;
 pub mod list;
 pub mod mod_sheet;
@@ -38,7 +39,7 @@ pub mod practice;
 
 use collections::Collections;
 use filters::Filters;
-use library::{GameInfo, Library, file_name};
+use library::{GameInfo, Library};
 use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
 
 /// The window's title on the select screen.
@@ -48,14 +49,6 @@ const DESIGN_HEIGHT: f32 = 1080.0;
 /// How far m5's toolbar moves m4's game select down (`A3_SelectTimeAttack`: the search row from
 /// y 48 to 96).
 pub const UNDER_TOOLBAR: f32 = 48.0;
-
-/// The left side's picked game title (placeholder until #148).
-#[derive(Component)]
-struct PickedTitle;
-
-/// The left side's picked map and your PB on it (placeholder until #148).
-#[derive(Component)]
-struct PickedMap;
 
 /// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
 #[derive(Component)]
@@ -178,7 +171,7 @@ impl Plugin for SelectPlugin {
                         DespawnOnExit(AppScreen::Select),
                         children![crate::ui::toolbar::toolbar(mode.as_deref().copied().unwrap_or_default())],
                     ));
-                    footer::spawn(&mut commands, camera, mods);
+                    footer::spawn(&mut commands, camera, mods, footer::player(stats.as_deref()));
                     mod_sheet::spawn(
                         &mut commands,
                         camera,
@@ -194,6 +187,7 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
+            .add_observer(footer::on_activate)
             .add_observer(practice::open)
             .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
@@ -225,7 +219,7 @@ impl Plugin for SelectPlugin {
                         list::dim,
                         list::want_previews,
                         list::previews,
-                        picked,
+                        hero::follow,
                         collections::favorite_label,
                         collections::chips,
                     )
@@ -321,12 +315,14 @@ fn enter(
     } else {
         HINT
     };
-    // The left side: a placeholder until #148's title wedge, stats and tabs.
+    // The left side (#148): the title wedge, the stats and the stage strip, then the keys, the
+    // folder and the collections under them (where m5's Details and Ranking tabs go, #151).
+    hero::spawn(commands, camera);
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(64.0),
-            top: Val::Px(150.0 + UNDER_TOOLBAR),
+            top: Val::Px(586.0),
             // Up to the list, with room for its selected panel's slide, on a narrow page too
             // (#1692).
             right: Val::Px(list::FROM_RIGHT + 60.0),
@@ -338,36 +334,8 @@ fn enter(
         UiTargetCamera(camera),
         DespawnOnExit(AppScreen::Select),
         children![
-            text("Select a game", Type::LABEL, tokens::MUTED),
-            (
-                text("", Type::condensed(56.0, 700).italic(), tokens::INK),
-                PickedTitle
-            ),
-            (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
-            crate::ui::widgets::ellipsis_text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
             (text(hint, Type::BODY, tokens::SOFT), HintText),
-            (
-                Node {
-                    column_gap: Val::Px(10.0),
-                    align_items: AlignItems::Center,
-                    flex_wrap: FlexWrap::Wrap,
-                    ..default()
-                },
-                children![
-                    (
-                        crate::ui::widgets::button(
-                            "Practice",
-                            crate::ui::widgets::ButtonKind::Control
-                        ),
-                        practice::OpenButton
-                    ),
-                    text(
-                        "Start at a stage, your save or any room · practice runs stay off the leaderboard",
-                        Type::barlow(14.0, 400),
-                        tokens::MUTED
-                    ),
-                ],
-            ),
+            crate::ui::widgets::ellipsis_text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
             collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
         ],
     ));
@@ -554,36 +522,6 @@ fn on_click(
     }
 }
 
-/// The left side's title and map line follow the selection.
-fn picked(
-    sel: Res<Selection>,
-    lib: Res<Library>,
-    mut title: Query<&mut Text, (With<PickedTitle>, Without<PickedMap>)>,
-    mut map: Query<&mut Text, (With<PickedMap>, Without<PickedTitle>)>,
-) {
-    if !sel.is_changed() && !lib.is_changed() {
-        return;
-    }
-    let game = lib.games.get(sel.game);
-    let line = game.map_or_else(String::new, |g| {
-        let pb = lib
-            .records
-            .get(sel.game)
-            .and_then(|r| r.pbs.get(sel.map).cloned().flatten())
-            .map_or_else(|| "No PB".to_owned(), |t| format!("PB {t}"));
-        match g.maps.get(sel.map) {
-            Some(m) => format!("{} · {pb}", m.name),
-            None => format!("{}: its game.toml does not read", file_name(&g.path)),
-        }
-    });
-    for mut t in &mut title {
-        t.0 = game.map_or_else(String::new, |g| g.title.clone());
-    }
-    for mut t in &mut map {
-        t.0 = line.clone();
-    }
-}
-
 /// The narrowest the shell's pages may be laid out, design px: the main menu's widest band
 /// (Play focused, four more buttons and the right margin), game select's list beside its left
 /// column, and the shelf's hero beside its progress panel all fit (#1692).
@@ -605,6 +543,7 @@ pub(super) fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use library::file_name;
 
     #[test]
     fn the_list_holds_package_folders_and_iwbz_files_by_name() {
