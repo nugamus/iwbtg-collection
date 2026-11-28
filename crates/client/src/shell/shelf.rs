@@ -1029,12 +1029,21 @@ fn previews(
     }
 }
 
+/// A cover's parts that follow the pick.
+type CoverParts = (
+    &'static Cover,
+    &'static mut Tween<Width>,
+    &'static mut Tween<Height>,
+    &'static mut Shape,
+    &'static Children,
+);
+
 /// The picked cover grows and gets the ring; the row slides to keep it in view.
 fn shelf_looks(
     state: Res<ShelfState>,
     lib: Res<Library>,
     facts: Res<AllFacts>,
-    mut covers: Query<(&Cover, &mut Tween<Width>, &mut Tween<Height>, &mut Shape, &Children)>,
+    mut covers: Query<CoverParts>,
     mut titles: Query<&mut TextFont, With<CoverTitle>>,
     mut row: Query<&mut Tween<OffsetX>, With<Row>>,
 ) {
@@ -1044,7 +1053,7 @@ fn shelf_looks(
     for (cover, mut w, mut h, mut shape, children) in &mut covers {
         let picked = cover.0 == state.pick;
         let size = if picked { COVER_PICKED } else { COVER };
-        if w.to != size.x {
+        if (w.to - size.x).abs() > f32::EPSILON {
             w.retarget(size.x);
             h.retarget(size.y);
         }
