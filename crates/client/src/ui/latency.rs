@@ -36,9 +36,14 @@ pub struct UiLatency {
 }
 
 impl UiLatency {
-    /// The slowest input frame within the last second, ms.
-    pub fn worst_ms(&self) -> Option<f32> {
-        self.recent.iter().map(|(_, ms)| *ms).reduce(f32::max)
+    /// The slowest input frame within the second before `now`, ms. Older samples do not count
+    /// even when no input came since.
+    pub fn worst_ms(&self, now: Instant) -> Option<f32> {
+        self.recent
+            .iter()
+            .filter(|(at, _)| now.duration_since(*at) <= WINDOW)
+            .map(|(_, ms)| *ms)
+            .reduce(f32::max)
     }
 
     /// Records one input frame that took `ms`, at `now`.
@@ -54,9 +59,14 @@ impl UiLatency {
         }
     }
 
-    /// The line the readouts show.
+    /// The line the readouts show, now.
     pub fn line(&self) -> String {
-        match (self.last_ms, self.worst_ms()) {
+        self.line_at(Instant::now())
+    }
+
+    /// The line the readouts show at `now`.
+    pub fn line_at(&self, now: Instant) -> String {
+        match (self.last_ms, self.worst_ms(now)) {
             (Some(last), Some(worst)) => format!("ui input {last:.1} ms  worst 1 s {worst:.1} ms"),
             (Some(last), None) => format!("ui input {last:.1} ms"),
             _ => "ui input -".to_owned(),
@@ -71,11 +81,18 @@ struct Readout;
 pub fn plugin(app: &mut App) {
     app.init_resource::<UiLatency>()
         .add_systems(First, start)
+        // After the input systems: the frame a key goes down in is the frame that answers it.
+        .add_systems(PreUpdate, sample.after(bevy::input::InputSystems))
         .add_systems(Last, finish)
         .add_systems(Update, readout);
 }
 
-fn start(
+fn start(mut latency: ResMut<UiLatency>) {
+    latency.started = Some(Instant::now());
+    latency.input = false;
+}
+
+fn sample(
     mut latency: ResMut<UiLatency>,
     keys: Option<Res<ButtonInput<KeyCode>>>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
@@ -84,8 +101,9 @@ fn start(
     let input = keys.is_some_and(|k| k.get_just_pressed().next().is_some())
         || mouse.is_some_and(|m| m.get_just_pressed().next().is_some())
         || pads.iter().any(|p| p.get_just_pressed().next().is_some());
-    latency.started = Some(Instant::now());
-    latency.input = input;
+    if input {
+        latency.input = true;
+    }
 }
 
 fn finish(mut latency: ResMut<UiLatency>) {
@@ -167,21 +185,34 @@ mod tests {
         l.record(t0, 9.0);
         l.record(t0 + Duration::from_millis(500), 2.0);
         assert_eq!(l.last_ms, Some(2.0));
-        assert_eq!(l.worst_ms(), Some(9.0));
+        assert_eq!(l.worst_ms(t0 + Duration::from_millis(500)), Some(9.0));
         l.record(t0 + Duration::from_millis(1600), 3.0);
-        assert_eq!(l.worst_ms(), Some(3.0), "the 9 ms frame is older than a second");
-        assert_eq!(l.line(), "ui input 3.0 ms  worst 1 s 3.0 ms");
+        let now = t0 + Duration::from_millis(1600);
+        assert_eq!(l.worst_ms(now), Some(3.0), "the 9 ms frame is older than a second");
+        assert_eq!(l.line_at(now), "ui input 3.0 ms  worst 1 s 3.0 ms");
+        let idle = t0 + Duration::from_millis(3000);
+        assert_eq!(l.worst_ms(idle), None, "nothing in the last second while idle");
+        assert_eq!(l.line_at(idle), "ui input 3.0 ms", "the last input stays");
     }
 
+    /// Through the real input path: the frame the key goes down in is the one recorded.
     #[test]
-    fn only_input_frames_count() {
+    fn the_frame_a_key_goes_down_in_is_recorded() {
+        use bevy::input::keyboard::{Key, KeyboardInput};
         let mut app = App::new();
-        app.init_resource::<ButtonInput<KeyCode>>().add_plugins(plugin);
+        app.add_plugins((bevy::input::InputPlugin, plugin));
         app.update();
         assert_eq!(app.world().resource::<UiLatency>().last_ms, None, "no input yet");
-        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::ArrowDown);
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::ArrowDown,
+            logical_key: Key::ArrowDown,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
         app.update();
-        assert!(app.world().resource::<UiLatency>().last_ms.is_some());
+        assert!(app.world().resource::<UiLatency>().last_ms.is_some(), "the press frame");
     }
 
     #[test]
